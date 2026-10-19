@@ -15,7 +15,14 @@ if (JWT_SECRET.length < 32 || WEAK_SECRETS.includes(JWT_SECRET)) {
   process.exit(1)
 }
 
+// Yuklangan fayllar papkasi. Electron'da dastur papkasi yozib bo'lmaydigan
+// (Program Files) bo'lgani uchun foydalanuvchi papkasiga ko'chiriladi.
+const UPLOAD_DIR = process.env.UPLOAD_DIR
+  ? require('path').resolve(process.env.UPLOAD_DIR)
+  : require('path').join(__dirname, 'uploads')
+
 module.exports = {
   JWT_SECRET,
+  UPLOAD_DIR,
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
 }

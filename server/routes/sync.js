@@ -10,7 +10,7 @@ const path    = require('path')
 const engine  = require('../sync/engine')
 const { notifyApplied } = require('../sync/notify')
 
-const UPLOAD_DIR = path.join(__dirname, '..', 'uploads')
+const { UPLOAD_DIR } = require('../config')
 const SAFE_FILE  = /^[\w-]+\.(png|jpe?g|webp|gif|mp3|wav|ogg|m4a)$/i
 
 function syncAuth(req, res, next) {
@@ -24,6 +24,9 @@ function syncAuth(req, res, next) {
 
 const ejsonBody = express.text({ type: 'application/ejson', limit: '50mb' })
 const sendEjson = (res, obj) => res.type('application/ejson').send(engine.encode(obj))
+
+// GET /api/sync/ping — kassa sozlashda manzil va kalitni tekshirish
+router.get('/ping', syncAuth, (req, res) => res.json({ ok: true, node: engine.NODE_ID }))
 
 // GET /api/sync/pull?since=N&node=kassa — kassa uchun yangi o'zgarishlar
 router.get('/pull', syncAuth, async (req, res, next) => {

@@ -27,11 +27,13 @@ export default function MyOrders(){
     audioRef.current=new Audio(getNewOrderSoundUrl(API_URL))
     const today=todayStr()
     // Faqat bugungi buyurtmalar — server sana bo'yicha filtrlaydi
-    API.get(`/api/orders?startDate=${today}&endDate=${today}`).then(({data})=>{
+    const load=()=>API.get(`/api/orders?startDate=${today}&endDate=${today}`).then(({data})=>{
       setOrders(Array.isArray(data)?data:(data.orders||[]))
     }).catch(console.error).finally(()=>setLoading(false))
+    load()
 
     const s=createSocket()
+    s.on('syncApplied',({colls})=>{if(colls.includes('orders'))load()})
     s.on('newOrder',o=>setOrders(p=>p.some(x=>x._id===o._id)?p:[...p,o]))
     s.on('orderUpdated',o=>setOrders(p=>p.map(x=>x._id===o._id?o:x)))
     s.on('orderClosed',id=>{

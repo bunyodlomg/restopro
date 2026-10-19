@@ -7,7 +7,7 @@ const { adminOnly } = require('../middleware/auth')
 const multer   = require('multer')
 const { imageFilter, audioFilter } = require('../utils/uploadFilters')
 
-const UPLOAD_DIR = path.join(__dirname, '..', 'uploads')
+const { UPLOAD_DIR } = require('../config')
 const SOUND_TYPES = ['tick','nav','confirm','success','warn','newOrder']
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true })
 

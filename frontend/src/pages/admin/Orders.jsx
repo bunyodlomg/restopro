@@ -148,11 +148,13 @@ export default function Orders() {
   const { settings } = useSettings()
 
   useEffect(() => {
-    API.get('/api/orders')
+    const load = () => API.get('/api/orders')
       .then(({ data }) => setOrders(data.filter(o => o.status === 'pending')))
       .catch(console.error)
       .finally(() => setLoading(false))
+    load()
     const socket = createSocket({ transports:['websocket'], reconnection:true })
+    socket.on('syncApplied', ({ colls }) => { if (colls.includes('orders')) load() })
     socket.on('newOrder',     o  => setOrders(p => [...p, o]))
     socket.on('orderUpdated', o  => setOrders(p => p.map(x => x._id === o._id ? o : x)))
     socket.on('orderClosed',  id => setOrders(p => p.filter(x => x._id !== id)))

@@ -13,7 +13,7 @@ const SYNC_URL    = (process.env.SYNC_URL || '').replace(/\/+$/, '')
 const SYNC_KEY    = process.env.SYNC_KEY || ''
 const REMOTE_ID   = process.env.SYNC_REMOTE_ID || 'cloud'
 const INTERVAL_MS = Math.max(5, parseInt(process.env.SYNC_INTERVAL, 10) || 15) * 1000
-const UPLOAD_DIR  = path.join(__dirname, '..', 'uploads')
+const { UPLOAD_DIR } = require('../config')
 const TIMEOUT_MS  = 20000
 
 const stateColl = () => mongoose.connection.collection('sync_state')

@@ -24,7 +24,12 @@ export default function Tables(){
     catch{toast.error('Xatolik')}
     finally{setLoading(false)}
   }
-  useEffect(()=>{fetch()},[cat])
+  useEffect(()=>{
+    fetch()
+    const s=createSocket()
+    s.on('syncApplied',({colls})=>{if(colls.includes('tables'))fetch()})
+    return()=>s.disconnect()
+  },[cat])
   // Tezkor qo'shish — keyingi bo'sh raqamli stolni darhol yaratadi
   const addTable=async()=>{
     if(adding)return

@@ -59,6 +59,31 @@ Birinchi ishga tushishda `admin` foydalanuvchisi yaratiladi:
 
 Birinchi kirishda parolni almashtirish majburiy.
 
+## Kassa dasturi (Windows, internetsiz ishlaydi)
+`desktop/` — Electron ilova. Kassa kompyuterida MongoDB va serverni o'zi ishga tushiradi:
+- internet bo'lmasa ham to'liq ishlaydi (buyurtma, yopish, chek, ombor);
+- ofitsantlar telefonda restoran Wi-Fi'si orqali `http://<kassa-IP>:5050` ni ochadi
+  (manzil tray belgisi menyusida);
+- internet bo'lganda cloud server bilan avtomatik sinxronlanadi (ikki tomonlama,
+  ziddiyatda oxirgi o'zgarish yutadi). Ekranda **Online / Offline** belgisi ko'rinadi;
+- oyna yopilsa trayda ishlashda davom etadi, Windows bilan birga ishga tushadi,
+  kuniga bir marta lokal backup oladi.
+
+**Installer yig'ish:** GitHub → Actions → *Kassa (Windows)* → *Run workflow*.
+Tayyor `RestoPro Kassa Setup.exe` artifact sifatida yuklab olinadi
+(yoki `git tag kassa-v1.0.0 && git push origin kassa-v1.0.0` — Release'ga qo'shiladi).
+
+**Kassani ulash:** cloud serverda `install.sh` oxirida `SYNC_URL` va `SYNC_KEY` ko'rsatiladi.
+Kassa birinchi ochilganda shu ikkisi so'raladi. Birinchi ishga tushirishda internet kerak
+(menyu, xodimlar, sozlamalar cloud'dan yuklanadi), keyin internetsiz ishlayveradi.
+
+> ⚠️ Ombor qoldig'i: kassa offline paytida taom sotib, xuddi shu vaqtda cloud'dan o'sha
+> mahsulot qoldig'i qo'lda o'zgartirilsa, oxirgi o'zgarish yutadi. Ombor kirimini
+> kassadan kiritish tavsiya etiladi.
+
+Lokal ishlab chiqish (Linux): `cd desktop && npm install &&
+node scripts/prepare.js --platform linux --mongo-dir <mongod papkasi> && npm start`
+
 ## Zaxira nusxa (backup)
 `deploy/backup.sh` MongoDB bazasi va `server/uploads` papkasini bitta arxivga yig'adi:
 `restopro-YYYYMMDD-HHMMSS.tar.gz`. Oxirgi `BACKUP_KEEP` ta arxiv saqlanadi, eskilari o'chiriladi.

@@ -22,7 +22,7 @@ app.set('trust proxy', 'loopback')
 app.disable('x-powered-by')
 
 // ── uploads papkasini yaratish ─────────────────────────────────
-const UPLOAD_DIR = path.join(__dirname, 'uploads')
+const { UPLOAD_DIR } = require('./config')
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true })
   console.log('📁 uploads/ papkasi yaratildi')
@@ -32,6 +32,9 @@ if (!fs.existsSync(UPLOAD_DIR)) {
 const ALLOWED = process.env.CLIENT_URL?.split(',').map(s => s.trim()) || []
 // ngrok/cloudflare tunnellari faqat ishlab chiqishda: ALLOW_TUNNELS=true
 const ALLOW_TUNNELS = process.env.ALLOW_TUNNELS === 'true'
+// Kassa (Electron) rejimi: restoran Wi-Fi'sidagi telefonlar http://192.168.x.x:PORT orqali kiradi
+const ALLOW_LAN = process.env.ALLOW_LAN === 'true'
+const PRIVATE_HOST = /^(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/
 const corsOrigin = (origin, cb) => {
   // browser bo'lmagan so'rovlar (curl, Postman) yoki ngrok proxy (no Origin)
   if (!origin) return cb(null, true)
@@ -41,6 +44,7 @@ const corsOrigin = (origin, cb) => {
   if (ALLOW_TUNNELS && /\.ngrok-free\.app$|\.ngrok-free\.dev$|\.ngrok\.app$|\.ngrok\.io$|\.trycloudflare\.com$/.test(new URL(origin).hostname)) {
     return cb(null, true)
   }
+  if (ALLOW_LAN && PRIVATE_HOST.test(new URL(origin).hostname)) return cb(null, true)
   // Localhost har qanday port
   if (/^https?:\/\/localhost(:\d+)?$/.test(origin) || /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) {
     return cb(null, true)

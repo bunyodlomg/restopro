@@ -13,6 +13,7 @@ import { API_URL }     from '../config.js'
 import { createSocket } from '../api/socket.js'
 import toast           from 'react-hot-toast'
 import { getNewOrderSoundUrl } from '../utils/sound.js'
+import SyncBadge from '../components/shared/SyncBadge.jsx'
 
 const NAV = [
   { to:'/admin',             label:'Dashboard',   Icon:LayoutDashboard, end:true },
@@ -90,6 +91,7 @@ export default function AdminLayout() {
                 {brandName}
               </div>
               <div style={{ fontSize:'0.68rem', color:'var(--brand)', fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase' }}>Admin Panel</div>
+              <div style={{ marginTop: 6 }}><SyncBadge/></div>
             </div>
           </div>
         )}

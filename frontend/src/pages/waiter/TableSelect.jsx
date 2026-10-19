@@ -35,6 +35,7 @@ export default function TableSelect() {
     s.on('tableUpdated', t  => setTables(p => p.map(x  => x._id === t._id ? t : x)))
     s.on('tableCreated', t  => { if (t.category === cat) setTables(p => [...p, t]) })
     s.on('tableDeleted', id => setTables(p => p.filter(x => x._id !== id)))
+    s.on('syncApplied', ({ colls }) => { if (colls.includes('tables')) load() })
     return () => s.disconnect()
   }, [cat])
 

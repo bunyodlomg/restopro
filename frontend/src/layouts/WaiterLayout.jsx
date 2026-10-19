@@ -5,6 +5,7 @@ import { useAuth }     from '../context/AuthContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { useTheme }    from '../context/ThemeContext.jsx'
 import { API_URL }     from '../config.js'
+import SyncBadge       from '../components/shared/SyncBadge.jsx'
 
 export default function WaiterLayout() {
   const { user, logout }   = useAuth()
@@ -56,6 +57,7 @@ export default function WaiterLayout() {
           </nav>
 
           <div style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
+            <SyncBadge compact/>
             {/* Desktop user badge */}
             <div className="wai-header-user hide-mobile">
               <div className="wai-header-avatar">
