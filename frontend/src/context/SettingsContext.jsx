@@ -14,23 +14,21 @@ export function SettingsProvider({ children }) {
     serviceFeePercent: 10,
   })
 
-  useEffect(() => {
-    // Token yo'q bo'lsa settings yuklashning hojati yo'q
-    if (!localStorage.getItem('rp_token')) return
-    API.get('/api/settings').then(({ data }) => {
-      setSettings(data)
-      if (data.brandName) document.title = data.brandName
-      if (data.sounds) loadCustomSounds(data.sounds, API_URL)
-    }).catch(() => {})
-  }, [])
+  const apply = data => {
+    setSettings(s => ({ ...s, ...data }))
+    if (data.brandName) document.title = data.brandName
+    if (data.sounds) loadCustomSounds(data.sounds, API_URL)
+  }
 
   const refresh = async () => {
     try {
-      const { data } = await API.get('/api/settings')
-      setSettings(data)
-      if (data.sounds) loadCustomSounds(data.sounds, API_URL)
+      if (localStorage.getItem('rp_token')) return apply((await API.get('/api/settings')).data)
     } catch {}
+    // Tizimga kirilmagan yoki obuna bloklangan — faqat nom va logo
+    try { apply((await API.get('/api/settings/public')).data) } catch {}
   }
+
+  useEffect(() => { refresh() }, [])
 
   return (
     <SettingsContext.Provider value={{ settings, setSettings, refresh }}>

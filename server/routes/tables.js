@@ -13,6 +13,34 @@ router.get('/', auth, async (req, res) => {
   } catch { res.status(500).json({ message: 'Server xatosi' }) }
 })
 
+// GET /api/tables/qr — QR kodlar uchun: har stolga kalit (bo'lmasa yaratiladi) va mumkin bo'lgan manzillar
+router.get('/qr', auth, adminOnly, async (req, res) => {
+  try {
+    const crypto = require('crypto')
+    const tables = await Table.find({ category: { $ne: 'soboy' } }).sort({ category: 1, number: 1 })
+    for (const t of tables) if (!t.qrToken) { t.qrToken = crypto.randomBytes(12).toString('base64url'); await t.save() }
+    // Mijoz telefoni ochadigan manzil: kassada LAN IP, cloud'da domen
+    const port = process.env.PORT || 5000
+    const lan = Object.values(require('os').networkInterfaces()).flat()
+      .filter(i => i && i.family === 'IPv4' && !i.internal && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(i.address))
+      .map(i => `http://${i.address}:${port}`)
+    const domains = (process.env.CLIENT_URL || '').split(',').map(x => x.trim()).filter(x => /^https:\/\//.test(x))
+    res.json({
+      tables: tables.map(t => ({ _id: t._id, number: t.number, category: t.category, qrToken: t.qrToken })),
+      urls: [...new Set([...(process.env.SYNC_URL ? [] : domains), ...lan])],
+    })
+  } catch { res.status(500).json({ message: 'Server xatosi' }) }
+})
+
+// POST /api/tables/:id/qr-reset — QR kodni yangilash (eski QR ishlamay qoladi)
+router.post('/:id/qr-reset', auth, adminOnly, async (req, res) => {
+  try {
+    const t = await Table.findByIdAndUpdate(req.params.id, { qrToken: require('crypto').randomBytes(12).toString('base64url') }, { new: true })
+    if (!t) return res.status(404).json({ message: 'Topilmadi' })
+    res.json({ _id: t._id, qrToken: t.qrToken })
+  } catch { res.status(500).json({ message: 'Server xatosi' }) }
+})
+
 // POST /api/tables
 router.post('/', auth, adminOnly, async (req, res) => {
   try {
@@ -31,9 +59,13 @@ router.post('/', auth, adminOnly, async (req, res) => {
 })
 
 // PUT /api/tables/:id
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', auth, adminOnly, async (req, res) => {
   try {
-    const table = await Table.findByIdAndUpdate(req.params.id, req.body, { new: true })
+    // Holat (band/bo'sh) faqat buyurtmalar orqali o'zgaradi
+    const update = {}
+    if (req.body.number      !== undefined) update.number      = +req.body.number
+    if (req.body.description !== undefined) update.description = String(req.body.description).slice(0, 200)
+    const table = await Table.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true })
     if (!table) return res.status(404).json({ message: 'Topilmadi' })
     req.app.get('io').emit('tableUpdated', table)
     res.json(table)

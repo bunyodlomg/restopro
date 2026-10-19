@@ -5,10 +5,12 @@ import { AuthProvider, useAuth }       from './context/AuthContext.jsx'
 import { SettingsProvider }            from './context/SettingsContext.jsx'
 import { ThemeProvider, useTheme }     from './context/ThemeContext.jsx'
 import { playSound, soundForElement }  from './utils/sound.js'
+import LicenseGate                     from './components/LicenseGate.jsx'
 
 import AdminLayout  from './layouts/AdminLayout.jsx'
 import WaiterLayout from './layouts/WaiterLayout.jsx'
 import Login        from './pages/Login.jsx'
+import ChangePassword from './pages/ChangePassword.jsx'
 
 import Dashboard    from './pages/admin/Dashboard.jsx'
 import Orders       from './pages/admin/Orders.jsx'
@@ -23,23 +25,31 @@ import Settings     from './pages/admin/Settings.jsx'
 import TableSelect  from './pages/waiter/TableSelect.jsx'
 import OrderCreate  from './pages/waiter/OrderCreate.jsx'
 import MyOrders     from './pages/waiter/MyOrders.jsx'
+import Reservations from './pages/admin/Reservations.jsx'
+import QrCodes      from './pages/admin/QrCodes.jsx'
+import GuestMenu    from './pages/guest/GuestMenu.jsx'
+import TerminalLock from './components/TerminalLock.jsx'
+import UpdateBanner from './components/UpdateBanner.jsx'
 
 function Loader() {
-  return (
-    <div style={{ background:'var(--bg)', minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:'1rem' }}>
-      <div className="spinner"/>
-      <p style={{ color:'var(--text-3)', fontSize:'0.875rem', fontFamily:'DM Sans,sans-serif' }}>Yuklanmoqda...</p>
-    </div>
-  )
+  return <div className="center-fill" style={{ minHeight: '100vh', background: 'var(--bg)' }}><div className="spinner"/></div>
 }
 function RequireAdmin({ children }) {
   const { user, loading, isAdmin } = useAuth()
   if (loading) return <Loader/>
   if (!user)    return <Navigate to="/login" replace/>
+  if (user.mustChangePassword) return <Navigate to="/change-password" replace/>
   if (!isAdmin) return <Navigate to="/waiter" replace/>
   return children
 }
 function RequireWaiter({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return <Loader/>
+  if (!user)   return <Navigate to="/login" replace/>
+  if (user.mustChangePassword) return <Navigate to="/change-password" replace/>
+  return children
+}
+function RequireUser({ children }) {
   const { user, loading } = useAuth()
   if (loading) return <Loader/>
   if (!user)   return <Navigate to="/login" replace/>
@@ -72,6 +82,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/"      element={<RootRedirect/>}/>
         <Route path="/login" element={<Login/>}/>
+        <Route path="/change-password" element={<RequireUser><ChangePassword/></RequireUser>}/>
         <Route path="/admin" element={<RequireAdmin><AdminLayout/></RequireAdmin>}>
           <Route index              element={<Dashboard/>}/>
           <Route path="orders"      element={<Orders/>}/>
@@ -82,6 +93,11 @@ function AppRoutes() {
           <Route path="users"       element={<Users/>}/>
           <Route path="salaries"    element={<Salaries/>}/>
           <Route path="settings"    element={<Settings/>}/>
+          <Route path="reservations" element={<Reservations/>}/>
+          <Route path="tables/qr"   element={<QrCodes/>}/>
+          <Route path="kassa"       element={<TableSelect/>}/>
+          <Route path="kassa/order/:tableId" element={<OrderCreate/>}/>
+          <Route path="kassa/soboy" element={<OrderCreate/>}/>
         </Route>
         <Route path="/waiter" element={<RequireWaiter><WaiterLayout/></RequireWaiter>}>
           <Route index                 element={<TableSelect/>}/>
@@ -91,31 +107,39 @@ function AppRoutes() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace/>}/>
       </Routes>
-      <Toaster position="top-right" toastOptions={{
+      <Toaster position="top-center" toastOptions={{
         duration: 3000,
         style: {
-          background: isDark ? '#1D1A15' : '#fff',
-          color: isDark ? '#F2EDE6' : '#1A1612',
-          border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+          background: isDark ? '#F4F4F2' : '#0B0B0C',
+          color: isDark ? '#0B0B0C' : '#fff',
           borderRadius: '14px',
-          fontFamily: 'DM Sans,sans-serif',
-          fontSize: '0.875rem',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          padding: '12px 16px',
+          fontFamily: 'var(--font)',
+          fontSize: '15px',
+          fontWeight: 600,
+          boxShadow: '0 12px 40px rgba(0,0,0,.25)',
         },
-        success: { iconTheme: { primary:'#22C55E', secondary: isDark ? '#1D1A15' : '#fff' } },
-        error:   { iconTheme: { primary:'#EF4444', secondary: isDark ? '#1D1A15' : '#fff' } },
+        success: { iconTheme: { primary: '#22C55E', secondary: isDark ? '#F4F4F2' : '#0B0B0C' } },
+        error:   { iconTheme: { primary: '#FF3B2F', secondary: isDark ? '#F4F4F2' : '#0B0B0C' } },
       }}/>
     </>
   )
 }
 
 export default function App() {
+  // Mijozning QR menyusi — tizimga kirishsiz, alohida sahifa
+  if (window.location.pathname.startsWith('/m/')) return (
+    <ThemeProvider>
+      <GuestMenu token={decodeURIComponent(window.location.pathname.slice(3).split('/')[0])}/>
+      <Toaster position="top-center" toastOptions={{ style: { background: '#0B0B0C', color: '#fff', borderRadius: '14px', fontWeight: 600 } }}/>
+    </ThemeProvider>
+  )
   return (
     <ThemeProvider>
       <AuthProvider>
         <SettingsProvider>
           <BrowserRouter>
-            <AppRoutes/>
+            <LicenseGate><TerminalLock/><UpdateBanner/><AppRoutes/></LicenseGate>
           </BrowserRouter>
         </SettingsProvider>
       </AuthProvider>

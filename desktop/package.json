@@ -1,0 +1,72 @@
+{
+  "name": "restopro-kassa",
+  "productName": "RestoPro Kassa",
+  "version": "1.0.0",
+  "description": "RestoPro — internetsiz ham ishlaydigan kassa (Electron)",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "prepare:win": "node scripts/prepare.js --platform win32",
+    "prepare:local": "node scripts/prepare.js --platform linux",
+    "start": "electron .",
+    "dist:win": "npm run prepare:win && electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "33.2.0",
+    "electron-builder": "25.1.8",
+    "extract-zip": "2.0.1"
+  },
+  "build": {
+    "appId": "uz.restopro.kassa",
+    "productName": "RestoPro Kassa",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "preload-app.js",
+      "print.js",
+      "setup.html",
+      "assets/**",
+      "updater.js"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/server",
+        "to": "server"
+      },
+      {
+        "from": "resources/web",
+        "to": "web"
+      },
+      {
+        "from": "resources/mongodb",
+        "to": "mongodb"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "RestoPro Kassa",
+      "include": "build/installer.nsh",
+      "artifactName": "RestoPro-Kassa-Setup-${version}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://updates.restopro.invalid/updates"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.3.9"
+  }
+}

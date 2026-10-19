@@ -1,157 +1,236 @@
-import React,{useState,useEffect}from'react'
-import{motion}from'framer-motion'
-import{UserPlus,Trash2,Search,Shield,User,Edit2}from'lucide-react'
-import toast from'react-hot-toast'
-import API from'../../api/api.js'
-import PageHeader from'../../components/shared/PageHeader.jsx'
-import Modal,{ModalField,ModalActions}from'../../components/shared/Modal.jsx'
+import React, { useState, useEffect } from 'react'
+import { UserPlus, Trash2, Search, Pencil, Users as UsersIcon, ShieldOff, ShieldCheck, KeyRound } from 'lucide-react'
+import toast from 'react-hot-toast'
+import API from '../../api/api.js'
+import Modal, { ModalField } from '../../components/shared/Modal.jsx'
+import { PageHead, Loading, Empty, Switch, money, initials } from '../../components/ui.jsx'
+import { useSettings } from '../../context/SettingsContext.jsx'
+import { useAuth } from '../../context/AuthContext.jsx'
 
-export default function Users(){
-  const[users,setUsers]=useState([])
-  const[loading,setLoading]=useState(true)
-  const[q,setQ]=useState('')
-  const[open,setOpen]=useState(false)
-  const[editing,setEditing]=useState(null)
-  const[saving,setSaving]=useState(false)
-  const[form,setForm]=useState({name:'',username:'',password:'',role:'waiter',phone:'',salary:''})
+const EMPTY = { name: '', username: '', password: '', role: 'waiter', phone: '', salary: '', pin: '' }
 
-  const load=async()=>{
-    try{const{data}=await API.get('/api/users');setUsers(data)}
-    catch{toast.error('Xatolik')}finally{setLoading(false)}
+export default function Users() {
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [removing, setRemoving] = useState(null)
+  const [form, setForm] = useState(EMPTY)
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
+  const { settings, refresh } = useSettings()
+  const { user: me } = useAuth()
+  const staffOn = settings.staffAccessEnabled !== false
+  const [confirmOff, setConfirmOff] = useState(false)
+
+  // Barcha xodimlar (admin bo'lmaganlar) kirishini yoqish/o'chirish
+  const setStaffAccess = async enabled => {
+    const fd = new FormData(); fd.append('staffAccessEnabled', String(enabled))
+    try {
+      await API.put('/api/settings', fd); await refresh()
+      toast.success(enabled ? 'Xodimlar kirishi yoqildi' : "Barcha xodimlar tizimdan chiqarildi")
+      setConfirmOff(false)
+    } catch (e) { toast.error(e.response?.data?.message || 'Xatolik') }
   }
-  useEffect(()=>{load()},[])
+  // Bitta xodimni yoqish/o'chirish
+  const toggleActive = async (u, isActive) => {
+    try {
+      const { data } = await API.put(`/api/users/${u._id}`, { isActive })
+      setUsers(p => p.map(x => (x._id === u._id ? data : x)))
+      toast.success(isActive ? `${u.name} — kirish yoqildi` : `${u.name} — kirish o'chirildi`)
+    } catch (e) { toast.error(e.response?.data?.message || 'Xatolik') }
+  }
 
-  const openAdd=()=>{setEditing(null);setForm({name:'',username:'',password:'',role:'waiter',phone:'',salary:''});setOpen(true)}
-  const openEdit=u=>{setEditing(u);setForm({name:u.name,username:u.username,password:'',role:u.role,phone:u.phone||'',salary:u.salary||''});setOpen(true)}
+  const load = async () => {
+    try { const { data } = await API.get('/api/users'); setUsers(data) }
+    catch { toast.error("Yuklab bo'lmadi") }
+    finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, [])
 
-  const save=async()=>{
-    if(!form.name||!form.username)return toast.error("Ism va username to'ldiring")
-    if(!editing&&!form.password)return toast.error("Parol kiriting")
+  const openAdd = () => { setEditing(null); setForm(EMPTY); setOpen(true) }
+  const openEdit = u => {
+    setEditing(u)
+    setForm({ name: u.name, username: u.username, password: '', role: u.role, phone: u.phone || '', salary: u.salary || '', pin: '', clearPin: false })
+    setOpen(true)
+  }
+
+  const save = async () => {
+    if (!form.name || !form.username) return toast.error("Ism va loginni to'ldiring")
+    if (!editing && !form.password) return toast.error('Parol kiriting')
     setSaving(true)
-    try{
-      const body={...form}
-      if(form.salary)body.salary=+form.salary
-      if(!body.password)delete body.password
-      if(editing){
-        const{data}=await API.put(`/api/users/${editing._id}`,body)
-        setUsers(p=>p.map(u=>u._id===editing._id?data:u));toast.success('Saqlandi')
-      }else{
-        const{data}=await API.post('/api/users',body)
-        setUsers(p=>[data,...p]);toast.success("Qo'shildi!")
+    try {
+      const body = { ...form }
+      if (form.salary) body.salary = +form.salary
+      if (!body.password) delete body.password
+      if (body.pin && !/^\d{4}$/.test(body.pin)) { setSaving(false); return toast.error('PIN 4 ta raqam bo\'lsin') }
+      if (body.clearPin) body.pin = ''
+      else if (!body.pin) delete body.pin
+      delete body.clearPin
+      if (editing) {
+        const { data } = await API.put(`/api/users/${editing._id}`, body)
+        setUsers(p => p.map(u => (u._id === editing._id ? data : u)))
+        toast.success('Saqlandi')
+      } else {
+        const { data } = await API.post('/api/users', body)
+        setUsers(p => [data, ...p])
+        toast.success("Xodim qo'shildi")
       }
       setOpen(false)
-    }catch(e){toast.error(e.response?.data?.message||'Xatolik')}finally{setSaving(false)}
+    } catch (e) { toast.error(e.response?.data?.message || 'Xatolik') }
+    finally { setSaving(false) }
   }
 
-  const del=async id=>{
-    if(!confirm("O'chirasizmi?"))return
-    try{await API.delete(`/api/users/${id}`);setUsers(p=>p.filter(u=>u._id!==id));toast.success("O'chirildi")}
-    catch{toast.error('Xatolik')}
+  const del = async () => {
+    const u = removing
+    try {
+      await API.delete(`/api/users/${u._id}`)
+      setUsers(p => p.filter(x => x._id !== u._id))
+      toast.success("O'chirildi")
+      setRemoving(null)
+    } catch (e) { toast.error(e.response?.data?.message || 'Xatolik') }
   }
 
-  const filtered=users.filter(u=>u.name?.toLowerCase().includes(q.toLowerCase())||u.username?.toLowerCase().includes(q.toLowerCase()))
+  const s = q.trim().toLowerCase()
+  const filtered = users.filter(u => !s || u.name?.toLowerCase().includes(s) || u.username?.toLowerCase().includes(s))
+  const admins = users.filter(u => u.role === 'admin').length
 
-  return(
-    <div className="page-enter" style={{minHeight:'100vh',background:'var(--bg)',padding:'2rem'}}>
-      <PageHeader title="Xodimlar" subtitle={`${users.length} ta foydalanuvchi`}
-        action={<div style={{display:'flex',gap:'0.5rem'}}>
-          <div style={{position:'relative'}}>
-            <Search size={14} style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'#4A4238'}}/>
-            <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Qidirish..." className="rp-input" style={{paddingLeft:32,width:180}}/>
+  return (
+    <div className="page">
+      <PageHead title="Xodimlar" sub={`${users.length} ta xodim · ${admins} admin · ${users.length - admins} ofitsant`}
+        actions={<>
+          <div className="input-icon" style={{ width: 240 }}>
+            <Search size={19}/>
+            <input className="input" value={q} onChange={e => setQ(e.target.value)} placeholder="Ism yoki login"/>
           </div>
-          <button className="adm-btn-primary" onClick={openAdd}><UserPlus size={15}/>Qo'shish</button>
-        </div>}
-      />
+          <button className="btn btn-primary btn-lg" onClick={openAdd}><UserPlus size={20}/> Xodim qo'shish</button>
+        </>}/>
 
-      <div style={{background:'var(--card)',border:'1px solid var(--border)',borderRadius:16,overflow:'hidden'}}>
-        {loading?(
-          <div style={{display:'flex',justifyContent:'center',padding:'3rem'}}><div className="spinner"/></div>
-        ):(
-          <table className="data-table">
-            <thead>
-              <tr style={{borderBottom:'1px solid rgba(255,255,255,0.05)'}}>
-                {['Xodim','Username','Rol','Oylik',''].map(h=>
-                  <th key={h} style={{color:'var(--text-3)',background:'rgba(var(--brand-rgb),0.03)'}}>{h}</th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((u,i)=>(
-                <motion.tr key={u._id}
-                  initial={{opacity:0,x:-16}}
-                  animate={{opacity:1,x:0}}
-                  transition={{duration:0.3,delay:i*0.04}}
-                  style={{borderBottom:i<filtered.length-1?'1px solid rgba(255,255,255,0.04)':'none',transition:'background 0.15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.background='rgba(var(--brand-rgb),0.02)'}
-                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}
-                >
-                  <td>
-                    <div style={{display:'flex',alignItems:'center',gap:'0.625rem'}}>
-                      <div style={{width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,var(--brand),var(--brand-lt))',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontWeight:700,fontSize:'0.875rem',flexShrink:0}}>
-                        {u.name?.[0]?.toUpperCase()}
+      <div className={`card card-pad staff-switch ${staffOn ? '' : 'off'}`}>
+        {staffOn ? <ShieldCheck size={28}/> : <ShieldOff size={28}/>}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <b style={{ fontSize: 17 }}>{staffOn ? 'Xodimlar tizimga kira oladi' : "Xodimlar kirishi o'chirilgan"}</b>
+          <div className="hint" style={{ color: 'inherit', opacity: .75 }}>
+            {staffOn ? "O'chirsangiz barcha ofitsantlar darhol chiqariladi va qayta kira olmaydi. Adminlar ishlayveradi."
+              : 'Hech bir ofitsant kira olmaydi va buyurtma bera olmaydi. Ish boshlanganda yoqing.'}
+          </div>
+        </div>
+        <Switch checked={staffOn} onChange={v => (v ? setStaffAccess(true) : setConfirmOff(true))}/>
+      </div>
+
+      <div className="card">
+        {loading ? <Loading/> : filtered.length === 0 ? (
+          <Empty icon={UsersIcon} title={s ? 'Topilmadi' : "Xodim yo'q"} text={s ? `«${q}» bo'yicha xodim yo'q` : "Birinchi xodimni qo'shing."}/>
+        ) : (
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr><th>Xodim</th><th>Login</th><th>Rol</th><th className="r">Oylik</th><th>Kirish</th><th/></tr>
+              </thead>
+              <tbody>
+                {filtered.map(u => (
+                  <tr key={u._id} style={{ opacity: u.isActive === false ? .55 : 1 }}>
+                    <td>
+                      <div className="row">
+                        <span className="avatar" style={{ width: 42, height: 42 }}>{initials(u.name)}</span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 600 }}>{u.name}</div>
+                          {u.phone && <div className="mono muted" style={{ fontSize: 13 }}>{u.phone}</div>}
+                        </div>
                       </div>
-                      <div>
-                        <div style={{fontWeight:600,fontSize:'0.875rem',color:'var(--text)'}}>{u.name}</div>
-                        {u.phone&&<div style={{fontSize:'0.68rem',color:'var(--text-3)'}}>{u.phone}</div>}
+                    </td>
+                    <td className="mono muted">{u.username}</td>
+                    <td>
+                      <div className="row" style={{ gap: 6 }}>
+                        {u.role === 'admin' ? <span className="tag tag-accent">Admin</span> : <span className="tag">Ofitsant</span>}
+                        {u.hasPin && <span className="tag" title="Monoblokda PIN bilan kiradi"><KeyRound size={12}/> PIN</span>}
                       </div>
-                    </div>
-                  </td>
-                  <td style={{color:'var(--text-3)',fontSize:'0.85rem'}}>@{u.username}</td>
-                  <td>
-                    <span className={`badge ${u.role==='admin'?'badge-brand':'badge-info'}`} style={{display:'inline-flex',alignItems:'center',gap:4}}>
-                      {u.role==='admin'?<Shield size={10}/>:<User size={10}/>}
-                      {u.role==='admin'?'Admin':'Ofitsant'}
-                    </span>
-                  </td>
-                  <td style={{color: u.salary?'var(--brand)':'#7A7060',fontWeight: u.salary?600:400,fontSize:'0.85rem'}}>
-                    {u.salary?`${u.salary.toLocaleString()} so'm`:'—'}
-                  </td>
-                  <td style={{textAlign:'right'}}>
-                    <div style={{display:'flex',gap:4,justifyContent:'flex-end'}}>
-                      <button onClick={()=>openEdit(u)} style={{width:28,height:28,borderRadius:7,background:'rgba(var(--brand-rgb),0.08)',border:'none',cursor:'pointer',color:'var(--brand)',display:'flex',alignItems:'center',justifyContent:'center',transition:'background 0.2s'}}
-                        onMouseEnter={e=>e.currentTarget.style.background='rgba(var(--brand-rgb),0.18)'}
-                        onMouseLeave={e=>e.currentTarget.style.background='rgba(var(--brand-rgb),0.08)'}
-                      ><Edit2 size={13}/></button>
-                      <button onClick={()=>del(u._id)} style={{width:28,height:28,borderRadius:7,background:'rgba(239,68,68,0.08)',border:'none',cursor:'pointer',color:'#EF4444',display:'flex',alignItems:'center',justifyContent:'center',transition:'background 0.2s'}}
-                        onMouseEnter={e=>e.currentTarget.style.background='rgba(239,68,68,0.18)'}
-                        onMouseLeave={e=>e.currentTarget.style.background='rgba(239,68,68,0.08)'}
-                      ><Trash2 size={13}/></button>
-                    </div>
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
+                    </td>
+                    <td className="r mono">{u.salary ? money(u.salary) : <span className="muted">—</span>}</td>
+                    <td>{u._id === me?._id ? <span className="muted">siz</span> : <Switch checked={u.isActive !== false} onChange={v => toggleActive(u, v)}/>}</td>
+                    <td className="r">
+                      <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
+                        <button className="btn btn-soft btn-icon" title="Tahrirlash" onClick={() => openEdit(u)}><Pencil size={18}/></button>
+                        <button className="btn btn-danger btn-icon" title="O'chirish" onClick={() => setRemoving(u)}><Trash2 size={18}/></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      <Modal open={open} onClose={()=>setOpen(false)} title={editing?`${editing.name} — tahrirlash`:'Yangi xodim'}>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-          <ModalField label="Ism familiya *">
-            <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="Ali Karimov" className="rp-input"/>
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? editing.name : 'Yangi xodim'}
+        footer={<>
+          <button className="btn btn-ghost btn-lg" onClick={() => setOpen(false)}>Bekor qilish</button>
+          <button className="btn btn-primary btn-lg" onClick={save} disabled={saving}>
+            {saving ? <><span className="spinner-sm"/> Saqlanmoqda</> : 'Saqlash'}
+          </button>
+        </>}>
+        <div className="col" style={{ gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <ModalField label="Ism familiya" required>
+              <input className="input" value={form.name} onChange={set('name')} placeholder="Ali Karimov"/>
+            </ModalField>
+            <ModalField label="Login" required>
+              <input className="input" value={form.username} onChange={set('username')} placeholder="ali" disabled={!!editing}
+                autoCapitalize="none" spellCheck={false}/>
+            </ModalField>
+          </div>
+          <ModalField label={editing ? 'Yangi parol' : 'Parol'} required={!editing}
+            hint={editing ? "O'zgartirmasangiz bo'sh qoldiring" : undefined}>
+            <input className="input" type="password" value={form.password} onChange={set('password')} autoComplete="new-password"/>
           </ModalField>
-          <ModalField label="Username *">
-            <input value={form.username} onChange={e=>setForm(f=>({...f,username:e.target.value}))} placeholder="ali_karimov" className="rp-input" disabled={!!editing} style={{opacity:editing?0.6:1}}/>
-          </ModalField>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <ModalField label="Rol">
+              <select className="input" value={form.role} onChange={set('role')}>
+                <option value="waiter">Ofitsant</option>
+                <option value="admin">Admin</option>
+              </select>
+            </ModalField>
+            <ModalField label="Oylik (so'm)">
+              <input className="input" type="number" inputMode="numeric" value={form.salary} onChange={set('salary')} placeholder="2000000"/>
+            </ModalField>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <ModalField label="Telefon">
+              <input className="input" type="tel" value={form.phone} onChange={set('phone')} placeholder="+998 90 123 45 67"/>
+            </ModalField>
+            <ModalField label={editing?.hasPin ? 'Yangi PIN (4 raqam)' : 'PIN (4 raqam)'} hint="Monoblokda tez kirish uchun">
+              <input className="input mono" inputMode="numeric" maxLength={4} value={form.pin}
+                onChange={e => setForm(f => ({ ...f, pin: e.target.value.replace(/\D/g, '').slice(0, 4), clearPin: false }))}
+                placeholder={editing?.hasPin ? '••••  (o\'rnatilgan)' : '4826'} autoComplete="off"/>
+            </ModalField>
+          </div>
+          {editing?.hasPin && (
+            <label className="row" style={{ gap: 8, cursor: 'pointer' }}>
+              <input type="checkbox" checked={!!form.clearPin} onChange={e => setForm(f => ({ ...f, clearPin: e.target.checked, pin: '' }))}/>
+              PIN'ni o'chirish
+            </label>
+          )}
         </div>
-        <ModalField label={editing?"Yangi parol (o'zgartirmasangiz bo'sh qoldiring)":'Parol *'}>
-          <input type="password" value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder="••••••••" className="rp-input"/>
-        </ModalField>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-          <ModalField label="Rol">
-            <select value={form.role} onChange={e=>setForm(f=>({...f,role:e.target.value}))} className="rp-input">
-              <option value="waiter">Ofitsant</option>
-              <option value="admin">Admin</option>
-            </select>
-          </ModalField>
-          <ModalField label="Oylik maoshi (so'm)">
-            <input type="number" value={form.salary} onChange={e=>setForm(f=>({...f,salary:e.target.value}))} placeholder="2000000" className="rp-input"/>
-          </ModalField>
-        </div>
-        <ModalField label="Telefon (ixtiyoriy)">
-          <input value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} placeholder="+998 90 123 45 67" className="rp-input"/>
-        </ModalField>
-        <ModalActions onClose={()=>setOpen(false)} onConfirm={save} loading={saving} confirmLabel="Saqlash"/>
+      </Modal>
+
+      <Modal open={confirmOff} onClose={() => setConfirmOff(false)} title="Barcha xodimlar kirishini o'chirish" maxWidth={460}
+        footer={<>
+          <button className="btn btn-ghost btn-lg" onClick={() => setConfirmOff(false)}>Yo'q</button>
+          <button className="btn btn-danger btn-lg" onClick={() => setStaffAccess(false)}>Ha, o'chirish</button>
+        </>}>
+        <p style={{ margin: 0, fontSize: 16 }}>
+          Barcha ofitsantlar telefon va monobloklardan darhol chiqariladi va qayta kira olmaydi. Adminlar ishlashda davom etadi.
+          Qayta yoqish uchun shu tugmani bosing.
+        </p>
+      </Modal>
+
+      <Modal open={!!removing} onClose={() => setRemoving(null)} title="Xodimni o'chirish" maxWidth={440}
+        footer={<>
+          <button className="btn btn-ghost btn-lg" onClick={() => setRemoving(null)}>Yo'q</button>
+          <button className="btn btn-danger btn-lg" onClick={del}>Ha, o'chirish</button>
+        </>}>
+        <p style={{ margin: 0, fontSize: 16 }}>{removing?.name} tizimdan o'chiriladi. Uning eski buyurtmalari saqlanib qoladi.</p>
       </Modal>
     </div>
   )

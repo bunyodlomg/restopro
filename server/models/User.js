@@ -9,11 +9,18 @@ const UserSchema = new Schema({
   salary:    { type: Number, default: 0 },   // oylik maoshi (so'm)
   hiredAt:   { type: Date,   default: Date.now },
   isActive:  { type: Boolean, default: true },
+  mustChangePassword: { type: Boolean, default: false },  // birinchi kirishda parolni almashtirish
+  // Monoblokda 4 raqamli PIN bilan kirish. sha256(salt + pin) — kassa va cloud'da bir xil ishlaydi
+  pinHash:   { type: String, default: '' },
+  pinSalt:   { type: String, default: '' },
 }, { timestamps: true })
 
 UserSchema.methods.toJSON = function() {
   const obj = this.toObject()
   delete obj.password
+  obj.hasPin = !!obj.pinHash
+  delete obj.pinHash
+  delete obj.pinSalt
   return obj
 }
 

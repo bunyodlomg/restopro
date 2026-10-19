@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RestoPro — Litsenziyalar</title>
+<style>
+  :root {
+    --bg: #F2F2EF; --panel: #fff; --thumb: #ECECE8; --rule: rgba(0,0,0,.08); --ink: #0B0B0C; --ink-2: #3B3B40; --ink-3: #8A8A90;
+    --accent: #FF3B2F; --accent-soft: rgba(255,59,47,.10); --accent-ink: #D0261B;
+    --ok: #16A34A; --ok-soft: rgba(22,163,74,.12); --warn: #8A6A00; --warn-soft: rgba(234,179,8,.18);
+    --font: system-ui, -apple-system, 'Segoe UI', sans-serif; --mono: ui-monospace, 'SF Mono', Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0B0B0C; --panel: #18181B; --thumb: #222226; --rule: rgba(255,255,255,.08); --ink: #F4F4F2; --ink-2: #C9C9CC; --ink-3: #8A8A90;
+      --accent-ink: #FF7A70; --accent-soft: rgba(255,59,47,.16); --ok: #22C55E; --ok-soft: rgba(34,197,94,.14); --warn: #FACC15; --warn-soft: rgba(234,179,8,.14); }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 500 15px/1.4 var(--font); }
+  header { background: #0B0B0C; color: #fff; padding: 0 24px; height: 64px; display: flex; align-items: center; gap: 14px; }
+  .logo { width: 38px; height: 38px; border-radius: 11px; background: var(--accent); display: grid; place-items: center; font-weight: 800; }
+  header b { font-size: 17px; } header small { display: block; font: 500 11px var(--mono); letter-spacing: .12em; color: #8A8A90; }
+  main { max-width: 1280px; margin: 0 auto; padding: 22px 24px 60px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .label { font: 600 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+  .mono { font-family: var(--mono); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 16px 0; }
+  .card { background: var(--panel); border-radius: 18px; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+  .kpi { padding: 14px 16px; } .kpi b { display: block; font: 600 26px var(--mono); letter-spacing: -.04em; margin-top: 6px; }
+  .kpi.hero { background: #0B0B0C; color: #fff; }
+  button, .btn { font: 600 14px var(--font); border: 0; border-radius: 12px; min-height: 42px; padding: 0 16px; cursor: pointer; background: var(--thumb); color: var(--ink); display: inline-flex; align-items: center; gap: 6px; }
+  .primary { background: var(--accent); color: #fff; } .dark { background: var(--ink); color: var(--bg); } .ghost { background: transparent; box-shadow: inset 0 0 0 1px var(--rule); }
+  .danger { background: var(--accent-soft); color: var(--accent-ink); }
+  input, select, textarea { font: 500 15px var(--font); width: 100%; min-height: 44px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 12px 14px; } td { padding: 12px 14px; border-top: 1px solid var(--rule); vertical-align: middle; }
+  .tag { display: inline-block; padding: 3px 9px; border-radius: 8px; font: 700 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+  .t-active { background: var(--ok-soft); color: var(--ok); } .t-warning, .t-grace { background: var(--warn-soft); color: var(--warn); }
+  .t-expired, .t-suspended { background: var(--accent-soft); color: var(--accent-ink); }
+  .key { font: 600 13px var(--mono); background: var(--thumb); padding: 5px 8px; border-radius: 8px; cursor: copy; white-space: nowrap; }
+  .muted { color: var(--ink-3); font-size: 13px; }
+  dialog { border: 0; border-radius: 22px; padding: 0; width: min(520px, 94vw); background: var(--panel); color: var(--ink); }
+  dialog::backdrop { background: rgba(0,0,0,.5); }
+  .dh { padding: 18px 20px 6px; font: 700 20px var(--font); } .db { padding: 10px 20px; display: grid; gap: 12px; } .df { padding: 14px 20px 20px; display: flex; gap: 10px; justify-content: flex-end; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .pub { font: 500 12px var(--mono); word-break: break-all; background: var(--thumb); padding: 10px 12px; border-radius: 12px; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #0B0B0C; color: #fff; padding: 12px 18px; border-radius: 12px; font-weight: 600; display: none; }
+  @media (max-width: 760px) { .hide-m { display: none; } main { padding: 14px; } .grid2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header><div class="logo">R</div><div><b>RestoPro</b><small>Litsenziyalar</small></div></header>
+<main>
+  <div class="row" style="justify-content: space-between">
+    <div><h1 style="margin:0;font-size:28px;letter-spacing:-.03em">Mijozlar</h1><div class="label" id="sub"></div></div>
+    <div class="row">
+      <input id="q" placeholder="Qidirish: nom, telefon, kalit" style="width:260px">
+      <button class="primary" onclick="openNew()">+ Yangi mijoz</button>
+    </div>
+  </div>
+  <div class="kpis" id="kpis"></div>
+  <div class="card" style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th class="label">Restoran</th><th class="label">Kalit</th><th class="label">Holat</th>
+        <th class="label">To'langan</th><th class="label hide-m">Oylik</th><th class="label hide-m">Oxirgi aloqa</th><th></th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <details class="card" style="margin-top:16px;padding:14px 16px">
+    <summary style="cursor:pointer;font-weight:700">Ulash ma'lumotlari (server/license/vendor.json uchun)</summary>
+    <p class="muted">Bu ochiq kalitni va litsenziya serveri manzilini <span class="mono">server/license/vendor.json</span> fayliga bir marta yozing, commit qiling. Shundan keyin o'rnatilgan har bir restoran serveri va kassa shu yerdan tekshiriladi.</p>
+    <div class="pub" id="vendorJson"></div>
+  </details>
+  <div class="card" style="margin-top:12px;padding:14px 16px">
+    <b>Ilovalar yangilanishi</b>
+    <div class="muted" id="updInfo" style="margin-top:6px"></div>
+  </div>
+</main>
+
+<dialog id="dlg"><form method="dialog" id="form"></form></dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s)
+const STATE = { active: 'Faol', warning: 'Tugayapti', grace: 'Muhlat', expired: "Muddati o'tgan", suspended: "To'xtatilgan" }
+const money = n => (Math.round(n || 0)).toLocaleString('ru-RU').replace(/ /g, ' ')
+const date = s => s ? new Date(s).toLocaleDateString('ru-RU') : '—'
+const ago = s => {
+  if (!s) return 'hech qachon'
+  const m = Math.round((Date.now() - new Date(s)) / 60000)
+  return m < 60 ? `${m} daq oldin` : m < 1440 ? `${Math.round(m / 60)} soat oldin` : `${Math.round(m / 1440)} kun oldin`
+}
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const toast = t => { const el = $('#toast'); el.textContent = t; el.style.display = 'block'; clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', 2600) }
+
+async function api(method, url, body) {
+  const r = await fetch('/admin/api' + url, { method, headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(j.message || r.status)
+  return j
+}
+
+let list = []
+async function load() {
+  list = await api('GET', '/customers')
+  render()
+}
+function render() {
+  const q = $('#q').value.trim().toLowerCase()
+  const shown = list.filter(c => !q || [c.name, c.phone, c.key, c.owner].join(' ').toLowerCase().includes(q))
+    .sort((a, b) => new Date(a.paidUntil) - new Date(b.paidUntil))
+  const active = list.filter(c => ['active', 'warning', 'grace'].includes(c.state))
+  const mrr = active.reduce((s, c) => s + (c.monthly || 0), 0)
+  const debt = list.filter(c => ['grace', 'expired'].includes(c.state)).length
+  $('#sub').textContent = `${list.length} ta mijoz`
+  $('#kpis').innerHTML = `
+    <div class="card kpi hero"><div class="label" style="color:#8A8A90">Oylik daromad</div><b>${money(mrr)}</b><span class="muted">so'm · ${active.length} faol</span></div>
+    <div class="card kpi"><div class="label">5 kunda tugaydi</div><b>${list.filter(c => c.state === 'warning').length}</b></div>
+    <div class="card kpi"><div class="label">To'lamagan</div><b style="color:var(--accent-ink)">${debt}</b></div>
+    <div class="card kpi"><div class="label">To'xtatilgan</div><b>${list.filter(c => c.state === 'suspended').length}</b></div>`
+  $('#rows').innerHTML = shown.length ? shown.map(c => {
+    const days = Math.ceil((new Date(c.paidUntil) - Date.now()) / 86400000)
+    return `<tr>
+      <td><b>${esc(c.name)}</b><div class="muted">${esc([c.owner, c.phone].filter(Boolean).join(' · '))}</div></td>
+      <td><span class="key" title="Nusxa olish" onclick="copy('${c.key}')">${c.key}</span></td>
+      <td><span class="tag t-${c.state}">${STATE[c.state]}</span></td>
+      <td class="mono">${date(c.paidUntil)}<div class="muted">${days >= 0 ? days + ' kun qoldi' : -days + ' kun o\'tdi'}</div></td>
+      <td class="mono hide-m">${money(c.monthly)}</td>
+      <td class="muted hide-m">${ago(c.lastSeen)}${c.version ? ' · v' + esc(c.version) : ''}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="dark" onclick="openPay('${c.id}')">To'lov</button>
+        ${c.status === 'suspended'
+          ? `<button onclick="act('${c.id}','activate')">Faollashtirish</button>`
+          : `<button class="danger" onclick="act('${c.id}','suspend')">To'xtatish</button>`}
+        <button class="ghost" onclick="openEdit('${c.id}')">...</button>
+      </td></tr>`
+  }).join('') : `<tr><td colspan="7" class="muted" style="text-align:center;padding:40px">Hali mijoz yo'q. «Yangi mijoz» tugmasini bosing.</td></tr>`
+}
+$('#q').oninput = render
+
+function copy(t) { navigator.clipboard?.writeText(t).then(() => toast('Nusxa olindi: ' + t)).catch(() => {}) }
+
+function dialog(title, fields, foot, onSubmit) {
+  $('#form').innerHTML = `<div class="dh">${title}</div><div class="db">${fields}</div><div class="df">${foot}</div>`
+  $('#form').onsubmit = async e => {
+    if (e.submitter?.value !== 'ok') return
+    e.preventDefault()
+    try { await onSubmit(new FormData($('#form'))); $('#dlg').close(); await load() } catch (err) { toast('Xato: ' + err.message) }
+  }
+  $('#dlg').showModal()
+}
+const F = (label, name, val = '', type = 'text', extra = '') => `<label><div class="label" style="margin-bottom:6px">${label}</div><input name="${name}" type="${type}" value="${esc(val)}" ${extra}></label>`
+const FOOT = ok => `<button value="cancel" class="ghost">Bekor</button><button value="ok" class="primary">${ok}</button>`
+
+function openNew() {
+  dialog('Yangi mijoz',
+    F('Restoran nomi', 'name', '', 'text', 'required') +
+    `<div class="grid2">${F('Egasi', 'owner')}${F('Telefon', 'phone')}</div>` +
+    F('Manzil', 'address') +
+    `<div class="grid2">${F("Oylik to'lov (so'm)", 'monthly', 350000, 'number')}${F("O'rnatish (so'm)", 'setupFee', 2500000, 'number')}</div>` +
+    F('Bepul sinov (kun)', 'trialDays', 14, 'number', 'min="0" max="60"'),
+    FOOT('Yaratish'),
+    async fd => {
+      const c = await api('POST', '/customers', Object.fromEntries(fd))
+      setTimeout(() => { copy(c.key); toast('Kalit yaratildi va nusxa olindi: ' + c.key) }, 50)
+    })
+}
+function openEdit(id) {
+  const c = list.find(x => x.id === id)
+  const pays = (c.payments || []).slice().reverse().map(p => `<div class="row" style="justify-content:space-between"><span class="mono">${date(p.at)}</span><span>${p.months} oy</span><span class="mono">${money(p.amount)}</span></div>`).join('') || '<span class="muted">To\'lov yo\'q</span>'
+  dialog(esc(c.name),
+    F('Restoran nomi', 'name', c.name) +
+    `<div class="grid2">${F('Egasi', 'owner', c.owner)}${F('Telefon', 'phone', c.phone)}</div>` +
+    F('Manzil', 'address', c.address) +
+    `<div class="grid2">${F("Oylik to'lov (so'm)", 'monthly', c.monthly, 'number')}${F("To'langan sana (qo'lda)", 'paidUntil', c.paidUntil.slice(0, 10), 'date')}</div>` +
+    F('Izoh', 'note', c.note) +
+    `<div><div class="label" style="margin:6px 0">To'lovlar tarixi</div>${pays}</div>` +
+    `<div><div class="label" style="margin:6px 0">Ulangan qurilmalar</div><div class="muted">${Object.entries(c.instances || {}).map(([k, v]) => `${esc(v.role || 'server')} · ${ago(v.lastSeen)}`).join('<br>') || '—'}</div></div>`,
+    `<button value="del" class="danger" style="margin-right:auto" onclick="del('${c.id}')">O'chirish</button>` + FOOT('Saqlash'),
+    async fd => api('PUT', '/customers/' + id, Object.fromEntries(fd)))
+}
+function openPay(id) {
+  const c = list.find(x => x.id === id)
+  dialog(`To'lov — ${esc(c.name)}`,
+    `<div class="muted">Hozir to'langan: <b class="mono">${date(c.paidUntil)}</b>. Muddat tugagan bo'lsa bugundan, aks holda shu sanadan uzaytiriladi.</div>` +
+    `<div class="grid2"><label><div class="label" style="margin-bottom:6px">Necha oy</div><select name="months">${[1, 2, 3, 6, 12].map(n => `<option value="${n}">${n} oy</option>`).join('')}</select></label>${F("Summa (so'm)", 'amount', c.monthly, 'number')}</div>` +
+    F('Izoh', 'note', '', 'text', 'placeholder="Naqd / Click / Payme"'),
+    FOOT("To'lovni qayd etish"),
+    async fd => { await api('POST', `/customers/${id}/pay`, Object.fromEntries(fd)); toast("To'lov qayd etildi") })
+}
+async function act(id, what) {
+  const c = list.find(x => x.id === id)
+  if (what === 'suspend' && !confirm(`${c.name} — obunani to'xtatasizmi?\nRestoran tizimi 1 soat ichida bloklanadi (ma'lumotlari o'chmaydi).`)) return
+  try { await api('POST', `/customers/${id}/${what}`); toast(what === 'suspend' ? "To'xtatildi" : 'Faollashtirildi'); load() } catch (e) { toast('Xato: ' + e.message) }
+}
+async function del(id) {
+  if (!confirm("Mijozni butunlay o'chirasizmi? Odatda «To'xtatish» yetarli.")) return
+  await api('DELETE', '/customers/' + id); $('#dlg').close(); load()
+}
+
+api('GET', '/info').then(i => {
+  $('#vendorJson').textContent = JSON.stringify({ licenseUrl: location.origin, publicKey: i.publicKey, contact: i.contact }, null, 2)
+  const u = i.updates || {}
+  const line = (n, x) => x ? `${n}: <b class="mono">${esc(x.version)}</b> (${date(x.at)})` : `${n}: hali yuklanmagan`
+  $('#updInfo').innerHTML = (i.uploadReady ? '' : '<span style="color:var(--accent-ink)">.env da UPDATE_UPLOAD_TOKEN yo\'q — GitHub yangi versiyalarni yuklay olmaydi.</span><br>')
+    + line('Kassa', u.kassa) + '<br>' + line('Ofitsant terminali', u.terminal)
+})
+load().catch(e => toast('Xato: ' + e.message))
+setInterval(load, 60000)
+</script>
+</body>
+</html>

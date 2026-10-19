@@ -9,6 +9,18 @@ const Purchase   = require('../models/Purchase')
 const auth       = require('../middleware/auth')
 const { adminOnly } = require('../middleware/auth')
 
+// O'zgartirish mumkin bo'lgan (hali yopilmagan) buyurtma holatlari
+const OPEN_STATUSES = ['pending', 'ready']
+
+// Buyurtma topilmadi yoki allaqachon yopilgan/bekor qilingan
+async function notOpen(req, res) {
+  try {
+    const exists = await Order.exists({ _id: req.params.id })
+    if (!exists) return res.status(404).json({ message: 'Buyurtma topilmadi' })
+    return res.status(409).json({ message: 'Buyurtma allaqachon yopilgan yoki bekor qilingan' })
+  } catch (err) { res.status(500).json({ message: err.message }) }
+}
+
 // ─── GET /api/orders ────────────────────────────────────────────
 router.get('/', auth, async (req, res) => {
   try {
@@ -186,34 +198,42 @@ router.get('/monthly', auth, adminOnly, async (req, res) => {
 
 // ─── POST /api/orders ───────────────────────────────────────────
 // Stol band bo'lsa — mavjud buyurtmaga qo'shish (merge)
-router.post('/', auth, async (req, res) => {
-  try {
-    const { tableId, tableNumber, category, waiterName, items, note } = req.body
+const fail = (status, message) => Object.assign(new Error(message), { status })
 
-    if (!items || items.length === 0)
-      return res.status(400).json({ message: 'Kamida bitta taom tanlang' })
+// Buyurtma yaratish yoki band stolning ochiq buyurtmasiga qo'shish.
+// Ofitsant (POST /api/orders) va mijozning QR buyurtmasi (qabul qilinganda) shu yerdan o'tadi.
+async function placeOrder(io, { tableId, tableNumber, category, waiterName, items, note }, user) {
+
+    if (!Array.isArray(items) || items.length === 0)
+      throw fail(400, 'Kamida bitta taom tanlang')
 
     // Narxlarni DB dan tekshirish
     const enrichedItems = []
     for (const item of items) {
+      // Manfiy yoki kasr miqdor jami summani kamaytirib yuborishi mumkin
+      const quantity = item.quantity === undefined ? 1 : Number(item.quantity)
+      if (!Number.isInteger(quantity) || quantity < 1 || quantity > 999)
+        throw fail(400, 'Miqdor 1 dan 999 gacha butun son bo\'lishi kerak')
       const product = await Product.findById(item.productId)
-      if (!product) continue
+      if (!product || !product.isActive) continue
       enrichedItems.push({
         productId: product._id,
         name:      product.name,
         price:     product.price,
-        quantity:  item.quantity || 1,
+        quantity,
       })
     }
-    if (!enrichedItems.length) return res.status(400).json({ message: 'Mahsulotlar topilmadi' })
+    if (!enrichedItems.length) throw fail(400, 'Mahsulotlar topilmadi')
 
     // Xizmat haqi sozlamasini olish
     let serviceFee = 0
+    let serviceFeePercent = 0
     try {
       const settings = await Settings.findById('main')
       if (settings?.serviceFeeEnabled && category !== 'soboy') {
+        serviceFeePercent = settings.serviceFeePercent
         const itemsTotal = enrichedItems.reduce((s, i) => s + i.price * i.quantity, 0)
-        serviceFee = Math.round(itemsTotal * (settings.serviceFeePercent / 100))
+        serviceFee = Math.round(itemsTotal * (serviceFeePercent / 100))
       }
     } catch {}
 
@@ -241,10 +261,10 @@ router.post('/', auth, async (req, res) => {
         }
         // Jami qayta hisoblash
         existing.totalPrice = existing.items.reduce((s,i) => s + i.price * i.quantity, 0)
-        existing.serviceFee = serviceFee ? Math.round(existing.totalPrice * 0.1) : 0
+        existing.serviceFee = Math.round(existing.totalPrice * (serviceFeePercent / 100))
         await existing.save()
-        req.app.get('io').emit('orderUpdated', existing)
-        return res.json(existing)
+        io.emit('orderUpdated', existing)
+        return { order: existing, merged: true }
       }
     }
 
@@ -254,8 +274,8 @@ router.post('/', auth, async (req, res) => {
       tableId:     category === 'soboy' ? null : tableId,
       tableNumber: category === 'soboy' ? soboySuffix : tableNumber,
       category,
-      waiterName:  waiterName || req.user.name,
-      waiterId:    req.user._id,
+      waiterName:  waiterName || user.name,
+      waiterId:    user._id,
       items:       enrichedItems,
       totalPrice,
       serviceFee,
@@ -269,26 +289,34 @@ router.post('/', auth, async (req, res) => {
         { status: 'busy', currentOrder: order._id },
         { new: true }
       )
-      req.app.get('io').emit('tableUpdated', updatedTable)
+      io.emit('tableUpdated', updatedTable)
     }
 
-    req.app.get('io').emit('newOrder', order)
-    res.status(201).json(order)
+    io.emit('newOrder', order)
+    return { order, merged: false }
+}
+
+router.post('/', auth, async (req, res) => {
+  try {
+    const { order, merged } = await placeOrder(req.app.get('io'), { ...req.body, waiterName: req.body.waiterName || req.user.name }, req.user)
+    res.status(merged ? 200 : 201).json(order)
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ message: err.message })
     console.error('Order xatosi:', err)
-    res.status(500).json({ message: err.message })
+    res.status(500).json({ message: 'Server xatosi' })
   }
 })
 
 // ─── PUT /api/orders/:id/close ──────────────────────────────────
-router.put('/:id/close', auth, async (req, res) => {
+router.put('/:id/close', auth, adminOnly, async (req, res) => {
   try {
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
+    // Atomar: faqat ochiq buyurtma yopiladi — qayta yopishda ombor ikki marta ayirilmaydi
+    const order = await Order.findOneAndUpdate(
+      { _id: req.params.id, status: { $in: OPEN_STATUSES } },
       { status: 'closed', closedAt: new Date() },
       { new: true }
     )
-    if (!order) return res.status(404).json({ message: 'Buyurtma topilmadi' })
+    if (!order) return notOpen(req, res)
 
     // Ingredientlarni ombordan ayirish (birlik konversiyasi bilan)
     for (const item of order.items) {
@@ -337,63 +365,78 @@ router.put('/:id/close', auth, async (req, res) => {
 })
 
 // ─── PUT /api/orders/:id ────────────────────────────────────────
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', auth, adminOnly, async (req, res) => {
   try {
-    const order = await Order.findByIdAndUpdate(req.params.id, req.body, { new: true })
-    if (!order) return res.status(404).json({ message: 'Buyurtma topilmadi' })
+    // Narx/summa/holatni to'g'ridan-to'g'ri o'zgartirib bo'lmaydi:
+    // yopish — /close, bekor qilish — DELETE orqali.
+    const update = {}
+    if (req.body.note !== undefined) update.note = String(req.body.note).slice(0, 500)
+    if (req.body.status !== undefined) {
+      if (!OPEN_STATUSES.includes(req.body.status))
+        return res.status(400).json({ message: 'Noto\'g\'ri holat' })
+      update.status = req.body.status
+    }
+    const order = await Order.findOneAndUpdate(
+      { _id: req.params.id, status: { $in: OPEN_STATUSES } }, update, { new: true }
+    )
+    if (!order) return notOpen(req, res)
     req.app.get('io').emit('orderUpdated', order)
     res.json(order)
   } catch (err) { res.status(500).json({ message: err.message }) }
 })
 
 // ─── POST /api/orders/:id/extras ────────────────────────────────
-router.post('/:id/extras', auth, async (req, res) => {
+router.post('/:id/extras', auth, adminOnly, async (req, res) => {
   try {
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      { $push: { extras: { extraFee: +req.body.extraFee || 0, comment: req.body.comment || '' } } },
+    const order = await Order.findOneAndUpdate(
+      { _id: req.params.id, status: { $in: OPEN_STATUSES } },
+      { $push: { extras: { extraFee: +req.body.extraFee || 0, comment: String(req.body.comment || '').slice(0, 200) } } },
       { new: true }
     )
+    if (!order) return notOpen(req, res)
     req.app.get('io').emit('orderUpdated', order)
     res.json(order)
   } catch (err) { res.status(500).json({ message: err.message }) }
 })
 
 // ─── PUT /api/orders/:id/extras/:extraId ────────────────────────
-router.put('/:id/extras/:extraId', auth, async (req, res) => {
+router.put('/:id/extras/:extraId', auth, adminOnly, async (req, res) => {
   try {
     const order = await Order.findOneAndUpdate(
-      { _id: req.params.id, 'extras._id': req.params.extraId },
-      { $set: { 'extras.$.extraFee': +req.body.extraFee || 0, 'extras.$.comment': req.body.comment || '' } },
+      { _id: req.params.id, status: { $in: OPEN_STATUSES }, 'extras._id': req.params.extraId },
+      { $set: { 'extras.$.extraFee': +req.body.extraFee || 0, 'extras.$.comment': String(req.body.comment || '').slice(0, 200) } },
       { new: true }
     )
+    if (!order) return res.status(404).json({ message: 'Topilmadi yoki buyurtma yopilgan' })
     req.app.get('io').emit('orderUpdated', order)
     res.json(order)
   } catch (err) { res.status(500).json({ message: err.message }) }
 })
 
 // ─── DELETE /api/orders/:id/extras/:extraId ─────────────────────
-router.delete('/:id/extras/:extraId', auth, async (req, res) => {
+router.delete('/:id/extras/:extraId', auth, adminOnly, async (req, res) => {
   try {
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
+    const order = await Order.findOneAndUpdate(
+      { _id: req.params.id, status: { $in: OPEN_STATUSES } },
       { $pull: { extras: { _id: req.params.extraId } } },
       { new: true }
     )
+    if (!order) return notOpen(req, res)
     req.app.get('io').emit('orderUpdated', order)
     res.json(order)
   } catch (err) { res.status(500).json({ message: err.message }) }
 })
 
 // ─── DELETE /api/orders/:id ─────────────────────────────────────
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', auth, adminOnly, async (req, res) => {
   try {
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
+    // Yopilgan (to'langan) buyurtmani bekor qilib, tushumni yashirib bo'lmaydi
+    const order = await Order.findOneAndUpdate(
+      { _id: req.params.id, status: { $in: OPEN_STATUSES } },
       { status: 'cancelled', closedAt: new Date() },
       { new: true }
     )
-    if (!order) return res.status(404).json({ message: 'Topilmadi' })
+    if (!order) return notOpen(req, res)
     if (order.tableId) {
       const other = await Order.findOne({ tableId: order.tableId, status: 'pending', _id: { $ne: order._id } })
       if (!other) {
@@ -407,3 +450,4 @@ router.delete('/:id', auth, async (req, res) => {
 })
 
 module.exports = router
+module.exports.placeOrder = placeOrder

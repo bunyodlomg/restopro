@@ -16,12 +16,22 @@ export function AuthProvider({ children }) {
     setLoading(false)
   }, [])
 
-  const login = async (username, password) => {
-    const { data } = await API.post('/api/auth/login', { username, password })
+  const login = async (username, password) => accept((await API.post('/api/auth/login', { username, password })).data)
+  const loginPin = async pin => accept((await API.post('/api/auth/pin', { pin })).data)
+
+  const accept = data => {
     localStorage.setItem('rp_token', data.token)
     localStorage.setItem('rp_user',  JSON.stringify(data.user))
     setUser(data.user)
     return data.user
+  }
+
+  const changePassword = async (oldPassword, newPassword) => {
+    await API.put('/api/auth/change-password', { oldPassword, newPassword })
+    const updated = { ...user, mustChangePassword: false }
+    localStorage.setItem('rp_user', JSON.stringify(updated))
+    setUser(updated)
+    return updated
   }
 
   const logout = () => {
@@ -34,7 +44,7 @@ export function AuthProvider({ children }) {
   const isWaiter = user?.role === 'waiter' || user?.role === 'ofitsant'
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin, isWaiter }}>
+    <AuthContext.Provider value={{ user, loading, login, loginPin, logout, changePassword, isAdmin, isWaiter }}>
       {children}
     </AuthContext.Provider>
   )

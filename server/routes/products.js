@@ -2,12 +2,13 @@ const router  = require('express').Router()
 const path    = require('path')
 const fs      = require('fs')
 const multer  = require('multer')
+const { imageFilter } = require('../utils/uploadFilters')
 const Product = require('../models/Product')
 const auth    = require('../middleware/auth')
 const { adminOnly } = require('../middleware/auth')
 
 // ── Uploads papkasini avtomatik yaratish ──────────────────────
-const UPLOAD_DIR = path.join(__dirname, '..', 'uploads')
+const { UPLOAD_DIR } = require('../config')
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true })
   console.log('📁 uploads/ papkasi yaratildi:', UPLOAD_DIR)
@@ -25,20 +26,16 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true)
-    else cb(new Error('Faqat rasm fayllar qabul qilinadi!'), false)
-  },
+  fileFilter: imageFilter,
 })
 
 // ── Eski rasmni o'chirish (xavfsiz) ──────────────────────────
 function removeOldImage(imagePath) {
   if (!imagePath) return
   // faqat /uploads/... yo'llarini o'chir, to'liq yo'l emas
-  const rel = imagePath.startsWith('/') ? imagePath : `/${imagePath}`
-  const abs = path.join(__dirname, '..', rel)
-  // Faqat uploads papkasi ichidagi faylni o'chir
-  if (!abs.startsWith(UPLOAD_DIR)) return
+  if (!/^\/?uploads\//.test(imagePath)) return
+  // basename — papkadan tashqariga chiqib bo'lmaydi
+  const abs = path.join(UPLOAD_DIR, path.basename(imagePath))
   if (fs.existsSync(abs)) {
     try { fs.unlinkSync(abs) } catch (e) { console.warn('Rasm o\'chirilmadi:', e.message) }
   }

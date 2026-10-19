@@ -6,6 +6,7 @@ const TableSchema = new Schema({
   status:      { type: String, default: 'free', enum: ['free', 'busy'] },
   description: { type: String, default: '' },
   currentOrder:{ type: Schema.Types.ObjectId, ref: 'Order', default: null },
+  qrToken:     { type: String, default: '' },   // QR menyu havolasi uchun tasodifiy kalit
 }, { timestamps: true })
 
 // Bir kategoriyada bir xil raqam bo'lmasligi uchun

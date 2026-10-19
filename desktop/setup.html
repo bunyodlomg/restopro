@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+<title>RestoPro Kassa — sozlash</title>
+<style>
+  :root { --bg:#0B0B0C; --card:#18181B; --el:#222226; --border:rgba(255,255,255,.08); --text:#F4F4F2; --muted:#8A8A90;
+          --brand:#FF3B2F; --brand-lt:#FF3B2F; --ok:#22C55E; --err:#F87171; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 "Segoe UI", system-ui, sans-serif; padding:28px; }
+  h1 { font-size:20px; margin:0 0 4px; } .sub { color:var(--muted); margin:0 0 22px; }
+  .mode { display:flex; gap:10px; margin-bottom:18px; }
+  .mode label { flex:1; border:1px solid var(--border); background:var(--card); border-radius:14px; padding:14px; cursor:pointer; }
+  .mode input { margin-right:8px; accent-color:var(--brand); }
+  .mode label.on { border-color:var(--brand); background:rgba(255,59,47,.10); }
+  .mode small { display:block; color:var(--muted); margin-top:4px; }
+  .field { margin-bottom:14px; } .field span { display:block; font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
+  input[type=text], input[type=password] { width:100%; padding:11px 13px; border-radius:11px; border:1px solid var(--border); background:var(--el); color:var(--text); font-size:14px; }
+  input:focus { outline:2px solid var(--brand); outline-offset:-1px; }
+  .row { display:flex; gap:10px; margin-top:18px; }
+  button { flex:1; padding:12px; border-radius:12px; border:0; font-weight:700; font-size:14px; cursor:pointer; }
+  .primary { background:linear-gradient(135deg,var(--brand),var(--brand-lt)); color:#fff; }
+  .ghost { background:var(--el); color:var(--text); border:1px solid var(--border); }
+  button:disabled { opacity:.5; cursor:default; }
+  .msg { padding:11px 13px; border-radius:11px; margin-top:14px; display:none; }
+  .msg.ok { display:block; background:rgba(34,197,94,.10); color:var(--ok); border:1px solid rgba(34,197,94,.3); }
+  .msg.err { display:block; background:rgba(239,68,68,.08); color:var(--err); border:1px solid rgba(239,68,68,.25); }
+  .box { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin-top:16px; }
+  .box h3 { margin:0 0 8px; font-size:14px; } .mono { font-family:Consolas, monospace; font-size:15px; color:var(--brand-lt); }
+  .hint { color:var(--muted); font-size:12px; margin-top:6px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+  <h1>RestoPro Kassa</h1>
+  <p class="sub">Kassa kompyuterini sozlash</p>
+
+  <div id="form">
+    <div class="mode">
+      <label id="m-sync"><input type="radio" name="mode" value="sync" checked>Cloud bilan
+        <small>Internet bo'lganda ma'lumotlar serverga sinxronlanadi. Egasi uydan ko'ra oladi.</small></label>
+      <label id="m-local"><input type="radio" name="mode" value="standalone">Faqat lokal
+        <small>Internetsiz, faqat shu kompyuterda. Cloud keyin ham ulanmaydi.</small></label>
+    </div>
+
+    <div id="sync-fields">
+      <div class="field"><span>Server manzili</span>
+        <input id="url" type="text" placeholder="https://cafe.example.uz" autocomplete="off" spellcheck="false"></div>
+      <div class="field"><span>Sync kaliti</span>
+        <input id="key" type="password" placeholder="install.sh oxirida ko'rsatilgan SYNC_KEY" autocomplete="off">
+        <div class="hint" id="key-hint" hidden>Kalit saqlangan. O'zgartirish uchun yangisini kiriting.</div></div>
+      <div class="hint">Birinchi ishga tushirishda internet kerak: menyu, xodimlar va sozlamalar serverdan yuklanadi.</div>
+    </div>
+
+    <div id="local-fields" hidden>
+      <div class="field"><span>Litsenziya kaliti</span>
+        <input id="lic" type="text" placeholder="RP-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" style="text-transform:uppercase">
+        <div class="hint" id="lic-hint" hidden>Kalit saqlangan. O'zgartirish uchun yangisini kiriting.</div></div>
+      <div class="hint">Kalitni sotuvchidan oling. Cloud rejimida kalit kerak emas — u serverdan olinadi.</div>
+    </div>
+
+    <div id="msg" class="msg"></div>
+    <div class="row">
+      <button class="ghost" id="test">Ulanishni tekshirish</button>
+      <button class="primary" id="save">Saqlash va boshlash</button>
+    </div>
+  </div>
+
+  <div id="done" hidden>
+    <div class="msg ok" style="display:block">Kassa ishga tushdi</div>
+    <div class="box" id="pw-box" hidden>
+      <h3>Admin kirish ma'lumotlari</h3>
+      Login: <span class="mono">admin</span> &nbsp; Parol: <span class="mono" id="pw"></span>
+      <div class="hint">Yozib oling — birinchi kirishda parolni almashtirish so'raladi. Bu oyna qayta ko'rsatilmaydi.</div>
+    </div>
+    <div class="box">
+      <h3>Ofitsantlar telefonida oching (shu Wi-Fi'da)</h3>
+      <div id="urls"></div>
+      <div class="hint">Manzil keyin ham tray belgisi → menyuda turadi.</div>
+    </div>
+    <div class="row"><button class="primary" id="open">Kassani ochish</button></div>
+  </div>
+
+<script>
+  const $ = id => document.getElementById(id)
+  const mode = () => document.querySelector('input[name=mode]:checked').value
+  let state = null
+
+  function syncModeUi() {
+    const m = mode()
+    $('m-sync').classList.toggle('on', m === 'sync')
+    $('m-local').classList.toggle('on', m === 'standalone')
+    $('sync-fields').hidden = m !== 'sync'
+    $('local-fields').hidden = m !== 'standalone'
+    $('test').hidden = m !== 'sync'
+  }
+  function show(type, text) { const el = $('msg'); el.className = 'msg ' + type; el.textContent = text }
+
+  document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', () => { syncModeUi(); $('msg').className = 'msg' }))
+
+  $('test').onclick = async () => {
+    $('test').disabled = true; show('ok', 'Tekshirilmoqda...')
+    const r = await window.kassa.test({ syncUrl: $('url').value, syncKey: $('key').value })
+    show(r.ok ? 'ok' : 'err', r.ok ? 'Server bilan ulanish ishlayapti' : r.message)
+    $('test').disabled = false
+  }
+
+  $('save').onclick = async () => {
+    const m = mode()
+    if (m === 'sync') {
+      if (!$('url').value.trim()) return show('err', 'Server manzilini kiriting')
+      if (!$('key').value && !state.hasKey) return show('err', 'Sync kalitini kiriting')
+      const t = await window.kassa.test({ syncUrl: $('url').value, syncKey: $('key').value })
+      if (!t.ok) return show('err', t.message)
+    } else if (state.licenseRequired && !$('lic').value.trim() && !state.hasLicense) {
+      return show('err', 'Litsenziya kalitini kiriting')
+    }
+    $('save').disabled = true; show('ok', 'Ishga tushirilmoqda...')
+    try {
+      const r = await window.kassa.save({ mode: m, syncUrl: $('url').value, syncKey: $('key').value, licenseKey: $('lic').value.trim().toUpperCase() })
+      finish(r.adminPassword)
+    } catch (e) { show('err', e.message); $('save').disabled = false }
+  }
+
+  async function finish(adminPassword) {
+    state = await window.kassa.get()
+    $('form').hidden = true; $('done').hidden = false
+    if (adminPassword) { $('pw').textContent = adminPassword; $('pw-box').hidden = false }
+    $('urls').innerHTML = ''
+    for (const u of state.waiterUrls.length ? state.waiterUrls : ['Tarmoq topilmadi — Wi-Fi\'ga ulaning']) {
+      const d = document.createElement('div'); d.className = 'mono'; d.textContent = u; $('urls').appendChild(d)
+    }
+  }
+  $('open').onclick = () => window.kassa.open()
+
+  ;(async () => {
+    state = await window.kassa.get()
+    if (state.mode === 'standalone') document.querySelector('input[value=standalone]').checked = true
+    $('url').value = state.syncUrl
+    $('key-hint').hidden = !state.hasKey
+    $('lic-hint').hidden = !state.hasLicense
+    syncModeUi()
+  })()
+</script>
+</body>
+</html>
