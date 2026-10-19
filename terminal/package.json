@@ -16,8 +16,19 @@
   "build": {
     "appId": "uz.restopro.terminal",
     "productName": "RestoPro Ofitsant",
-    "directories": { "output": "dist" },
-    "files": ["main.js", "preload.js", "preload-app.js", "print.js", "setup.html", "offline.html", "assets/**"],
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "preload-app.js",
+      "print.js",
+      "setup.html",
+      "offline.html",
+      "assets/**",
+      "updater.js"
+    ],
     "win": {
       "target": "nsis",
       "icon": "assets/icon.png",
@@ -29,7 +40,19 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "shortcutName": "RestoPro Ofitsant",
-      "artifactName": "RestoPro-Ofitsant-Setup-${version}.exe"
-    }
+      "artifactName": "RestoPro-Ofitsant-Setup-${version}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "bunyodlomg",
+        "repo": "restopro",
+        "releaseType": "release",
+        "channel": "terminal"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.3.9"
   }
 }

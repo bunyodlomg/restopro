@@ -29,6 +29,7 @@ import Reservations from './pages/admin/Reservations.jsx'
 import QrCodes      from './pages/admin/QrCodes.jsx'
 import GuestMenu    from './pages/guest/GuestMenu.jsx'
 import TerminalLock from './components/TerminalLock.jsx'
+import UpdateBanner from './components/UpdateBanner.jsx'
 
 function Loader() {
   return <div className="center-fill" style={{ minHeight: '100vh', background: 'var(--bg)' }}><div className="spinner"/></div>
@@ -138,7 +139,7 @@ export default function App() {
       <AuthProvider>
         <SettingsProvider>
           <BrowserRouter>
-            <LicenseGate><TerminalLock/><AppRoutes/></LicenseGate>
+            <LicenseGate><TerminalLock/><UpdateBanner/><AppRoutes/></LicenseGate>
           </BrowserRouter>
         </SettingsProvider>
       </AuthProvider>

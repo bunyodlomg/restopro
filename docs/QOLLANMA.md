@@ -168,6 +168,13 @@ Kassa ilovasida chek **to'g'ridan-to'g'ri standart printerga** chiqadi (oyna och
 3. Ilova to'liq ekranda ochiladi va PIN klaviaturasini ko'rsatadi. Kompyuter yoqilganda avtomatik ishga tushadi.
 4. Chiqish: soat yonidagi belgi → **Chiqish**, yoki `Ctrl+Shift+Q`.
 
+### Yangilanishlar (avtomatik)
+Kassa va Ofitsant ilovalari yangi versiyani **o'zi tekshiradi** (har 3 soatda), internet bo'lsa fonda yuklab oladi:
+- Kassada adminga xabar chiqadi: «Yangi versiya tayyor» → **Hozir yangilash** (dastur ~1 daqiqaga yopilib qayta ochiladi) yoki **✕** — dastur keyingi safar yopilganda o'zi o'rnatiladi.
+- Ofitsant monoblokida hech kim kirmagan (PIN ekrani) paytda 30 soniyadan keyin o'zi yangilanadi.
+- Qo'lda tekshirish: **Sozlama → Ko'rinish → Yangilanishni tekshirish** yoki tray menyusi.
+- Ma'lumotlar yangilanishda o'chmaydi. Qayta `.exe` yuklab o'rnatish shart emas.
+
 ### Tray menyusi (soat yonidagi RestoPro belgisi)
 - **Sozlamalar** — server, kalit yoki rejimni o'zgartirish.
 - **Loglar papkasi** — muammo bo'lsa, shu fayllarni texnik yordamga yuboring.

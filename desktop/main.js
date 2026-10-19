@@ -8,6 +8,7 @@
 //    3. Internet bo'lsa cloud bilan avtomatik sinxronlanadi (server/sync)
 //  Oyna yopilsa dastur trayda ishlashda davom etadi (ofitsantlar uchun).
 // ============================================================
+const updater = require('./updater')
 const { app, BrowserWindow, Tray, Menu, ipcMain, dialog, shell, clipboard, nativeImage, Notification } = require('electron')
 const path   = require('path')
 const fs     = require('fs')
@@ -235,8 +236,20 @@ function refreshTrayMenu() {
     { label: 'Loglar papkasi', click: () => shell.openPath(LOG_DIR) },
     { label: 'Backup papkasi', click: () => shell.openPath(BACKUP_DIR) },
     { type: 'separator' },
+    ...updateMenu(),
+    { type: 'separator' },
     { label: 'Chiqish', click: () => app.quit() },
   ]))
+}
+
+// Tray: versiya va yangilanish
+function updateMenu() {
+  const u = updater.state
+  if (u.status === 'ready') return [{ label: `Yangilash: ${u.version} (qayta ishga tushadi)`, click: () => updater.install() }]
+  return [
+    { label: `Versiya ${app.getVersion()}${u.status === 'downloading' ? ` — yangilanish yuklanmoqda ${u.progress}%` : ''}`, enabled: false },
+    { label: 'Yangilanishni tekshirish', enabled: u.status !== 'disabled', click: () => updater.check() },
+  ]
 }
 
 // ── Chek chop etish (oynasiz, standart printerga) ──────────────
@@ -321,6 +334,11 @@ app.whenReady().then(async () => {
     quitting = true; app.quit(); return
   }
   if (config.mode) createMainWindow(); else createSetupWindow()
+  // Avtomatik yangilanish: o'rnatishdan oldin server va MongoDB toza to'xtatiladi
+  updater.setup({
+    onBeforeInstall: async () => { quitting = true; await stopServer(); await stopMongo(); cleanedUp = true },
+    onChange: () => refreshTrayMenu(),
+  })
   setTimeout(runBackup, 60 * 1000)
   setInterval(runBackup, 24 * 3600 * 1000)
   setInterval(refreshTrayMenu, 60 * 1000)   // IP o'zgarsa

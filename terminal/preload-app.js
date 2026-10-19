@@ -6,6 +6,17 @@ contextBridge.exposeInMainWorld('rpNative', {
   app: 'terminal',
   terminal: true,
   print: (html, opts) => ipcRenderer.invoke('rp:print', html, opts || {}),
+  // Avtomatik yangilanish: holat, tekshirish, o'rnatish va o'zgarishga obuna
+  update: {
+    get:     () => ipcRenderer.invoke('rp:update:get'),
+    check:   () => ipcRenderer.invoke('rp:update:check'),
+    install: () => ipcRenderer.invoke('rp:update:install'),
+    onChange: cb => {
+      const h = (_e, s) => cb(s)
+      ipcRenderer.on('rp:update', h)
+      return () => ipcRenderer.removeListener('rp:update', h)
+    },
+  },
 })
 contextBridge.exposeInMainWorld('terminal', {
   get:   () => ipcRenderer.invoke('term:get'),

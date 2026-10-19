@@ -97,6 +97,12 @@ Kassa birinchi ochilganda shu ikkisi so'raladi. Birinchi ishga tushirishda inter
 Lokal ishlab chiqish (Linux): `cd desktop && npm install &&
 node scripts/prepare.js --platform linux --mongo-dir <mongod papkasi> && npm start`
 
+## Ilovalarni yangilash (avtomatik)
+`main` branch'ga har push'da GitHub Actions yangi versiya (`1.0.<run>`) yig'ib, **GitHub Release** qiladi
+(`.github/workflows/desktop.yml`). O'rnatilgan Kassa va Ofitsant ilovalari uni 3 soat ichida o'zi topadi,
+fonda yuklaydi va o'rnatadi (electron-updater). Boshqa branch'lar faqat sinov artefakti yig'adi.
+Cloud server: `./deploy/update.sh`.
+
 ## Zaxira nusxa (backup)
 `deploy/backup.sh` MongoDB bazasi va `server/uploads` papkasini bitta arxivga yig'adi:
 `restopro-YYYYMMDD-HHMMSS.tar.gz`. Oxirgi `BACKUP_KEEP` ta arxiv saqlanadi, eskilari o'chiriladi.

@@ -96,7 +96,7 @@ export default function Tables() {
                 <span className="tcard-foot" style={isBusy ? { color: 'inherit', opacity: .7 } : undefined}>{t.description || label}</span>
                 <button className="btn btn-icon btn-sm corner" title={isBusy ? "Band stolni o'chirib bo'lmaydi" : "O'chirish"}
                   disabled={isBusy} onClick={() => setDeleting(t)}
-                  style={{ background: isBusy ? 'rgba(127,127,127,.25)' : 'var(--thumb)', color: isBusy ? 'inherit' : 'var(--accent-ink)', boxShadow: 'none' }}>
+                  style={{ background: isBusy ? 'rgba(255,255,255,.2)' : 'var(--thumb)', color: isBusy ? 'inherit' : 'var(--accent-ink)', boxShadow: 'none' }}>
                   <Trash2 size={17}/>
                 </button>
               </div>

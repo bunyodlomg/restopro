@@ -19,12 +19,31 @@
   "build": {
     "appId": "uz.restopro.kassa",
     "productName": "RestoPro Kassa",
-    "directories": { "output": "dist" },
-    "files": ["main.js", "preload.js", "preload-app.js", "print.js", "setup.html", "assets/**"],
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "preload-app.js",
+      "print.js",
+      "setup.html",
+      "assets/**",
+      "updater.js"
+    ],
     "extraResources": [
-      { "from": "resources/server",  "to": "server" },
-      { "from": "resources/web",     "to": "web" },
-      { "from": "resources/mongodb", "to": "mongodb" }
+      {
+        "from": "resources/server",
+        "to": "server"
+      },
+      {
+        "from": "resources/web",
+        "to": "web"
+      },
+      {
+        "from": "resources/mongodb",
+        "to": "mongodb"
+      }
     ],
     "win": {
       "target": "nsis",
@@ -37,7 +56,19 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "shortcutName": "RestoPro Kassa",
-      "include": "build/installer.nsh"
-    }
+      "include": "build/installer.nsh",
+      "artifactName": "RestoPro-Kassa-Setup-${version}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "bunyodlomg",
+        "repo": "restopro",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.3.9"
   }
 }

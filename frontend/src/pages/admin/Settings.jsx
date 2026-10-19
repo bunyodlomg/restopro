@@ -5,6 +5,7 @@ import {
   TriangleAlert, BellRing, QrCode, Wifi, X,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useAppUpdate } from '../../components/UpdateBanner.jsx'
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
@@ -149,6 +150,9 @@ export default function SettingsPage() {
     catch { toast.error('IP aniqlanmadi') }
   }
 
+  const { st: upd, api: updApi } = useAppUpdate()
+  const UPD = { checking: 'Tekshirilmoqda…', latest: "Eng so'nggi versiya o'rnatilgan", downloading: `Yangi versiya yuklanmoqda ${upd?.progress || 0}%`, ready: `Versiya ${upd?.version} tayyor`, installing: "O'rnatilmoqda…", error: "Tekshirib bo'lmadi (internet?)", disabled: "Avtomatik yangilanish o'chiq", idle: '' }
+
   const name = form.brandName || 'RestoPro'
   const monogram = name.replace(/[^A-Za-z]/g, '')[0]?.toUpperCase() || 'R'
   const r = form.receipt
@@ -197,6 +201,17 @@ export default function SettingsPage() {
 
       {tab === 'theme' && (
         <div className="col" style={{ gap: 14, maxWidth: 720 }}>
+          {updApi && (
+            <div className="card card-pad row" style={{ gap: 14, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <b>Dastur versiyasi <span className="mono">{upd?.current}</span></b>
+                <div className="hint">{UPD[upd?.status] || ''}{upd?.status === 'error' && upd.error ? ` — ${upd.error.slice(0, 80)}` : ''}</div>
+              </div>
+              {upd?.status === 'ready'
+                ? <button className="btn btn-primary btn-lg" onClick={() => updApi.install()}>Hozir yangilash</button>
+                : <button className="btn btn-soft btn-lg" disabled={['checking', 'downloading', 'disabled'].includes(upd?.status)} onClick={() => updApi.check()}>Yangilanishni tekshirish</button>}
+            </div>
+          )}
           <div className="card card-pad">
             <div className="card-head"><span className="card-title">Rejim</span><span className="label">shu qurilma uchun</span></div>
             <div className="row" style={{ gap: 12 }}>

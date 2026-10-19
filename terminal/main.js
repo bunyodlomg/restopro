@@ -6,6 +6,7 @@
 //  Chek to'g'ridan-to'g'ri standart printerga chiqadi (rpNative.print).
 //  Chiqish: tray → Chiqish yoki Ctrl+Shift+Q.
 // ============================================================
+const updater = require('./updater')
 const { app, BrowserWindow, Tray, Menu, ipcMain, dialog, shell, globalShortcut, nativeImage } = require('electron')
 const path = require('path')
 const fs   = require('fs')
@@ -104,9 +105,19 @@ async function confirmQuit() {
 function createTray() {
   tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }))
   tray.setToolTip('RestoPro Ofitsant')
+  refreshTrayMenu()
+}
+function refreshTrayMenu() {
+  if (!tray) return
+  const u = updater.state
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Qayta yuklash', click: () => openApp() },
     { label: 'Manzilni o\'zgartirish', click: createSetupWindow },
+    { type: 'separator' },
+    u.status === 'ready'
+      ? { label: `Yangilash: ${u.version} (qayta ishga tushadi)`, click: () => updater.install() }
+      : { label: `Versiya ${app.getVersion()}${u.status === 'downloading' ? ` — yuklanmoqda ${u.progress}%` : ''}`, enabled: false },
+    { label: 'Yangilanishni tekshirish', enabled: u.status !== 'disabled' && u.status !== 'ready', click: () => updater.check() },
     { type: 'separator' },
     { label: 'Chiqish', click: confirmQuit },
   ]))
@@ -139,4 +150,5 @@ app.whenReady().then(() => {
   globalShortcut.register('CommandOrControl+Shift+Q', confirmQuit)
   if (config.url) createMainWindow()
   else createSetupWindow()
+  updater.setup({ channel: 'terminal', onBeforeInstall: async () => { quitting = true }, onChange: () => refreshTrayMenu() })
 })
