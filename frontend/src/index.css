@@ -138,6 +138,9 @@ a { color: inherit; }
 .btn-primary:active:not(:disabled), .btn-primary:hover:not(:disabled) { background: var(--accent-2); }
 .btn-dark { background: var(--sel); color: var(--sel-ink); box-shadow: none; }
 .btn-soft { background: var(--thumb); box-shadow: none; }
+.btn-ok { background: #16A34A; color: #fff; box-shadow: 0 12px 24px -14px rgba(22,163,74,.8); }
+.btn-ok:active:not(:disabled), .btn-ok:hover:not(:disabled) { background: #15803D; }
+.btn-on { background: var(--ok-soft); color: var(--ok-ink); box-shadow: none; }
 .btn-ghost { background: transparent; box-shadow: none; color: var(--ink-2); }
 .btn-ghost:active:not(:disabled), .btn-ghost:hover:not(:disabled) { background: var(--thumb); color: var(--ink); }
 .btn-danger { background: var(--accent-soft); color: var(--accent-ink); box-shadow: none; }
@@ -281,6 +284,13 @@ select.input {
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
 .page-title { font: 700 28px var(--font); letter-spacing: -.03em; }
 .page-sub { margin-top: 3px; }
+/* Sarlavhadagi qisqa statistika (stollar) */
+.hstats { display: flex; align-items: stretch; padding: 5px; border-radius: 17px; background: var(--panel); box-shadow: 0 0 0 1px var(--rule); }
+.hstat { display: flex; flex-direction: column; justify-content: center; gap: 5px; min-width: 96px; padding: 4px 18px; }
+.hstat + .hstat { border-left: 1px solid var(--rule); }
+.hstat .label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.hstat b { font: 600 21px/1 var(--mono); letter-spacing: -.03em; white-space: nowrap; }
+.hstat b small { font: 500 12px var(--font); color: var(--ink-3); letter-spacing: 0; margin-left: 5px; }
 
 /* KPI */
 .kpis { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
@@ -296,8 +306,11 @@ select.input {
 [data-theme="dark"] .kpi.hero .up { color: var(--ok); }
 
 /* Bosh panel */
-.dash { display: grid; gap: 14px; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); margin-top: 14px; align-items: start; }
+.dash { display: grid; gap: 14px; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); margin-top: 14px; align-items: stretch; }
 .dash .span-2 { grid-column: 1 / -1; }
+/* Yonma-yon kartalar bir xil balandlikda; bo'sh holat markazda turadi */
+.dash > .card { display: flex; flex-direction: column; }
+.dash > .card > .center-fill { flex: 1; }
 .lst { display: flex; flex-direction: column; }
 .lst-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--rule); }
 .lst-row:first-child { border-top: 0; }
@@ -321,6 +334,9 @@ select.input {
 .menu-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); }
 .pcard { position: relative; display: flex; flex-direction: column; text-align: left; overflow: hidden; background: var(--panel); border-radius: var(--r-lg); box-shadow: var(--shadow); transition: transform .06s; }
 .pcard:active { transform: scale(.98); }
+/* <button> ichida bloklar o'z kengligiga qisqarmasin — rasm va pastki qator butun kartani egallaydi */
+.pcard > .pcard-ph, .pcard > .pcard-body { width: 100%; align-self: stretch; }
+.pcard-body { flex: 1; }
 .pcard-ph { height: 138px; background: var(--thumb); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
 .pcard-ph img { width: 100%; height: 100%; object-fit: cover; }
 .pcard-ini { font: 700 40px var(--font); letter-spacing: -.05em; color: var(--ink-3); opacity: .55; }
@@ -329,7 +345,7 @@ select.input {
 .pcard-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 2px; }
 .pcard-name { font: 600 17px var(--font); letter-spacing: -.015em; line-height: 1.2; }
 .pcard-desc { font-size: 12.5px; color: var(--ink-3); }
-.pcard-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; gap: 8px; }
+.pcard-foot { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 10px; gap: 8px; width: 100%; }
 .pcard-price { font: 600 17px var(--mono); letter-spacing: -.02em; }
 .pcard-btn { width: 46px; height: 46px; border-radius: 14px; background: var(--thumb); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .pcard.cur { background: var(--sel); color: var(--sel-ink); box-shadow: 0 0 0 3px var(--accent), var(--shadow); }
@@ -399,7 +415,7 @@ select.input {
 .ogrid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); align-items: start; }
 .ocard { display: flex; flex-direction: column; overflow: hidden; }
 .ocard-head { display: flex; align-items: center; gap: 14px; padding: 16px 18px 12px; }
-.ocard-num { width: 56px; height: 56px; border-radius: 15px; background: var(--sel); color: var(--sel-ink); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; flex-shrink: 0; }
+.ocard-num { width: 56px; height: 56px; border-radius: 15px; background: var(--accent-soft); color: var(--accent-ink); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; flex-shrink: 0; }
 .ocard-num small { font: 700 9.5px var(--mono); letter-spacing: .1em; opacity: .7; }
 .ocard-num b { font: 700 22px var(--mono); }
 .ocard-items { padding: 0 18px 10px; font: 500 14px/1.5 var(--mono); }
@@ -408,6 +424,7 @@ select.input {
 .ocard-actions { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; }
 .ocard-actions .btn { min-width: 0; white-space: nowrap; overflow: hidden; }
 .ocard-actions .btn-ghost { box-shadow: inset 0 0 0 1.5px var(--rule-2); }
+.ocard-actions .btn-ghost:hover:not(:disabled), .ocard-actions .btn-ghost:active:not(:disabled) { background: var(--accent-soft); color: var(--accent-ink); box-shadow: none; }
 
 /* Xodimlar kirishi (umumiy kalit) */
 .staff-switch { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; background: var(--ok-soft); color: var(--ok-ink); }

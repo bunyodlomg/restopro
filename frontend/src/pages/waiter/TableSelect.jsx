@@ -83,10 +83,10 @@ export default function TableSelect() {
     <div className="page">
       <div className="page-head">
         <Seg value={cat} onChange={setCat} items={CATS.map(c => ({ k: c.k, l: c.l, n: counts[c.k] }))}/>
-        <div className="row hide-mobile" style={{ gap: 28, marginLeft: 'auto' }}>
-          <Stat n={list.length - busy.length} l="Bo'sh"/>
-          <Stat n={busy.length} l="Band"/>
-          <Stat n={money(openSum)} l="Ochiq hisob"/>
+        <div className="hstats hide-mobile" style={{ marginLeft: 'auto' }}>
+          <Stat n={list.length - busy.length} l="Bo'sh" dot="var(--ok)"/>
+          <Stat n={busy.length} l="Band" dot="var(--accent)"/>
+          <Stat n={money(openSum)} unit="so'm" l="Ochiq hisob"/>
         </div>
         <button className="btn btn-primary btn-lg" onClick={soboy}><ShoppingBag size={20}/> Soboy buyurtma</button>
       </div>
@@ -133,11 +133,11 @@ export default function TableSelect() {
   )
 }
 
-function Stat({ n, l }) {
+function Stat({ n, l, unit, dot }) {
   return (
-    <div style={{ textAlign: 'right' }}>
-      <div className="mono" style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-.03em' }}>{n}</div>
-      <div className="label">{l}</div>
+    <div className="hstat">
+      <span className="label">{dot && <i className="dot" style={{ background: dot }}/>}{l}</span>
+      <b>{n}{unit && <small>{unit}</small>}</b>
     </div>
   )
 }

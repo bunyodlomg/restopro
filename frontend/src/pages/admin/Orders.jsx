@@ -67,7 +67,7 @@ function OrderCard({ order, settings, onClose, onCancel, busy }) {
         </div>
         <div className="ocard-actions">
           <button className="btn btn-ghost btn-lg btn-icon" title="Bekor qilish" aria-label="Bekor qilish" onClick={() => onCancel(order)} disabled={busy}><X size={22}/></button>
-          <button className="btn btn-dark btn-lg" onClick={() => onClose(order)} disabled={busy}>
+          <button className="btn btn-ok btn-lg" onClick={() => onClose(order)} disabled={busy}>
             <Check size={20}/> To'landi
           </button>
         </div>
@@ -128,7 +128,7 @@ export default function Orders() {
   return (
     <div className="page">
       <PageHead title="Faol buyurtmalar" sub={`${orders.length} ta ochiq · ${money(total)} so'm`}
-        actions={<button className={`btn btn-lg ${sound ? 'btn-dark' : 'btn-soft'}`} onClick={toggleSound}>
+        actions={<button className={`btn btn-lg ${sound ? 'btn-on' : 'btn-soft'}`} onClick={toggleSound}>
           {sound ? <Bell size={20}/> : <BellOff size={20}/>}{sound ? 'Ovoz yoqilgan' : "Ovoz o'chiq"}
         </button>}/>
 
