@@ -30,9 +30,10 @@ router.get('/ping', syncAuth, (req, res) => res.json({ ok: true, node: engine.NO
 
 // GET /api/sync/license — kassa litsenziya holatini cloud orqali oladi (imzolangan)
 router.get('/license', syncAuth, (req, res) => {
-  const token = require('../license').currentToken()
+  const lic = require('../license')
+  const token = lic.currentToken()
   if (!token) return res.status(404).json({ message: 'Litsenziya hali olinmagan' })
-  res.json({ token })
+  res.json({ token, updateToken: lic.currentUpdateToken() })
 })
 
 // GET /api/sync/pull?since=N&node=kassa — kassa uchun yangi o'zgarishlar

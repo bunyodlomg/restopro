@@ -98,9 +98,10 @@ Lokal ishlab chiqish (Linux): `cd desktop && npm install &&
 node scripts/prepare.js --platform linux --mongo-dir <mongod papkasi> && npm start`
 
 ## Ilovalarni yangilash (avtomatik)
-`main` branch'ga har push'da GitHub Actions yangi versiya (`1.0.<run>`) yig'ib, **GitHub Release** qiladi
-(`.github/workflows/desktop.yml`). O'rnatilgan Kassa va Ofitsant ilovalari uni 3 soat ichida o'zi topadi,
-fonda yuklaydi va o'rnatadi (electron-updater). Boshqa branch'lar faqat sinov artefakti yig'adi.
+`main` branch'ga har push'da GitHub Actions yangi versiya (`1.0.<run>`) yig'ib, uni **litsenziya serveriga**
+yuklaydi (`.github/workflows/desktop.yml`). O'rnatilgan Kassa va Ofitsant ilovalari uni 3 soat ichida o'zi
+topadi, fonda yuklaydi va o'rnatadi — faqat amaldagi litsenziyasi bo'lsa. Sozlash: [docs/LITSENZIYA.md](docs/LITSENZIYA.md#6-ilovalarni-yangilash-avtomatik).
+Boshqa branch'lar faqat sinov artefakti yig'adi.
 Cloud server: `./deploy/update.sh`.
 
 ## Zaxira nusxa (backup)

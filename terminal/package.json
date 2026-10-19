@@ -44,10 +44,8 @@
     },
     "publish": [
       {
-        "provider": "github",
-        "owner": "bunyodlomg",
-        "repo": "restopro",
-        "releaseType": "release",
+        "provider": "generic",
+        "url": "https://updates.restopro.invalid/updates",
         "channel": "terminal"
       }
     ]

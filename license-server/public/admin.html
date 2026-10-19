@@ -73,6 +73,10 @@
     <p class="muted">Bu ochiq kalitni va litsenziya serveri manzilini <span class="mono">server/license/vendor.json</span> fayliga bir marta yozing, commit qiling. Shundan keyin o'rnatilgan har bir restoran serveri va kassa shu yerdan tekshiriladi.</p>
     <div class="pub" id="vendorJson"></div>
   </details>
+  <div class="card" style="margin-top:12px;padding:14px 16px">
+    <b>Ilovalar yangilanishi</b>
+    <div class="muted" id="updInfo" style="margin-top:6px"></div>
+  </div>
 </main>
 
 <dialog id="dlg"><form method="dialog" id="form"></form></dialog>
@@ -198,6 +202,10 @@ async function del(id) {
 
 api('GET', '/info').then(i => {
   $('#vendorJson').textContent = JSON.stringify({ licenseUrl: location.origin, publicKey: i.publicKey, contact: i.contact }, null, 2)
+  const u = i.updates || {}
+  const line = (n, x) => x ? `${n}: <b class="mono">${esc(x.version)}</b> (${date(x.at)})` : `${n}: hali yuklanmagan`
+  $('#updInfo').innerHTML = (i.uploadReady ? '' : '<span style="color:var(--accent-ink)">.env da UPDATE_UPLOAD_TOKEN yo\'q — GitHub yangi versiyalarni yuklay olmaydi.</span><br>')
+    + line('Kassa', u.kassa) + '<br>' + line('Ofitsant terminali', u.terminal)
 })
 load().catch(e => toast('Xato: ' + e.message))
 setInterval(load, 60000)

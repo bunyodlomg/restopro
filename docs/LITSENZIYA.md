@@ -44,7 +44,8 @@ git clone https://github.com/bunyodlomg/restopro.git /opt/restopro
 cd /opt/restopro/license-server
 npm ci --omit=dev
 cp .env.example .env
-nano .env        # ADMIN_PASSWORD (kamida 10 belgi) va VENDOR_CONTACT (telefoningiz)
+nano .env        # ADMIN_PASSWORD (kamida 10 belgi), VENDOR_CONTACT (telefoningiz),
+                 # UPDATE_UPLOAD_TOKEN (openssl rand -hex 32 — ilova yangilanishlari uchun)
 pm2 start server.js --name restopro-license && pm2 save && pm2 startup
 ```
 
@@ -54,7 +55,8 @@ Nginx va HTTPS:
 cat > /etc/nginx/sites-available/license <<'EOF'
 server {
     server_name license.sizning-domen.uz;
-    location / { proxy_pass http://127.0.0.1:7070; proxy_set_header Host $host; proxy_set_header X-Forwarded-For $remote_addr; }
+    client_max_body_size 400M;      # ilova yangilanishlari (.exe) yuklanadi
+    location / { proxy_pass http://127.0.0.1:7070; proxy_set_header Host $host; proxy_set_header X-Forwarded-For $remote_addr; proxy_request_buffering off; }
 }
 EOF
 ln -s /etc/nginx/sites-available/license /etc/nginx/sites-enabled/ && nginx -t && systemctl reload nginx
@@ -118,8 +120,44 @@ Ro'yxat to'lov muddati bo'yicha saralangan: eng yaqini tepada turadi.
 - Qayta yoqish uchun **Faollashtirish** yoki **To'lov** tugmasini bosing.
 - Mijozni o'chirishdan ko'ra to'xtatgan ma'qul. O'chirilgan kalit imzolangan javob olmaydi, lekin restoran oxirgi saqlangan javob bilan uning muddati (14 kungacha) tugaguncha ishlashda davom etadi.
 
+## 6. Ilovalarni yangilash (avtomatik)
+
+Kassa va Ofitsant ilovalari yangi versiyani **sizning litsenziya serveringizdan** oladi.
+Repozitoriy yopiq (private) bo'lsa ham ishlaydi. Yuklab olish faqat amaldagi litsenziyasi bor
+restoranlarga ruxsat etiladi.
+
+```
+ main'ga push → GitHub Actions .exe yig'adi → litsenziya serveriga yuklaydi (/api/v1/updates)
+                                                         │
+ Kassa / Ofitsant ilovasi ← 3 soatda tekshiradi ← restoran serveri beradigan imzoli ruxsatnoma
+```
+
+**Bir martalik sozlash:**
+1. Litsenziya serverining `.env` fayliga `UPDATE_UPLOAD_TOKEN=` qo'shing (`openssl rand -hex 32`), `pm2 restart restopro-license`.
+2. GitHub → repozitoriy → **Settings → Secrets and variables → Actions → New repository secret**:
+   - `LICENSE_SERVER_URL` = `https://license.sizning-domen.uz`
+   - `UPDATE_UPLOAD_TOKEN` = 1-qadamdagi qiymat
+3. Nginx'da `client_max_body_size 400M;` bo'lsin (yuqoridagi namunada bor).
+
+Shundan keyin `main` ga har push'da yangi versiya (`1.0.N`) avtomatik yuklanadi. Admin panel pastidagi
+**«Ilovalar yangilanishi»** blokida hozirgi versiyalar ko'rinadi. Eski versiyalar fayllari avtomatik o'chiriladi.
+
+Restoranda: kassada adminga «Yangi versiya tayyor — Hozir yangilash» chiqadi (yoki dastur yopilganda o'zi
+o'rnatiladi); ofitsant monobloki PIN ekranida o'zi yangilanadi.
+
+### Repozitoriyni yopiq (private) qilish
+GitHub → repozitoriy → **Settings → General → Danger Zone → Change repository visibility → Make private**.
+
+- Yopiq repozitoriyda GitHub Actions bepul tarifda oyiga 2000 daqiqa beradi; Windows yig'ishlari 2 baravar
+  hisoblanadi (bir push ≈ 15–20 daqiqa), ya'ni oyiga ~100 ta yangi versiya bemalol sig'adi.
+- Serverga `git clone` qilish uchun endi kirish kerak bo'ladi: GitHub → Settings → Developer settings →
+  **Fine-grained token** (faqat shu repo, Contents: Read-only) yarating va
+  `git clone https://<TOKEN>@github.com/bunyodlomg/restopro.git /opt/restopro` qiling.
+
 ## Cheklovlar (bilib qo'ying)
 
+- **Dastur kodi:** `.exe` ichida JavaScript kod bor — tajribali dasturchi uni ochib ko'rishi mumkin.
+  Repozitoriyni yopiq qilish kodni ochiq internetdan olib tashlaydi, lekin to'liq himoya emas.
 - **Server egasi:** model A'da har restoranning o'z serveri bor. Server kodini o'zgartira oladigan dasturchi tekshiruvni olib tashlashi mumkin. Shuning uchun restoran serverlarini o'zingizning VPS hisobingizda saqlash va restoranga faqat ilovaga kirishni berish tavsiya etiladi. Bunda server ham, `.env` ham sizning nazoratingizda bo'ladi.
 - **Litsenziya serveringiz ishlamay qolsa:** restoranlar oxirgi javob bilan 14 kungacha ishlayveradi (to'langan muddat doirasida). Serveringizni shu muddatda tiklash kifoya.
 - **Kompyuter soati:** soatni orqaga surish yordam bermaydi, chunki tizim ko'rilgan eng katta vaqtni eslab qoladi.

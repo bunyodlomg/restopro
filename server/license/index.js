@@ -57,6 +57,17 @@ function verify(token) {
   } catch { return null }
 }
 
+// Yangilanish ruxsatnomasi (sotuvchi imzosi, t: 'upd') — kalitni o'z ichiga olmaydi
+function verifyUpdate(token) {
+  if (!publicKey || typeof token !== 'string') return null
+  const [body, sig] = token.split('.')
+  try {
+    if (!crypto.verify(null, Buffer.from(body), publicKey, Buffer.from(sig, 'base64url'))) return null
+    const p = JSON.parse(Buffer.from(body, 'base64url').toString())
+    return p.t === 'upd' && p.exp > Date.now() ? p : null
+  } catch { return null }
+}
+
 // Soatni orqaga surish orqali aldashning oldini olish
 const now = () => Math.max(Date.now(), saved?.maxSeen || 0)
 
@@ -69,7 +80,7 @@ async function fetchToken() {
   if (VIA_CLOUD) {
     const r = await fetch(`${SYNC_URL}/api/sync/license`, { headers: { 'x-sync-key': SYNC_KEY }, signal: AbortSignal.timeout(20000) })
     if (!r.ok) throw new Error(r.status === 404 ? 'Cloud serverda litsenziya hali yo\'q' : `Cloud javobi: ${r.status}`)
-    return (await r.json()).token
+    return r.json()
   }
   if (!LICENSE_URL) throw new Error('Litsenziya serveri manzili yo\'q (vendor.json)')
   if (!LICENSE_KEY) throw new Error('LICENSE_KEY o\'rnatilmagan')
@@ -82,19 +93,19 @@ async function fetchToken() {
   const j = await r.json().catch(() => ({}))
   if (r.status === 404) throw new Error('Litsenziya kaliti topilmadi')
   if (!r.ok) throw new Error(j.message || `Litsenziya serveri javobi: ${r.status}`)
-  return j.token
+  return j
 }
 
 async function check() {
   if (!ENABLED) return
   lastTry = Date.now()
   try {
-    const token = await fetchToken()
+    const { token, updateToken } = await fetchToken()
     const p = verify(token)
     if (!p) throw new Error('Litsenziya javobi imzosi noto\'g\'ri')
     const cur = verify(saved?.token)
     // Eskiroq javob yangisini almashtira olmaydi
-    if (!cur || p.iat >= cur.iat) await persist({ token, lastCheckAt: Date.now() })
+    if (!cur || p.iat >= cur.iat) await persist({ token, lastCheckAt: Date.now(), ...(verifyUpdate(updateToken) ? { updateToken } : {}) })
     lastError = null
   } catch (err) {
     lastError = err.cause?.code ? `Ulanib bo'lmadi (${err.cause.code})` : err.message
@@ -166,5 +177,16 @@ router.post('/refresh', async (req, res) => {
 
 // Cloud → kassa: oxirgi imzolangan javob (routes/sync.js dan, SYNC_KEY bilan)
 const currentToken = () => (verify(saved?.token) ? saved.token : null)
+const currentUpdateToken = () => (verifyUpdate(saved?.updateToken) ? saved.updateToken : null)
 
-module.exports = { start, status, requireLicense, router, currentToken, verify }
+// GET /api/license/update-token — kassa va ofitsant terminali ilovalari yangilanishni
+// litsenziya serveridan yuklashi uchun (faqat restoran ichidan: localhost / Wi-Fi)
+router.get('/update-token', async (req, res) => {
+  const { isOnPremise } = require('../utils/onPremise')
+  if (!(await isOnPremise(req))) return res.status(403).json({ message: 'Faqat restoran tarmog\'idan' })
+  const token = ENABLED && currentUpdateToken()
+  if (!token || !LICENSE_URL) return res.status(404).json({ message: 'Yangilanish sozlanmagan' })
+  res.json({ url: `${LICENSE_URL}/updates`, token })
+})
+
+module.exports = { start, status, requireLicense, router, currentToken, currentUpdateToken, verify }

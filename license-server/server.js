@@ -21,6 +21,9 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || ''
 const GRACE_DAYS     = Math.max(0, parseInt(process.env.GRACE_DAYS, 10) || 3)
 const VENDOR_CONTACT = (process.env.VENDOR_CONTACT || '').slice(0, 120)
 const TOKEN_DAYS     = 14     // restoran internetsiz qancha kun ishlay oladi (keyin qayta tekshirish shart)
+// Ilovalar yangilanishi: GitHub Actions shu tokenni ishlatib yangi .exe larni yuklaydi
+const UPLOAD_TOKEN   = process.env.UPDATE_UPLOAD_TOKEN || ''
+const UPDATE_DAYS    = 30     // yangilanish ruxsatnomasi muddati
 
 if (ADMIN_PASSWORD.length < 10) {
   console.error('ADMIN_PASSWORD o\'rnatilmagan yoki juda qisqa (kamida 10 belgi). .env faylini to\'ldiring.')
@@ -133,8 +136,87 @@ app.post('/api/v1/check', limit, (req, res) => {
       iat: now,
       exp: now + TOKEN_DAYS * DAY, // internetsiz ishlash chegarasi
     }),
+    // Ilovalarni yangilash ruxsatnomasi (kalitsiz — ofitsant terminaliga ham berish xavfsiz)
+    updateToken: signToken({ v: 1, t: 'upd', id: c.id, iat: now, exp: now + UPDATE_DAYS * DAY }),
   })
 })
+
+// ── Ilovalar yangilanishi (electron-updater "generic" provider) ──
+// Kassa: GET /updates/latest.yml, Ofitsant terminali: GET /updates/terminal.yml,
+// so'ng yml ichidagi .exe (Range so'rovlari bilan — faqat o'zgargan qismlar yuklanadi).
+// Faqat amaldagi litsenziyasi bor restoranlar yuklay oladi.
+const UPD_DIR = path.join(DATA_DIR, 'updates')
+fs.mkdirSync(UPD_DIR, { recursive: true })
+const SAFE_UPD = /^[A-Za-z0-9._-]+\.(yml|exe|blockmap)$/
+
+function verifyOwn(token) {
+  const [body, sig] = String(token || '').split('.')
+  if (!body || !sig) return null
+  try {
+    const pub = crypto.createPublicKey({ key: Buffer.from(PUBLIC_KEY_B64, 'base64'), format: 'der', type: 'spki' })
+    if (!crypto.verify(null, Buffer.from(body), pub, Buffer.from(sig, 'base64url'))) return null
+    return JSON.parse(Buffer.from(body, 'base64url').toString())
+  } catch { return null }
+}
+
+app.get('/updates/:file', (req, res) => {
+  const p = verifyOwn(req.get('x-restopro-update'))
+  if (!p || p.t !== 'upd' || p.exp < Date.now() || !findById(p.id))
+    return res.status(401).json({ message: 'Yangilanish uchun litsenziya kerak' })
+  const name = req.params.file
+  if (!SAFE_UPD.test(name)) return res.status(404).end()
+  const file = path.join(UPD_DIR, name)
+  if (!fs.existsSync(file)) return res.status(404).end()
+  res.set('Cache-Control', 'no-store')
+  res.sendFile(file)
+})
+
+// PUT /api/v1/updates/:file — GitHub Actions yuklaydi (Authorization: Bearer UPDATE_UPLOAD_TOKEN).
+// .exe/.blockmap avval, .yml oxirida — mijozlar yml'ni ko'rganda fayl allaqachon joyida bo'ladi.
+app.put('/api/v1/updates/:file', (req, res) => {
+  const given = Buffer.from((req.get('authorization') || '').replace(/^Bearer /, ''))
+  const want = Buffer.from(UPLOAD_TOKEN)
+  if (UPLOAD_TOKEN.length < 32 || given.length !== want.length || !crypto.timingSafeEqual(given, want))
+    return res.status(401).json({ message: 'Ruxsat yo\'q' })
+  const name = req.params.file
+  if (!SAFE_UPD.test(name)) return res.status(400).json({ message: 'Fayl nomi noto\'g\'ri' })
+  const dest = path.join(UPD_DIR, name)
+  const tmp = dest + '.part'
+  const out = fs.createWriteStream(tmp)
+  let size = 0
+  req.on('data', ch => { size += ch.length; if (size > 400 * 1024 * 1024) req.destroy() })
+  req.pipe(out)
+  out.on('finish', () => {
+    if (!size) { fs.rmSync(tmp, { force: true }); return res.status(400).json({ message: 'Bo\'sh fayl' }) }
+    fs.renameSync(tmp, dest)
+    if (name.endsWith('.yml')) cleanupUpdates()
+    res.json({ ok: true, name, size })
+  })
+  out.on('error', err => { fs.rmSync(tmp, { force: true }); res.status(500).json({ message: err.message }) })
+  req.on('aborted', () => fs.rmSync(tmp, { force: true }))
+})
+
+// Hozirgi yml'larda ko'rsatilmagan eski .exe/.blockmap fayllarni o'chirish
+function cleanupUpdates() {
+  const keep = new Set()
+  for (const yml of fs.readdirSync(UPD_DIR).filter(f => f.endsWith('.yml'))) {
+    const text = fs.readFileSync(path.join(UPD_DIR, yml), 'utf8')
+    for (const m of text.matchAll(/(?:path|url):\s*([^\s]+)/g)) { keep.add(m[1]); keep.add(m[1] + '.blockmap') }
+  }
+  for (const f of fs.readdirSync(UPD_DIR)) {
+    if (/\.(exe|blockmap)$/.test(f) && !keep.has(f)) fs.rmSync(path.join(UPD_DIR, f), { force: true })
+  }
+}
+function currentVersions() {
+  const out = {}
+  for (const [ch, yml] of [['kassa', 'latest.yml'], ['terminal', 'terminal.yml']]) {
+    const f = path.join(UPD_DIR, yml)
+    if (!fs.existsSync(f)) continue
+    const m = fs.readFileSync(f, 'utf8').match(/^version:\s*(.+)$/m)
+    out[ch] = { version: m?.[1]?.trim(), at: fs.statSync(f).mtime.toISOString() }
+  }
+  return out
+}
 
 app.get('/api/v1/pubkey', (req, res) => res.json({ publicKey: PUBLIC_KEY_B64 }))
 app.get('/health', (req, res) => res.json({ ok: true }))
@@ -173,7 +255,7 @@ const view = c => ({ ...c, state: stateOf(c) })
 const str = (v, max) => String(v ?? '').trim().slice(0, max)
 const money = v => Math.max(0, Math.round(Number(v) || 0))
 
-admin.get('/api/info', (req, res) => res.json({ publicKey: PUBLIC_KEY_B64, graceDays: GRACE_DAYS, contact: VENDOR_CONTACT }))
+admin.get('/api/info', (req, res) => res.json({ publicKey: PUBLIC_KEY_B64, graceDays: GRACE_DAYS, contact: VENDOR_CONTACT, updates: currentVersions(), uploadReady: UPLOAD_TOKEN.length >= 32 }))
 admin.get('/api/customers', (req, res) => res.json(db.customers.map(view)))
 
 admin.post('/api/customers', (req, res) => {

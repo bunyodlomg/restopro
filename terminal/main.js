@@ -150,5 +150,8 @@ app.whenReady().then(() => {
   globalShortcut.register('CommandOrControl+Shift+Q', confirmQuit)
   if (config.url) createMainWindow()
   else createSetupWindow()
-  updater.setup({ channel: 'terminal', onBeforeInstall: async () => { quitting = true }, onChange: () => refreshTrayMenu() })
+  updater.setup({
+    channel: 'terminal',
+    feed: async () => config.url ? (await fetch(`${config.url}/api/license/update-token`, { signal: AbortSignal.timeout(10000) })).json() : null,
+    onBeforeInstall: async () => { quitting = true }, onChange: () => refreshTrayMenu() })
 })

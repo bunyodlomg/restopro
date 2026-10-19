@@ -1,4 +1,4 @@
-// ── Avtomatik yangilanish (GitHub Releases) ──────────────────
+// ── Avtomatik yangilanish (sotuvchining litsenziya serveri orqali) ──
 // Ilova o'zi yangi versiyani tekshiradi, fonda yuklab oladi va tayyor
 // bo'lgach foydalanuvchiga "Yangilash" taklif qiladi. Ilova yopilganda ham
 // avtomatik o'rnatiladi. Qayta .exe yuklab o'rnatish shart emas.
@@ -11,6 +11,8 @@ const CHECK_EVERY = 3 * 3600 * 1000   // 3 soatda bir
 const state = { status: 'idle', current: app.getVersion(), version: null, progress: 0, error: null }
 let listeners = []
 let beforeInstall = async () => {}
+let getFeed = async () => null      // { url, token } — restoran serveridan olinadi
+let feedChannel = 'latest'
 
 function emit(patch) {
   Object.assign(state, patch)
@@ -20,6 +22,12 @@ function emit(patch) {
 
 async function check() {
   if (!autoUpdater || !app.isPackaged) return state
+  // Har tekshiruvdan oldin manzil va ruxsatnoma yangilanadi (litsenziya serveri imzolagan)
+  let feed = null
+  try { feed = await getFeed() } catch {}
+  if (!feed?.url || !feed?.token) { emit({ status: 'error', error: 'Yangilanish serveri hali sozlanmagan yoki litsenziya olinmagan' }); return state }
+  autoUpdater.setFeedURL({ provider: 'generic', url: feed.url, channel: feedChannel })
+  autoUpdater.requestHeaders = { 'x-restopro-update': feed.token }
   try { await autoUpdater.checkForUpdates() } catch (err) { emit({ status: 'error', error: err.message }) }
   return state
 }
@@ -32,9 +40,11 @@ async function install() {
   return true
 }
 
-// channel: kassa — 'latest', ofitsant terminali — 'terminal' (bitta release'da ikkala ilova)
-function setup({ channel = 'latest', onBeforeInstall, onChange } = {}) {
+// channel: kassa — 'latest' (latest.yml), ofitsant terminali — 'terminal' (terminal.yml)
+function setup({ channel = 'latest', feed, onBeforeInstall, onChange } = {}) {
   if (onBeforeInstall) beforeInstall = onBeforeInstall
+  if (feed) getFeed = feed
+  feedChannel = channel
   if (onChange) listeners.push(onChange)
 
   ipcMain.handle('rp:update:get', () => state)
@@ -43,7 +53,6 @@ function setup({ channel = 'latest', onBeforeInstall, onChange } = {}) {
 
   if (!autoUpdater || !app.isPackaged) { emit({ status: 'disabled' }); return }
 
-  if (channel !== 'latest') autoUpdater.channel = channel
   autoUpdater.allowDowngrade = false
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true

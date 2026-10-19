@@ -336,6 +336,7 @@ app.whenReady().then(async () => {
   if (config.mode) createMainWindow(); else createSetupWindow()
   // Avtomatik yangilanish: o'rnatishdan oldin server va MongoDB toza to'xtatiladi
   updater.setup({
+    feed: async () => (await fetch(`http://127.0.0.1:${config.port}/api/license/update-token`, { signal: AbortSignal.timeout(10000) })).json(),
     onBeforeInstall: async () => { quitting = true; await stopServer(); await stopMongo(); cleanedUp = true },
     onChange: () => refreshTrayMenu(),
   })
