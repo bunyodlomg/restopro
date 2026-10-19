@@ -7,7 +7,27 @@ restopro-full/
 └── frontend/    ← Frontend (React + Vite)
 ```
 
-## Tezkor ishga tushirish
+## Yangi mijoz serveriga o'rnatish (Ubuntu 22.04 / 24.04)
+1. VPS oling, domenning DNS **A** yozuvini server IP manziliga yo'naltiring.
+2. Serverda (root):
+```bash
+git clone https://github.com/bunyodlomg/restopro.git /opt/restopro
+cd /opt/restopro
+./deploy/install.sh --domain cafe.example.uz --email siz@example.uz \
+                    --tg-token <BOT_TOKEN> --tg-chat <CHAT_ID>
+```
+Skript Node.js 22, MongoDB 8, pm2, nginx, SSL (Let's Encrypt), firewall va kunlik backup'ni
+o'rnatadi, `.env` ni xavfsiz kalitlar bilan yaratadi va oxirida admin parolini ko'rsatadi.
+Qayta ishga tushirish xavfsiz — mavjud sozlamalar saqlanadi. Barcha parametrlar: `./deploy/install.sh --help`.
+
+> MongoDB 5+ AVX'li protsessor talab qiladi. Ba'zi arzon VPS'larda AVX yo'q — skript buni aniqlab, ogohlantiradi.
+
+Yangilash (backup → pull → build → restart; ishlamasa avtomatik orqaga qaytadi):
+```bash
+cd /opt/restopro && ./deploy/update.sh
+```
+
+## Lokal ishlab chiqish
 
 ### 1. Server (Backend)
 ```bash
@@ -45,7 +65,7 @@ Birinchi kirishda parolni almashtirish majburiy.
 `BACKUP_TELEGRAM_*` to'ldirilgan bo'lsa, har bir arxiv Telegram'ga yuboriladi (49 MB gacha).
 Xato bo'lsa, Telegram'ga ogohlantirish keladi.
 
-Serverda bir marta sozlash:
+`install.sh` buni avtomatik sozlaydi. Qo'lda sozlash:
 ```bash
 sudo apt install mongodb-database-tools    # mongodump / mongorestore
 chmod +x deploy/backup.sh deploy/restore.sh
