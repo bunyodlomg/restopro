@@ -7,6 +7,7 @@ const express = require('express')
 const crypto  = require('crypto')
 const fs      = require('fs')
 const path    = require('path')
+const mongoose = require('mongoose')
 const engine  = require('../sync/engine')
 const { notifyApplied } = require('../sync/notify')
 
@@ -34,6 +35,24 @@ router.get('/license', syncAuth, (req, res) => {
   const token = lic.currentToken()
   if (!token) return res.status(404).json({ message: 'Litsenziya hali olinmagan' })
   res.json({ token, updateToken: lic.currentUpdateToken() })
+})
+
+// GET /api/sync/wait?seq=N — "long-poll": cloud bazasida o'zgarish bo'lguncha (25 soniyagacha)
+// javobni ushlab turadi. Kassa shu orqali yangi buyurtmani 15 soniya kutmasdan darhol oladi.
+const counterSeq = async () => (await mongoose.connection.collection('sync_counters').findOne({ _id: 'seq' }))?.v || 0
+router.get('/wait', syncAuth, async (req, res, next) => {
+  try {
+    const seen = Math.max(0, parseInt(req.query.seq, 10) || 0)
+    const end = Date.now() + 25000
+    let closed = false
+    req.on('close', () => { closed = true })
+    let seq = await counterSeq()
+    while (seq <= seen && Date.now() < end && !closed) {
+      await new Promise(r => setTimeout(r, 400))
+      seq = await counterSeq()
+    }
+    if (!closed) res.json({ seq })
+  } catch (err) { next(err) }
 })
 
 // GET /api/sync/pull?since=N&node=kassa — kassa uchun yangi o'zgarishlar

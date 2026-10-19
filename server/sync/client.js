@@ -1,5 +1,6 @@
 // ── Sync mijozi (kassa / Electron tomonida) ───────────────────
-// Har SYNC_INTERVAL soniyada: internet bormi → o'zgarishlarni yuborish → olish.
+// Real vaqtga yaqin: cloud'dagi o'zgarish "long-poll" (/api/sync/wait) orqali darhol keladi,
+// kassadagi o'zgarish 1 soniya ichida yuboriladi. Har SYNC_INTERVAL soniyada zaxira tekshiruv.
 // Internet bo'lmasa hech narsa buzilmaydi: hammasi lokal ishlayveradi,
 // ulanish tiklanganda navbatdagi o'zgarishlar avtomatik yuboriladi.
 
@@ -95,6 +96,8 @@ async function pull(io) {
       const result = await engine.applyChanges(items)
       if (result.conflicts.length) addConflicts(result.conflicts.map(c => ({ ...c, side: 'kassa' })))
       notifyApplied(io, result)
+      // Cloud'da yaratilgan chek/talon — kutmasdan printerga
+      if (result.touched.some(t => t.coll === 'printjobs')) require('../print').kick()
     }
     pulled = cursor
     await saveState({ pulled })
@@ -117,8 +120,9 @@ async function countPending() {
   return n
 }
 
+let again = false
 async function tick(io) {
-  if (status.syncing) return
+  if (status.syncing) { again = true; return }   // hozirgi tugagach yana bir marta
   status.syncing = true
   try {
     await push()
@@ -140,7 +144,36 @@ async function tick(io) {
     if (wasOnline) { console.warn('📴 sync: offline —', status.lastError); io?.emit('syncStatus', publicStatus()) }
   } finally {
     status.pending = await countPending().catch(() => status.pending)
+    lastLocalSeq = await localSeq().catch(() => lastLocalSeq)
     status.syncing = false
+    if (again) { again = false; setImmediate(() => tick(io)) }
+  }
+}
+
+// ── Darhol sinxronlash ─────────────────────────────────────────
+const localSeq = async () => (await mongoose.connection.collection('sync_counters').findOne({ _id: 'seq' }))?.v || 0
+let lastLocalSeq = 0
+
+// Kassada nimadir yozildi (buyurtma, chek holati) — 1 soniya ichida cloud'ga
+function watchLocal(io) {
+  setInterval(async () => {
+    try { if (!status.syncing && (await localSeq()) !== lastLocalSeq) tick(io) } catch {}
+  }, 1000).unref()
+}
+
+// Cloud'da o'zgarish bo'lishi bilan javob keladi (long-poll) — darhol olamiz
+async function watchRemote(io) {
+  let seq = 0
+  for (;;) {
+    try {
+      const res = await fetch(`${SYNC_URL}/api/sync/wait?seq=${seq}`, { headers: { 'x-sync-key': SYNC_KEY }, signal: AbortSignal.timeout(40000) })
+      if (res.status === 404) return   // eski cloud versiyasi — faqat davriy sync
+      if (!res.ok) throw new Error(String(res.status))
+      const { seq: next } = await res.json()
+      if (next !== seq) { seq = next; tick(io) }
+    } catch {
+      await new Promise(r => setTimeout(r, 5000))   // internet yo'q — biroz kutib qayta
+    }
   }
 }
 
@@ -159,6 +192,8 @@ async function start(io) {
   console.log(`🔁 sync: ${SYNC_URL} (har ${INTERVAL_MS / 1000}s)`)
   tick(io)
   setInterval(() => tick(io), INTERVAL_MS).unref()
+  watchLocal(io)
+  watchRemote(io)
 }
 
 // Hech qachon cloud bilan sinxronlanmagan kassada API yopiq turadi:
