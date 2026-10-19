@@ -28,6 +28,10 @@ const OrderSchema = new Schema({
 
   note:        { type: String, default: '' },    // oshpazga izoh
   closedAt:    { type: Date,   default: null },
+
+  // Idempotency — offline navbatdan takror yuborilgan so'rovlarni aniqlash uchun.
+  // Klient generatsiya qilgan ID'lar (yangi yaratish yoki mavjud buyurtmaga merge).
+  clientIds:   { type: [String], default: [], index: true },
 }, { timestamps: true })
 
 // Jami hisoblaydigan virtual field

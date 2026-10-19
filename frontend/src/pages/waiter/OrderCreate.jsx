@@ -8,6 +8,7 @@ import { useSettings } from '../../context/SettingsContext.jsx'
 import { createSocket } from '../../api/socket.js'
 import { isTerminal } from '../../utils/terminal.js'
 import SyncBadge from '../../components/shared/SyncBadge.jsx'
+import { enqueueOrder, genClientId } from '../../utils/offlineQueue.js'
 import { BrandMark, usePosBase, money, initials, fileUrl, minutesSince, fmtDuration, Loading, Empty } from '../../components/ui.jsx'
 
 const ALL = 'Barchasi'
@@ -110,20 +111,44 @@ export default function OrderCreate() {
   const submit = async () => {
     if (!lines.length || sending) return
     setSending(true)
-    try {
-      await API.post('/api/orders', {
-        tableId: isSoboy ? null : tableId,
-        tableNumber: table?.number,
-        category: isSoboy ? 'soboy' : table?.category || 'zal',
-        waiterName: user?.name,
-        note: note.trim(),
-        items: lines.map(l => ({ productId: l.p._id, quantity: l.n })),
-      })
-      toast.success(isSoboy ? 'Soboy buyurtma yuborildi' : `Stol ${table?.number} — oshxonaga yuborildi`)
+
+    // Idempotency uchun clientId — takror yuborilsa ham server bitta buyurtma yaratadi
+    const payload = {
+      clientId: genClientId(),
+      tableId: isSoboy ? null : tableId,
+      tableNumber: table?.number,
+      category: isSoboy ? 'soboy' : table?.category || 'zal',
+      waiterName: user?.name,
+      note: note.trim(),
+      items: lines.map(l => ({ productId: l.p._id, quantity: l.n })),
+    }
+
+    const done = () => {
       // Monoblok (terminal) rejimida ofitsant buyurtmadan keyin avtomatik chiqadi
       if (isTerminal() && user?.role !== 'admin') { logout(); navigate('/login', { replace: true }) }
       else navigate(base)
+    }
+    const saveOffline = async (msg) => {
+      try {
+        await enqueueOrder(payload)
+        toast.success(msg, { icon: '📴', duration: 4000 })
+        done()
+      } catch {
+        toast.error('Saqlab bo\'lmadi')
+        setSending(false)
+      }
+    }
+
+    // Internet yo'q — to'g'ridan-to'g'ri navbatga saqlaymiz
+    if (!navigator.onLine) return saveOffline('Offline: buyurtma navbatga saqlandi, ulanish tiklanganda yuboriladi')
+
+    try {
+      await API.post('/api/orders', payload)
+      toast.success(isSoboy ? 'Soboy buyurtma yuborildi' : `Stol ${table?.number} — oshxonaga yuborildi`)
+      done()
     } catch (err) {
+      // So'rov serverga yetmadi — offline navbatga
+      if (!err.response) return saveOffline('Internet uzildi — buyurtma navbatga saqlandi')
       toast.error(err.response?.data?.message || 'Yuborib bo\'lmadi')
       setSending(false)
     }

@@ -202,10 +202,18 @@ const fail = (status, message) => Object.assign(new Error(message), { status })
 
 // Buyurtma yaratish yoki band stolning ochiq buyurtmasiga qo'shish.
 // Ofitsant (POST /api/orders) va mijozning QR buyurtmasi (qabul qilinganda) shu yerdan o'tadi.
-async function placeOrder(io, { tableId, tableNumber, category, waiterName, items, note }, user) {
+async function placeOrder(io, { tableId, tableNumber, category, waiterName, items, note, clientId }, user) {
 
     if (!Array.isArray(items) || items.length === 0)
       throw fail(400, 'Kamida bitta taom tanlang')
+
+    // ── Idempotency: bu clientId allaqachon qayta ishlanganmi? ──
+    // (offline navbatdan takror yuborilsa, dublikat yaratilmaydi)
+    if (clientId) {
+      clientId = String(clientId).slice(0, 100)
+      const already = await Order.findOne({ clientIds: clientId })
+      if (already) return { order: already, merged: true }
+    }
 
     // Narxlarni DB dan tekshirish
     const enrichedItems = []
@@ -262,6 +270,7 @@ async function placeOrder(io, { tableId, tableNumber, category, waiterName, item
         // Jami qayta hisoblash
         existing.totalPrice = existing.items.reduce((s,i) => s + i.price * i.quantity, 0)
         existing.serviceFee = Math.round(existing.totalPrice * (serviceFeePercent / 100))
+        if (clientId && !existing.clientIds.includes(clientId)) existing.clientIds.push(clientId)
         await existing.save()
         io.emit('orderUpdated', existing)
         return { order: existing, merged: true }
@@ -280,6 +289,7 @@ async function placeOrder(io, { tableId, tableNumber, category, waiterName, item
       totalPrice,
       serviceFee,
       note: note || '',
+      clientIds:   clientId ? [clientId] : [],
     })
 
     // Stol bandligini yangilash

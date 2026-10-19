@@ -30,6 +30,8 @@ import QrCodes      from './pages/admin/QrCodes.jsx'
 import GuestMenu    from './pages/guest/GuestMenu.jsx'
 import TerminalLock from './components/TerminalLock.jsx'
 import UpdateBanner from './components/UpdateBanner.jsx'
+import OfflineBanner from './components/shared/OfflineBanner.jsx'
+import { initSync } from './utils/syncEngine.js'
 
 function Loader() {
   return <div className="center-fill" style={{ minHeight: '100vh', background: 'var(--bg)' }}><div className="spinner"/></div>
@@ -65,6 +67,9 @@ function RootRedirect() {
 function AppRoutes() {
   const { isDark } = useTheme()
 
+  // ── Offline navbat sinxronlash dvigatelini ishga tushirish ─────
+  useEffect(() => { initSync() }, [])
+
   // ── Global tugma ovozlari — admin va ofitsant tomonida ham ─────
   useEffect(() => {
     const onClick = e => {
@@ -79,6 +84,7 @@ function AppRoutes() {
 
   return (
     <>
+      <OfflineBanner/>
       <Routes>
         <Route path="/"      element={<RootRedirect/>}/>
         <Route path="/login" element={<Login/>}/>
