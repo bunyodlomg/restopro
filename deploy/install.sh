@@ -128,6 +128,7 @@ env_default MONGO_URI "mongodb://127.0.0.1:27017/restopro"
 env_set     PORT "$PORT"
 env_set     CLIENT_URL "https://$DOMAIN,http://$DOMAIN"
 env_set     ALLOW_TUNNELS "false"
+env_default SYNC_KEY "$(openssl rand -hex 32)"   # kassalar (Electron) ulanishi uchun
 env_default BACKUP_DIR "/var/backups/restopro"
 env_default BACKUP_KEEP "14"
 [ -z "$TG_TOKEN" ] || env_set BACKUP_TELEGRAM_BOT_TOKEN "$TG_TOKEN"
@@ -256,6 +257,7 @@ if [ -n "$ADMIN_PASSWORD" ]; then
   echo "  👤 Login: admin    Parol: $ADMIN_PASSWORD"
   echo "     (birinchi kirishda parolni almashtirish so'raladi)"
 fi
+echo "  🔁 Kassa ulash: SYNC_URL=$SCHEME://$DOMAIN  SYNC_KEY=$(env_get SYNC_KEY)"
 echo "  📋 Loglar:    pm2 logs $PM2_NAME"
 echo "  🔄 Yangilash: $SCRIPT_DIR/update.sh"
 echo "  🗄  Backup:    $SCRIPT_DIR/backup.sh   (tiklash: restore.sh)"

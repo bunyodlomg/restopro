@@ -1,5 +1,6 @@
 require('dotenv').config()
 const { JWT_SECRET } = require('./config')   // JWT_SECRET yo'q bo'lsa server to'xtaydi
+require('./sync/plugin')                     // modellardan OLDIN: har yozuvga sync belgisi
 const express    = require('express')
 const http       = require('http')
 const { Server } = require('socket.io')
@@ -10,6 +11,8 @@ const fs         = require('fs')
 const crypto     = require('crypto')
 const jwt        = require('jsonwebtoken')
 const User       = require('./models/User')
+const syncEngine = require('./sync/engine')
+const syncClient = require('./sync/client')
 
 const app    = express()
 const server = http.createServer(app)
@@ -88,6 +91,13 @@ app.use('/uploads', express.static(UPLOAD_DIR, {
   },
 }))
 
+// ── Sync ───────────────────────────────────────────────────────
+// Kassa rejimi (SYNC_URL bor): birinchi sinxronlashgacha API yopiq.
+// Cloud rejimi (SYNC_KEY bor, SYNC_URL yo'q): kassalar uchun /api/sync/*.
+app.use(syncClient.requireInitialized)
+app.get('/api/sync/status', (req, res) => res.json(syncClient.publicStatus()))
+if (process.env.SYNC_KEY && !process.env.SYNC_URL) app.use('/api/sync', require('./routes/sync'))
+
 // ── Routes ─────────────────────────────────────────────────────
 app.use('/api/auth',        require('./routes/auth'))
 app.use('/api/users',       require('./routes/users'))
@@ -100,6 +110,13 @@ app.use('/api/settings',    require('./routes/settings'))
 
 // ── Health check ───────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date() }))
+
+// ── Frontend (kassa/LAN rejimi: nginx'siz, ofitsant telefonlari shu yerdan ochadi) ──
+if (process.env.SERVE_FRONTEND) {
+  const DIST = path.resolve(process.env.SERVE_FRONTEND)
+  app.use(express.static(DIST, { index: false }))
+  app.get(/^\/(?!api\/|uploads\/|socket\.io\/).*/, (req, res) => res.sendFile(path.join(DIST, 'index.html')))
+}
 
 // ── 404 handler ────────────────────────────────────────────────
 app.use((req, res) => res.status(404).json({ message: `Route topilmadi: ${req.method} ${req.path}` }))
@@ -116,11 +133,14 @@ app.use((err, req, res, next) => {
 mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/restopro')
   .then(async () => {
     console.log('✅ MongoDB ulandi')
-    await seedAdmin()
+    await syncEngine.migrate()
+    // Kassada admin va sozlamalar cloud'dan keladi — lokal yaratilsa to'qnashadi
+    if (!process.env.SYNC_URL) await seedAdmin()
     const PORT = process.env.PORT || 5000
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server: http://localhost:${PORT}`)
       console.log(`📁 Uploads: ${UPLOAD_DIR}`)
+      syncClient.start(io).catch(err => console.error('❌ sync:', err.message))
     })
   })
   .catch(err => { console.error('❌ MongoDB xatosi:', err.message); process.exit(1) })
