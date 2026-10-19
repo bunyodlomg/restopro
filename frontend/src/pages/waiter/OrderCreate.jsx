@@ -236,7 +236,7 @@ export default function OrderCreate() {
       <section className="pos-main">
         <header className="topbar">
           <button className="bar-btn" onClick={leave} aria-label="Orqaga"><ArrowLeft size={24}/></button>
-          <div className="brand hide-mobile"><BrandMark size={42}/><div><b>{settings.brandName}</b><small>Kassa</small></div></div>
+          <div className="brand hide-mobile"><BrandMark size={42}/><div><b>{settings.brandName}</b><small>Ofitsant</small></div></div>
           <div className="vr hide-mobile"/>
           <div className="brand"><div><b style={{ fontSize: 19 }}>{title}</b><small>{sub}</small></div></div>
           <div className="right"><SyncBadge/></div>

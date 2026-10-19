@@ -16,7 +16,7 @@ import SyncBadge from '../components/shared/SyncBadge.jsx'
 const NAV = [
   { to: '/admin',             label: 'Bosh',     Icon: LayoutDashboard, end: true },
   { to: '/admin/orders',      label: 'Buyurtma', Icon: ClipboardList },
-  { to: '/admin/kassa',       label: 'Kassa',    Icon: ShoppingBag },
+  { to: '/admin/kassa',       label: 'Ofitsant', Icon: ShoppingBag },
   { to: '/admin/reservations', label: 'Bron',    Icon: CalendarClock },
   { to: '/admin/history',     label: 'Tarix',    Icon: History },
   { to: '/admin/products',    label: 'Taomlar',  Icon: UtensilsCrossed },
