@@ -122,6 +122,13 @@ jobs:
             echo "::warning::LICENSE_SERVER_URL / UPDATE_UPLOAD_TOKEN sirlari yo'q — yangilanish yuklanmadi (artefaktlar mavjud)"
             exit 0
           fi
+          # Sir qiymatidagi bo'sh joy / yangi qator / qo'shtirnoq va oxirgi "/" ni olib tashlash
+          URL="$(printf '%s' "$LICENSE_SERVER_URL" | tr -d '[:space:]"'"'"'')"
+          URL="${URL%/}"
+          case "$URL" in http://*|https://*) ;; *) URL="https://$URL" ;; esac
+          LICENSE_SERVER_URL="$URL"
+          echo "Server: $(printf '%s' "$URL" | sed 's#^\(https\?://\)#\1 #')"
+          curl -fsS -o /dev/null --max-time 20 "$URL/admin" -w "admin javobi: %{http_code}\n" || [ "$?" = 22 ] || { echo "::error::Litsenziya serveriga ulanib bo'lmadi: LICENSE_SERVER_URL sirini tekshiring"; exit 1; }
           up() {
             name="$(basename "$1")"
             echo "→ $name"
