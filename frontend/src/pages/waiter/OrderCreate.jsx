@@ -6,7 +6,7 @@ import API from '../../api/api.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { createSocket } from '../../api/socket.js'
-import { isTerminal } from '../../utils/terminal.js'
+import { isTerminal, lockSoon } from '../../utils/terminal.js'
 import SyncBadge from '../../components/shared/SyncBadge.jsx'
 import { enqueueOrder, genClientId } from '../../utils/offlineQueue.js'
 import { BrandMark, usePosBase, money, initials, fileUrl, minutesSince, fmtDuration, Loading, Empty } from '../../components/ui.jsx'
@@ -25,7 +25,7 @@ export default function OrderCreate() {
   const { state } = useLocation()
   const navigate = useNavigate()
   const base = usePosBase()
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const { settings } = useSettings()
   const isSoboy = !tableId || tableId === 'soboy'
 
@@ -124,9 +124,9 @@ export default function OrderCreate() {
     }
 
     const done = () => {
-      // Monoblok (terminal) rejimida ofitsant buyurtmadan keyin avtomatik chiqadi
-      if (isTerminal() && user?.role !== 'admin') { logout(); navigate('/login', { replace: true }) }
-      else navigate(base)
+      // Monoblok (terminal) rejimida buyurtmadan keyin 10 soniya harakatsizlikdan so'ng PIN ekrani
+      if (isTerminal()) lockSoon()
+      navigate(base)
     }
     const saveOffline = async (msg) => {
       try {

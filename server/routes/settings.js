@@ -1,6 +1,7 @@
 const router   = require('express').Router()
 const path     = require('path')
 const fs       = require('fs')
+const mongoose = require('mongoose')
 const Settings = require('../models/Settings')
 const auth     = require('../middleware/auth')
 const { adminOnly } = require('../middleware/auth')
@@ -99,9 +100,38 @@ router.put('/', auth, adminOnly, upload.single('logo'), async (req, res) => {
       } catch { /* noto'g'ri JSON — e'tiborsiz qoldiramiz */ }
     }
 
+    // Printerlar — FormData orqali JSON satr
+    if (req.body.printers !== undefined) {
+      let list
+      try { list = typeof req.body.printers === 'string' ? JSON.parse(req.body.printers) : req.body.printers } catch { list = null }
+      if (!Array.isArray(list) || list.length > 20) return res.status(400).json({ message: "Printerlar ro'yxati noto'g'ri" })
+      const printers = []
+      for (const p of list) {
+        const conn = p.conn === 'usb' ? 'usb' : 'network'
+        const ip = String(p.ip || '').trim()
+        const port = parseInt(p.port, 10) || 9100
+        const name = String(p.name || '').trim().slice(0, 40)
+        if (!name) return res.status(400).json({ message: 'Printer nomini yozing' })
+        if (conn === 'network' && !/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return res.status(400).json({ message: `${name}: IP manzil noto'g'ri (masalan 192.168.1.50)` })
+        if (port < 1 || port > 65535) return res.status(400).json({ message: `${name}: port noto'g'ri` })
+        printers.push({
+          ...(mongoose.isValidObjectId(p._id) ? { _id: p._id } : {}),
+          name, conn, ip, port,
+          device: String(p.device || '').trim().slice(0, 120),
+          paperWidth: +p.paperWidth === 58 ? 58 : 80,
+          receipt: !!p.receipt,
+          orders: !!p.orders,
+          categories: [...new Set((Array.isArray(p.categories) ? p.categories : []).map(c => String(c).trim().slice(0, 60)).filter(Boolean))].slice(0, 50),
+          enabled: p.enabled !== false,
+        })
+      }
+      update.printers = printers
+    }
+
     const s = await Settings.findByIdAndUpdate('main', update, { new: true, upsert: true })
     require('../utils/settingsCache').invalidate()
     if (update.staffAccessEnabled !== undefined) req.app.get('io').emit('staffAccess', { enabled: update.staffAccessEnabled })
+    req.app.get('io').emit('settingsUpdated')   // ochiq ekranlar (ofitsant terminali ham) logo/nomni darhol yangilaydi
     res.json(s)
   } catch (err) { res.status(500).json({ message: err.message }) }
 })

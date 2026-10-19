@@ -5,6 +5,7 @@
 // ============================================================
 
 import { API_URL } from '../config.js'
+import API from '../api/api.js'
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
@@ -83,38 +84,38 @@ export function buildReceiptHTML(order = {}, settings = {}) {
   </body></html>`
 }
 
-// Chekni chop etish.
-//  - Kassa / ofitsant terminali (Electron): to'g'ridan-to'g'ri standart printerga, oynasiz
-//  - Oddiy brauzer: yashirin iframe orqali (yangi oyna ochilmaydi — popup bloklanmaydi)
-// { ok, error } qaytaradi.
+// Chop etish vazifalari chiqquncha kutish (kassa printerga yuboradi).
+// Cloud'da vazifa kassaga sync orqali yetadi — shuning uchun uzoqroq kutiladi.
+export async function waitJobs(jobs, timeoutMs = 12000) {
+  const ids = jobs.map(j => j._id)
+  const end = Date.now() + timeoutMs
+  let list = jobs
+  while (Date.now() < end && list.some(j => j.status === 'pending' || j.status === 'printing')) {
+    await new Promise(r => setTimeout(r, 1000))
+    try { list = (await API.get(`/api/print/jobs?ids=${ids.join(',')}`)).data } catch { break }
+  }
+  const failed = list.filter(j => j.status === 'error' || j.status === 'expired')
+  if (failed.length) return { ok: false, error: failed.map(j => `${j.printer}: ${j.error}`).join('; ') }
+  if (list.some(j => j.status !== 'done')) return { ok: true, queued: true }
+  return { ok: true }
+}
+
+// Chekni chek printeriga chiqarish — oyna, PDF yoki fayl yuklab olish yo'q.
+//  1) Sozlamalar → Printerlar'da "Mijoz cheki" printeri bo'lsa — kassa orqali o'sha printerga
+//  2) Bo'lmasa, kassa/terminal ilovasida — shu kompyuterning standart printeriga (oynasiz)
+// { ok, error?, queued? } qaytaradi.
 export async function printReceipt(order, settings) {
-  const html = buildReceiptHTML(order, settings)
-  const paperWidth = Number(settings?.receipt?.paperWidth) === 80 ? 80 : 58
+  try {
+    const { data } = await API.post(`/api/print/receipt/${order._id}`)
+    return await waitJobs(data.jobs)
+  } catch (err) {
+    if (err.response?.data?.code !== 'NO_PRINTER') return { ok: false, error: err.response?.data?.message || "Chek chiqmadi" }
+  }
   if (window.rpNative?.print) {
+    const html = buildReceiptHTML(order, settings)
+    const paperWidth = Number(settings?.receipt?.paperWidth) === 80 ? 80 : 58
     try { return await window.rpNative.print(html, { paperWidth }) }
     catch (err) { return { ok: false, error: err.message } }
   }
-  return printViaIframe(html)
-}
-
-function printViaIframe(html) {
-  return new Promise(resolve => {
-    const frame = document.createElement('iframe')
-    frame.setAttribute('aria-hidden', 'true')
-    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden'
-    document.body.appendChild(frame)
-    const cleanup = () => setTimeout(() => frame.remove(), 1500)
-    frame.onload = () => {
-      // Rasm (logo) yuklanishini kutish
-      setTimeout(() => {
-        try {
-          frame.contentWindow.focus()
-          frame.contentWindow.print()
-          resolve({ ok: true })
-        } catch (err) { resolve({ ok: false, error: err.message }) }
-        cleanup()
-      }, 250)
-    }
-    frame.srcdoc = html
-  })
+  return { ok: false, error: 'Chek printeri sozlanmagan: Sozlamalar → Printerlar' }
 }

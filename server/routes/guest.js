@@ -4,6 +4,7 @@
 const router     = require('express').Router()
 const Table      = require('../models/Table')
 const Product    = require('../models/Product')
+const Order      = require('../models/Order')
 const GuestOrder = require('../models/GuestOrder')
 const auth       = require('../middleware/auth')
 const settingsCache = require('../utils/settingsCache')
@@ -44,8 +45,34 @@ router.get('/t/:token', guestGate, async (req, res, next) => {
       brand: { name: s.brandName || 'RestoPro', logo: s.brandLogo || '' },
       serviceFeePercent: s.serviceFeeEnabled ? s.serviceFeePercent : 0,
       products,
+      bill: await tableBill(req.table),
     })
   } catch (err) { next(err) }
+})
+
+// Stolning ochiq hisobi (yopilguncha): qabul qilingan taomlar + hali tasdiqlanmagan mijoz buyurtmalari.
+// Mijoz telefonida "Hisobim" bo'lib ko'rinadi — oldingi buyurtmalari ham, jami summa ham.
+async function tableBill(table) {
+  const [order, waiting] = await Promise.all([
+    Order.findOne({ tableId: table._id, status: { $in: ['pending', 'ready'] } }).sort({ createdAt: 1 }).lean(),
+    GuestOrder.find({ tableId: table._id, status: 'new' }).sort({ createdAt: 1 }).lean(),
+  ])
+  const items = (order?.items || []).map(i => ({ name: i.name, price: i.price, quantity: i.quantity }))
+  const extras = (order?.extras || []).map(e => ({ name: e.comment || "Qo'shimcha", price: e.extraFee || 0 }))
+  const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0) + extras.reduce((s, e) => s + e.price, 0)
+  return {
+    open: !!order,
+    openedAt: order?.createdAt || null,
+    items, extras,
+    serviceFee: order?.serviceFee || 0,
+    total: subtotal + (order?.serviceFee || 0),
+    waiting: waiting.flatMap(g => g.items.map(i => ({ name: i.name, price: i.price, quantity: i.quantity }))),
+  }
+}
+
+// GET /api/guest/t/:token/bill — hisobni yangilash (mijoz sahifasi kuzatadi)
+router.get('/t/:token/bill', guestGate, async (req, res, next) => {
+  try { res.json(await tableBill(req.table)) } catch (err) { next(err) }
 })
 
 // POST /api/guest/t/:token/orders — { items: [{ productId, quantity }], note }

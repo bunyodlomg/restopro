@@ -3,6 +3,8 @@ import API from '../api/api.js'
 import { API_URL } from '../config.js'
 import { BRAND } from '../brand.js'
 import { loadCustomSounds } from '../utils/sound.js'
+import { createSocket } from '../api/socket.js'
+import { useAuth } from './AuthContext.jsx'
 
 const SettingsContext = createContext(null)
 
@@ -28,7 +30,19 @@ export function SettingsProvider({ children }) {
     try { apply((await API.get('/api/settings/public')).data) } catch {}
   }
 
-  useEffect(() => { refresh() }, [])
+  // Kirgan foydalanuvchi o'zgarganda (admin/ofitsant) — to'liq sozlamalar
+  const { user } = useAuth()
+  useEffect(() => { refresh() }, [user?._id])
+
+  // Admin logo/nom/printerlarni o'zgartirsa — barcha ochiq ekranlar darhol yangilanadi
+  useEffect(() => {
+    if (!user) return
+    const s = createSocket()
+    s.on('settingsUpdated', refresh)
+    s.on('syncApplied', ({ colls }) => { if (colls.includes('settings')) refresh() })
+    s.on('connect', refresh)    // uzilish paytida o'tkazib yuborilgan o'zgarishlar uchun
+    return () => s.disconnect()
+  }, [user?._id])
 
   return (
     <SettingsContext.Provider value={{ settings, setSettings, refresh }}>

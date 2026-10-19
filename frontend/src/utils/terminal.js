@@ -10,3 +10,7 @@ export const isTerminal = () => {
   if (window.rpNative?.terminal) return true
   try { return localStorage.getItem('rp_terminal') === '1' } catch { return false }
 }
+
+// Buyurtma yuborilgach terminal tez bloklanadi (TerminalLock tinglaydi)
+export const LOCK_SOON_MS = 10000
+export const lockSoon = () => window.dispatchEvent(new Event('rp:lock-soon'))

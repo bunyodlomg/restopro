@@ -7,7 +7,7 @@ const { EJSON } = mongoose.mongo.BSON
 const { NODE_ID, nextSeq, recordTombstones, tombstones } = require('./plugin')
 
 // Sinxronlanadigan modellar
-const MODELS = ['User', 'Product', 'Ingredient', 'Order', 'Table', 'Salary', 'Purchase', 'Settings', 'Reservation', 'GuestOrder']
+const MODELS = ['User', 'Product', 'Ingredient', 'Order', 'Table', 'Salary', 'Purchase', 'Settings', 'Reservation', 'GuestOrder', 'PrintJob']
 const BATCH = 500
 
 const models = () => MODELS.map(name => mongoose.model(name))

@@ -2,6 +2,7 @@
 // Renderer: window.rpNative.print(html, { paperWidth: 58|80 }) → { ok, error? }
 const { BrowserWindow } = require('electron')
 
+const VIRTUAL = /pdf|xps|onenote|fax|print to/i
 const NO_PRINTER = 'Printer topilmadi. Windows sozlamalarida standart printerni tanlang.'
 
 async function printHtml(html, opts = {}) {
@@ -18,6 +19,9 @@ async function printHtml(html, opts = {}) {
     const printers = await win.webContents.getPrintersAsync()
     if (!printers.length) return { ok: false, error: NO_PRINTER }
     const deviceName = opts.deviceName && printers.some(p => p.name === opts.deviceName) ? opts.deviceName : undefined
+    // PDF/XPS kabi virtual printer "faylni saqlash" oynasini ochadi — chek printeri emas
+    const target = deviceName || printers.find(p => p.isDefault)?.name || ''
+    if (VIRTUAL.test(target)) return { ok: false, error: `«${target}» chek printeri emas. Sozlamalar → Printerlar bo'limida chek printerini qo'shing.` }
     await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
     return await new Promise(resolve => {
       win.webContents.print({

@@ -8,6 +8,7 @@ const Salary     = require('../models/Salary')
 const Purchase   = require('../models/Purchase')
 const auth       = require('../middleware/auth')
 const { adminOnly } = require('../middleware/auth')
+const print      = require('../print')
 
 // O'zgartirish mumkin bo'lgan (hali yopilmagan) buyurtma holatlari
 const OPEN_STATUSES = ['pending', 'ready']
@@ -217,6 +218,7 @@ async function placeOrder(io, { tableId, tableNumber, category, waiterName, item
 
     // Narxlarni DB dan tekshirish
     const enrichedItems = []
+    const categoryOf = {}     // oshxona printerlariga taqsimlash uchun
     for (const item of items) {
       // Manfiy yoki kasr miqdor jami summani kamaytirib yuborishi mumkin
       const quantity = item.quantity === undefined ? 1 : Number(item.quantity)
@@ -224,6 +226,7 @@ async function placeOrder(io, { tableId, tableNumber, category, waiterName, item
         throw fail(400, 'Miqdor 1 dan 999 gacha butun son bo\'lishi kerak')
       const product = await Product.findById(item.productId)
       if (!product || !product.isActive) continue
+      categoryOf[product._id] = product.category
       enrichedItems.push({
         productId: product._id,
         name:      product.name,
@@ -254,8 +257,10 @@ async function placeOrder(io, { tableId, tableNumber, category, waiterName, item
 
     // Band stol uchun mavjud pending buyurtmani topish va merge qilish
     if (tableId && category !== 'soboy') {
-      const existing = await Order.findOne({ tableId, status: 'pending' })
+      // "Tayyor" holatidagi ham ochiq hisob — yangi taom qo'shilsa yana oshxonaga (pending)
+      const existing = await Order.findOne({ tableId, status: { $in: OPEN_STATUSES } }).sort({ createdAt: 1 })
       if (existing) {
+        existing.status = 'pending'
         // Mavjud itemlarga qo'shish (bir xil mahsulot bo'lsa miqdorini oshirish)
         for (const newItem of enrichedItems) {
           const idx = existing.items.findIndex(
@@ -273,6 +278,7 @@ async function placeOrder(io, { tableId, tableNumber, category, waiterName, item
         if (clientId && !existing.clientIds.includes(clientId)) existing.clientIds.push(clientId)
         await existing.save()
         io.emit('orderUpdated', existing)
+        printTickets(existing, enrichedItems, categoryOf, true)
         return { order: existing, merged: true }
       }
     }
@@ -303,7 +309,15 @@ async function placeOrder(io, { tableId, tableNumber, category, waiterName, item
     }
 
     io.emit('newOrder', order)
+    printTickets(order, enrichedItems, categoryOf, false)
     return { order, merged: false }
+}
+
+// Oshpaz / shashlikchi printerlariga faqat yangi qo'shilgan taomlar.
+// Printer xatosi buyurtmani to'xtatmaydi.
+function printTickets(order, items, categoryOf, added) {
+  print.queueOrderTickets(order, items.map(i => ({ name: i.name, quantity: i.quantity, category: categoryOf[i.productId] })), { added })
+    .catch(err => console.error('🖨️  talon:', err.message))
 }
 
 router.post('/', auth, async (req, res) => {

@@ -120,6 +120,7 @@ app.use('/api/tables',      require('./routes/tables'))
 app.use('/api/salaries',    require('./routes/salaries'))
 app.use('/api/settings',    require('./routes/settings'))
 app.use('/api/reservations', require('./routes/reservations'))
+app.use('/api/print',        require('./routes/print'))
 const guestRoutes = require('./routes/guest')
 app.use('/api/guest',        guestRoutes.guest)
 app.use('/api/guest-orders', guestRoutes.staff)
@@ -153,6 +154,7 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/restopro')
     // Kassada admin va sozlamalar cloud'dan keladi — lokal yaratilsa to'qnashadi
     if (!process.env.SYNC_URL) await seedAdmin()
     await license.start().catch(err => console.error('❌ litsenziya:', err.message))
+    await require('./print').start().catch(err => console.error('❌ printer:', err.message))
     const PORT = process.env.PORT || 5000
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server: http://localhost:${PORT}`)

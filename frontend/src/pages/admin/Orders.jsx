@@ -19,9 +19,11 @@ const CATS = [
 ]
 
 export async function printReceipt(order, settings) {
+  const id = toast.loading('Chek chiqarilmoqda…')
   const r = await printOrder(order, settings)
-  if (!r.ok) toast.error(r.error || 'Chek chiqmadi', { duration: 5000 })
-  else if (window.rpNative) toast.success('Chek printerga yuborildi')
+  if (!r.ok) toast.error(r.error || 'Chek chiqmadi', { id, duration: 6000 })
+  else if (r.queued) toast.success('Chek kassaga yuborildi', { id })
+  else toast.success('Chek chiqdi', { id })
 }
 
 function OrderCard({ order, settings, onClose, onCancel, busy }) {

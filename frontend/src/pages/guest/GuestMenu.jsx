@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Plus, Minus, Wifi, QrCode, Check, X, RefreshCw, ShoppingBag, Clock } from 'lucide-react'
+import { Plus, Minus, Wifi, QrCode, Check, X, RefreshCw, ShoppingBag, Clock, ReceiptText } from 'lucide-react'
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import { money, initials, fileUrl } from '../../components/ui.jsx'
@@ -19,6 +19,31 @@ function Photo({ src, name }) {
   return <img src={fileUrl(src)} alt="" loading="lazy" onError={() => setErr(true)}/>
 }
 
+// Stolning ochiq hisobi: qabul qilingan barcha taomlar (oldingi buyurtmalar ham) va jami
+function Bill({ bill }) {
+  if (!bill) return null
+  const row = (l, r, k, muted) => (
+    <div key={k} className={`row ${muted ? 'muted' : ''}`} style={{ justifyContent: 'space-between', gap: 8, padding: '3px 0' }}>
+      <span className="truncate">{l}</span><span>{r}</span>
+    </div>
+  )
+  return (
+    <div className="card card-pad mono" style={{ fontSize: 14.5 }}>
+      {!bill.items.length && !bill.waiting.length && <div className="muted">Hali taom yo'q</div>}
+      {bill.items.map((i, k) => row(<><span className="muted">{i.quantity}×</span> {i.name}</>, money(i.price * i.quantity), 'i' + k))}
+      {bill.extras.map((e, k) => row(`+ ${e.name}`, money(e.price), 'e' + k, true))}
+      {bill.serviceFee > 0 && row('Xizmat haqi', money(bill.serviceFee), 'fee', true)}
+      <div className="row" style={{ justifyContent: 'space-between', borderTop: '1.5px dashed var(--rule-2)', marginTop: 10, paddingTop: 10 }}>
+        <span className="label">Jami hisob</span><b style={{ fontSize: 20 }}>{money(bill.total)}</b>
+      </div>
+      {bill.waiting.length > 0 && <>
+        <div className="label" style={{ marginTop: 14, marginBottom: 4 }}>Tasdiqlanishi kutilmoqda</div>
+        {bill.waiting.map((i, k) => row(<><span>{i.quantity}×</span> {i.name}</>, money(i.price * i.quantity), 'w' + k, true))}
+      </>}
+    </div>
+  )
+}
+
 export default function GuestMenu({ token }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
@@ -27,16 +52,26 @@ export default function GuestMenu({ token }) {
   const [note, setNote] = useState('')
   const [sheet, setSheet] = useState(false)
   const [sending, setSending] = useState(false)
+  const [bill, setBill] = useState(null)
+  const [billOpen, setBillOpen] = useState(false)
   const storeKey = `rp_guest_${token}`
   const [sent, setSent] = useState(() => { try { return JSON.parse(sessionStorage.getItem(storeKey) || 'null') } catch { return null } })
 
   const load = () => {
     setError(null)
     API.get(`/api/guest/t/${encodeURIComponent(token)}`)
-      .then(r => { setData(r.data); document.title = `${r.data.brand.name} — menyu` })
+      .then(r => { setData(r.data); setBill(r.data.bill || null); document.title = `${r.data.brand.name} — menyu` })
       .catch(err => setError(err.response?.data || { message: 'Serverga ulanib bo\'lmadi' }))
   }
   useEffect(() => { load() }, [token])
+
+  // Stol hisobi: ofitsant qo'shgan taomlar ham, yopilganda bo'shaydi
+  const loadBill = () => API.get(`/api/guest/t/${encodeURIComponent(token)}/bill`).then(r => setBill(r.data)).catch(() => {})
+  useEffect(() => {
+    if (!data) return
+    const t = setInterval(loadBill, 10000)
+    return () => clearInterval(t)
+  }, [data, token])
 
   // Yuborilgan buyurtma holatini kuzatish
   useEffect(() => {
@@ -47,6 +82,7 @@ export default function GuestMenu({ token }) {
         if (g.status !== 'new') {
           const next = { ...sent, status: g.status }
           setSent(next); sessionStorage.setItem(storeKey, JSON.stringify(next))
+          loadBill()
         }
       } catch {}
     }, 4000)
@@ -74,6 +110,7 @@ export default function GuestMenu({ token }) {
       const s = { _id: g._id, status: g.status, lines: lines.map(l => ({ name: l.p.name, n: l.n, price: l.p.price })), sum }
       setSent(s); sessionStorage.setItem(storeKey, JSON.stringify(s))
       setCart({}); setNote(''); setSheet(false)
+      loadBill()
     } catch (err) {
       const d = err.response?.data
       if (d?.code && ERRORS[d.code]) setError(d)
@@ -122,7 +159,8 @@ export default function GuestMenu({ token }) {
           <h1 className="g-h1">{title}</h1>
           <p className="muted" style={{ margin: 0, maxWidth: 320 }}>{text}</p>
         </div>
-        <div className="card card-pad mono" style={{ margin: '24px 16px', fontSize: 14.5 }}>
+        <div className="label" style={{ margin: '24px 16px 8px' }}>Shu buyurtma</div>
+        <div className="card card-pad mono" style={{ margin: '0 16px', fontSize: 14.5 }}>
           {sent.lines.map((l, i) => (
             <div key={i} className="row" style={{ justifyContent: 'space-between', gap: 8, padding: '3px 0' }}>
               <span className="truncate"><span className="muted">{l.n}×</span> {l.name}</span><span>{money(l.price * l.n)}</span>
@@ -132,8 +170,12 @@ export default function GuestMenu({ token }) {
             <span className="label">Jami</span><b style={{ fontSize: 20 }}>{money(sent.sum)}</b>
           </div>
         </div>
+        {bill?.open && <>
+          <div className="label" style={{ margin: '20px 16px 8px' }}>Stol hisobi (barcha buyurtmalar)</div>
+          <div style={{ margin: '0 16px 20px' }}><Bill bill={bill}/></div>
+        </>}
         {sent.status !== 'new' && (
-          <div style={{ padding: '0 16px' }}>
+          <div style={{ padding: '0 16px', marginTop: bill?.open ? 0 : 20 }}>
             <button className="btn btn-primary btn-xl btn-block" onClick={newOrder}><Plus size={20}/> Yana buyurtma berish</button>
           </div>
         )}
@@ -170,6 +212,27 @@ export default function GuestMenu({ token }) {
           )
         })}
       </div>
+
+      {bill?.open && !count && !sheet && !billOpen && (
+        <button className="g-cart" style={{ background: 'var(--sel)', color: 'var(--sel-ink)', boxShadow: '0 18px 30px -12px rgba(0,0,0,.45)' }} onClick={() => setBillOpen(true)}>
+          <ReceiptText size={24}/>
+          <span style={{ flex: 1, textAlign: 'left' }}><b style={{ display: 'block' }}>Stol hisobi</b><span className="mono" style={{ fontSize: 13, opacity: .7 }}>{bill.items.reduce((s, i) => s + i.quantity, 0)} ta taom</span></span>
+          <b className="mono">{money(bill.total)}</b>
+        </button>
+      )}
+
+      {billOpen && (
+        <div className="g-sheet-bg" onClick={e => e.target === e.currentTarget && setBillOpen(false)}>
+          <div className="g-sheet rise">
+            <div className="row" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
+              <b style={{ fontSize: 20 }}>Stol {data.table.number} hisobi</b>
+              <button className="btn btn-ghost btn-icon" onClick={() => setBillOpen(false)} aria-label="Yopish"><X size={22}/></button>
+            </div>
+            <div style={{ overflowY: 'auto' }}><Bill bill={bill}/></div>
+            <p className="muted" style={{ fontSize: 13, margin: '10px 2px 0' }}>To'lov uchun ofitsantni chaqiring. Hisob yopilguncha shu yerda ko'rinadi.</p>
+          </div>
+        </div>
+      )}
 
       {count > 0 && !sheet && (
         <button className="g-cart" onClick={() => setSheet(true)}>

@@ -45,7 +45,7 @@ export default function Login() {
   const [showPass, setShowPass] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const { login, loginPin } = useAuth()
+  const { login, loginPin, logout } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -56,8 +56,13 @@ export default function Login() {
   }, [])
 
   const go = user => {
+    // Ofitsant terminaliga (monoblok) faqat ofitsantlar kiradi
+    if (isTerminal() && user.role === 'admin') {
+      logout()
+      return setError('Bu terminalga faqat ofitsantlar kira oladi. Admin kassa yoki sayt orqali kiradi.')
+    }
     if (user.mustChangePassword) navigate('/change-password', { replace: true })
-    else navigate(user.role === 'admin' && !isTerminal() ? '/admin' : '/waiter', { replace: true })
+    else navigate(user.role === 'admin' ? '/admin' : '/waiter', { replace: true })
   }
 
   const submit = async e => {

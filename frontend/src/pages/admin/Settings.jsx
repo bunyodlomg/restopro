@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react'
 import {
   Building2, Paintbrush, Volume2, Percent, Receipt, Upload, Trash2, Play, RotateCcw,
   Sun, Moon, Check, Minus, Plus, MousePointerClick, Navigation, CircleCheck, PartyPopper,
-  TriangleAlert, BellRing, QrCode, Wifi, X,
+  TriangleAlert, BellRing, QrCode, Wifi, X, Printer,
 } from 'lucide-react'
+import PrintersTab from './PrintersTab.jsx'
 import { Link } from 'react-router-dom'
 import { useAppUpdate } from '../../components/UpdateBanner.jsx'
 import toast from 'react-hot-toast'
@@ -21,6 +22,7 @@ const TABS = [
   { k: 'sound',   l: 'Tovush',      icon: Volume2 },
   { k: 'service', l: 'Xizmat haqi', icon: Percent },
   { k: 'receipt', l: 'Chek',        icon: Receipt },
+  { k: 'printers', l: 'Printerlar', icon: Printer },
   { k: 'qr',      l: 'QR menyu',    icon: QrCode },
 ]
 
@@ -331,6 +333,8 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {tab === 'printers' && <PrintersTab/>}
 
       {tab === 'receipt' && (
         <div className="dash" style={{ marginTop: 0, gridTemplateColumns: 'minmax(0,1.2fr) minmax(0,1fr)' }}>

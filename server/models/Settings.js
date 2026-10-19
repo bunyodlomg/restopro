@@ -20,6 +20,23 @@ const SoundsSchema = new Schema({
   newOrder: { type: String, default: '' },
 }, { _id: false })
 
+// ─── Printerlar (kassa, ofitsant, oshxona, shashlikchi ...) ─────
+// Har bir printerga faqat o'ziga tegishli narsa chiqadi:
+//   receipt — mijoz cheki ("Chek" tugmasi)
+//   orders  — yangi buyurtma talonlari (categories bo'sh bo'lsa barcha taomlar)
+const PrinterSchema = new Schema({
+  name:       { type: String, default: 'Printer', trim: true },
+  conn:       { type: String, enum: ['network', 'usb'], default: 'network' },
+  ip:         { type: String, default: '' },
+  port:       { type: Number, default: 9100 },
+  device:     { type: String, default: '' },      // USB: Windows'dagi printer nomi (kassa kompyuterida)
+  paperWidth: { type: Number, default: 80 },      // 58 yoki 80 mm
+  receipt:    { type: Boolean, default: false },
+  orders:     { type: Boolean, default: false },
+  categories: { type: [String], default: [] },
+  enabled:    { type: Boolean, default: true },
+})
+
 const SettingsSchema = new Schema({
   // Yagona hujjat (singleton)
   _id: { type: String, default: 'main' },
@@ -36,6 +53,8 @@ const SettingsSchema = new Schema({
 
   // Maxsus tovush fayllari
   sounds: { type: SoundsSchema, default: () => ({}) },
+
+  printers: { type: [PrinterSchema], default: [] },
 
   // Xodimlar (admin bo'lmaganlar) tizimga kira oladimi — bitta tugma bilan hammasini o'chirish
   staffAccessEnabled: { type: Boolean, default: true },
