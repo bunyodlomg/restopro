@@ -7,6 +7,9 @@ on:
   workflow_dispatch:
   push:
     tags: ['kassa-v*']
+    # Ishchi branch: har push'da .exe artefakt sifatida yig'iladi (Release faqat tegdan)
+    branches: ['claude/pensive-maxwell-gih8c6']
+    paths: ['desktop/**', 'frontend/**', 'server/**', '.github/workflows/desktop.yml']
 
 permissions:
   contents: write
