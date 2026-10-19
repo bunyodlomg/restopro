@@ -22,9 +22,10 @@ export function SettingsProvider({ children }) {
 
   const refresh = async () => {
     try {
-      if (localStorage.getItem('rp_token')) apply((await API.get('/api/settings')).data)
-      else apply((await API.get('/api/settings/public')).data)
+      if (localStorage.getItem('rp_token')) return apply((await API.get('/api/settings')).data)
     } catch {}
+    // Tizimga kirilmagan yoki obuna bloklangan — faqat nom va logo
+    try { apply((await API.get('/api/settings/public')).data) } catch {}
   }
 
   useEffect(() => { refresh() }, [])

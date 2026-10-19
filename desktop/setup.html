@@ -5,15 +5,15 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
 <title>RestoPro Kassa — sozlash</title>
 <style>
-  :root { --bg:#0A1413; --card:#0F1A18; --el:#14221F; --border:rgba(255,255,255,.08); --text:#E8F1EF; --muted:#8FA3A0;
-          --brand:#0D9488; --brand-lt:#14B8A6; --ok:#22C55E; --err:#F87171; }
+  :root { --bg:#0B0B0C; --card:#18181B; --el:#222226; --border:rgba(255,255,255,.08); --text:#F4F4F2; --muted:#8A8A90;
+          --brand:#FF3B2F; --brand-lt:#FF3B2F; --ok:#22C55E; --err:#F87171; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 "Segoe UI", system-ui, sans-serif; padding:28px; }
   h1 { font-size:20px; margin:0 0 4px; } .sub { color:var(--muted); margin:0 0 22px; }
   .mode { display:flex; gap:10px; margin-bottom:18px; }
   .mode label { flex:1; border:1px solid var(--border); background:var(--card); border-radius:14px; padding:14px; cursor:pointer; }
   .mode input { margin-right:8px; accent-color:var(--brand); }
-  .mode label.on { border-color:var(--brand); background:rgba(13,148,136,.10); }
+  .mode label.on { border-color:var(--brand); background:rgba(255,59,47,.10); }
   .mode small { display:block; color:var(--muted); margin-top:4px; }
   .field { margin-bottom:14px; } .field span { display:block; font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
   input[type=text], input[type=password] { width:100%; padding:11px 13px; border-radius:11px; border:1px solid var(--border); background:var(--el); color:var(--text); font-size:14px; }
@@ -33,7 +33,7 @@
 </style>
 </head>
 <body>
-  <h1>🍽 RestoPro Kassa</h1>
+  <h1>RestoPro Kassa</h1>
   <p class="sub">Kassa kompyuterini sozlash</p>
 
   <div id="form">
@@ -53,6 +53,13 @@
       <div class="hint">Birinchi ishga tushirishda internet kerak: menyu, xodimlar va sozlamalar serverdan yuklanadi.</div>
     </div>
 
+    <div id="local-fields" hidden>
+      <div class="field"><span>Litsenziya kaliti</span>
+        <input id="lic" type="text" placeholder="RP-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" style="text-transform:uppercase">
+        <div class="hint" id="lic-hint" hidden>Kalit saqlangan. O'zgartirish uchun yangisini kiriting.</div></div>
+      <div class="hint">Kalitni sotuvchidan oling. Cloud rejimida kalit kerak emas — u serverdan olinadi.</div>
+    </div>
+
     <div id="msg" class="msg"></div>
     <div class="row">
       <button class="ghost" id="test">Ulanishni tekshirish</button>
@@ -61,14 +68,14 @@
   </div>
 
   <div id="done" hidden>
-    <div class="msg ok" style="display:block">✅ Kassa ishga tushdi</div>
+    <div class="msg ok" style="display:block">Kassa ishga tushdi</div>
     <div class="box" id="pw-box" hidden>
-      <h3>👤 Admin kirish ma'lumotlari</h3>
+      <h3>Admin kirish ma'lumotlari</h3>
       Login: <span class="mono">admin</span> &nbsp; Parol: <span class="mono" id="pw"></span>
       <div class="hint">Yozib oling — birinchi kirishda parolni almashtirish so'raladi. Bu oyna qayta ko'rsatilmaydi.</div>
     </div>
     <div class="box">
-      <h3>📱 Ofitsantlar telefonida oching (shu Wi-Fi'da)</h3>
+      <h3>Ofitsantlar telefonida oching (shu Wi-Fi'da)</h3>
       <div id="urls"></div>
       <div class="hint">Manzil keyin ham tray belgisi → menyuda turadi.</div>
     </div>
@@ -85,6 +92,7 @@
     $('m-sync').classList.toggle('on', m === 'sync')
     $('m-local').classList.toggle('on', m === 'standalone')
     $('sync-fields').hidden = m !== 'sync'
+    $('local-fields').hidden = m !== 'standalone'
     $('test').hidden = m !== 'sync'
   }
   function show(type, text) { const el = $('msg'); el.className = 'msg ' + type; el.textContent = text }
@@ -94,7 +102,7 @@
   $('test').onclick = async () => {
     $('test').disabled = true; show('ok', 'Tekshirilmoqda...')
     const r = await window.kassa.test({ syncUrl: $('url').value, syncKey: $('key').value })
-    show(r.ok ? 'ok' : 'err', r.ok ? '✅ Server bilan ulanish ishlayapti' : '❌ ' + r.message)
+    show(r.ok ? 'ok' : 'err', r.ok ? 'Server bilan ulanish ishlayapti' : r.message)
     $('test').disabled = false
   }
 
@@ -104,13 +112,15 @@
       if (!$('url').value.trim()) return show('err', 'Server manzilini kiriting')
       if (!$('key').value && !state.hasKey) return show('err', 'Sync kalitini kiriting')
       const t = await window.kassa.test({ syncUrl: $('url').value, syncKey: $('key').value })
-      if (!t.ok) return show('err', '❌ ' + t.message)
+      if (!t.ok) return show('err', t.message)
+    } else if (state.licenseRequired && !$('lic').value.trim() && !state.hasLicense) {
+      return show('err', 'Litsenziya kalitini kiriting')
     }
     $('save').disabled = true; show('ok', 'Ishga tushirilmoqda...')
     try {
-      const r = await window.kassa.save({ mode: m, syncUrl: $('url').value, syncKey: $('key').value })
+      const r = await window.kassa.save({ mode: m, syncUrl: $('url').value, syncKey: $('key').value, licenseKey: $('lic').value.trim().toUpperCase() })
       finish(r.adminPassword)
-    } catch (e) { show('err', '❌ ' + e.message); $('save').disabled = false }
+    } catch (e) { show('err', e.message); $('save').disabled = false }
   }
 
   async function finish(adminPassword) {
@@ -129,6 +139,7 @@
     if (state.mode === 'standalone') document.querySelector('input[value=standalone]').checked = true
     $('url').value = state.syncUrl
     $('key-hint').hidden = !state.hasKey
+    $('lic-hint').hidden = !state.hasLicense
     syncModeUi()
   })()
 </script>

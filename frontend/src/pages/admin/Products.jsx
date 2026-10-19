@@ -3,7 +3,7 @@ import { Plus, Pencil, Trash2, ImagePlus, Search, UtensilsCrossed, X } from 'luc
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import Modal from '../../components/shared/Modal.jsx'
-import { Field, Loading, Empty, PageHead, money, initials, fileUrl } from '../../components/ui.jsx'
+import { Field, Switch, Loading, Empty, PageHead, money, initials, fileUrl } from '../../components/ui.jsx'
 
 const UNITS = ['kg', 'g', 'l', 'ml', 'dona', 'litr', 'paket']
 const ALL = 'Barchasi'
@@ -27,7 +27,7 @@ export default function Products() {
   const [deleting, setDeleting] = useState(null)
   const [imagePreview, setImagePreview] = useState('')
   const [imageFile, setImageFile] = useState(null)
-  const [form, setForm] = useState({ name: '', price: '', category: '', ingredients: [] })
+  const [form, setForm] = useState({ name: '', price: '', category: '', ingredients: [], isActive: true })
 
   const load = async () => {
     try {
@@ -55,13 +55,13 @@ export default function Products() {
 
   const openAdd = () => {
     setEditing(null)
-    setForm({ name: '', price: '', category: catFilter !== ALL ? catFilter : (categories[0] || ''), ingredients: [] })
+    setForm({ name: '', price: '', category: catFilter !== ALL ? catFilter : (categories[0] || ''), ingredients: [], isActive: true })
     setImagePreview(''); setImageFile(null); setModalOpen(true)
   }
   const openEdit = p => {
     setEditing(p)
     setForm({
-      name: p.name, price: p.price, category: p.category,
+      name: p.name, price: p.price, category: p.category, isActive: p.isActive !== false,
       ingredients: p.ingredients?.map(i => ({
         ingredient: i.ingredient?._id || i.ingredient,
         quantity: i.quantity,
@@ -85,6 +85,7 @@ export default function Products() {
       fd.append('name', form.name)
       fd.append('price', form.price)
       fd.append('category', form.category || 'Asosiy')
+      if (editing) fd.append('isActive', String(form.isActive))
       fd.append('ingredients', JSON.stringify(form.ingredients.filter(r => r.ingredient && r.quantity)))
       if (imageFile) fd.append('image', imageFile)
       if (editing) {
@@ -185,6 +186,8 @@ export default function Products() {
           <input className="input" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} placeholder="Masalan: Milliy taomlar" list="cats-list"/>
           <datalist id="cats-list">{categories.map(c => <option key={c} value={c}/>)}</datalist>
         </Field>
+        {editing && <Switch checked={form.isActive} onChange={v => setForm(f => ({ ...f, isActive: v }))}
+          label="Sotuvda" hint="O'chirilsa, taom ofitsant menyusida ko'rinmaydi (masalan, tugab qolganda)"/>}
 
         <div className="row" style={{ justifyContent: 'space-between', margin: '6px 0 10px' }}>
           <span className="label">Retsept — ingredientlar (ixtiyoriy)</span>

@@ -28,6 +28,13 @@ const sendEjson = (res, obj) => res.type('application/ejson').send(engine.encode
 // GET /api/sync/ping — kassa sozlashda manzil va kalitni tekshirish
 router.get('/ping', syncAuth, (req, res) => res.json({ ok: true, node: engine.NODE_ID }))
 
+// GET /api/sync/license — kassa litsenziya holatini cloud orqali oladi (imzolangan)
+router.get('/license', syncAuth, (req, res) => {
+  const token = require('../license').currentToken()
+  if (!token) return res.status(404).json({ message: 'Litsenziya hali olinmagan' })
+  res.json({ token })
+})
+
 // GET /api/sync/pull?since=N&node=kassa — kassa uchun yangi o'zgarishlar
 router.get('/pull', syncAuth, async (req, res, next) => {
   try {

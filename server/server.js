@@ -13,6 +13,7 @@ const jwt        = require('jsonwebtoken')
 const User       = require('./models/User')
 const syncEngine = require('./sync/engine')
 const syncClient = require('./sync/client')
+const license    = require('./license')
 
 const app    = express()
 const server = http.createServer(app)
@@ -102,6 +103,11 @@ app.use(syncClient.requireInitialized)
 app.get('/api/sync/status', (req, res) => res.json(syncClient.publicStatus()))
 if (process.env.SYNC_KEY && !process.env.SYNC_URL) app.use('/api/sync', require('./routes/sync'))
 
+// ── Litsenziya (oylik obuna) ───────────────────────────────────
+// To'lov muddati + muhlat o'tsa yoki sotuvchi to'xtatsa — API 402 qaytaradi
+app.use('/api/license', license.router)
+app.use(license.requireLicense)
+
 // ── Routes ─────────────────────────────────────────────────────
 app.use('/api/auth',        require('./routes/auth'))
 app.use('/api/users',       require('./routes/users'))
@@ -140,6 +146,7 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/restopro')
     await syncEngine.migrate()
     // Kassada admin va sozlamalar cloud'dan keladi — lokal yaratilsa to'qnashadi
     if (!process.env.SYNC_URL) await seedAdmin()
+    await license.start().catch(err => console.error('❌ litsenziya:', err.message))
     const PORT = process.env.PORT || 5000
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server: http://localhost:${PORT}`)

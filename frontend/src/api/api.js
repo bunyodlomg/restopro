@@ -16,6 +16,11 @@ let _redirecting = false
 API.interceptors.response.use(
   (res) => res,
   (err) => {
+    // Obuna to'xtatilgan / muddati o'tgan — butun ilova bloklash ekraniga o'tadi
+    if (err.response?.status === 402 && err.response.data?.code === 'LICENSE_BLOCKED') {
+      window.dispatchEvent(new CustomEvent('rp-license', { detail: err.response.data.license }))
+      return Promise.reject(err)
+    }
     // Server parolni almashtirishni talab qilmoqda
     if (err.response?.data?.code === 'PASSWORD_CHANGE_REQUIRED' && window.location.pathname !== '/change-password') {
       try {

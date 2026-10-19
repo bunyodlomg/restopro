@@ -14,6 +14,7 @@
 #    --name N            pm2 jarayon nomi (standart: restopro)
 #    --tg-token T        backup'larni Telegram'ga yuborish uchun bot token
 #    --tg-chat C         backup'lar boradigan Telegram chat ID
+#    --license-key K     sotuvchi bergan litsenziya kaliti (RP-XXXX-XXXX-XXXX)
 #    --no-ssl            SSL o'rnatmaslik (faqat test uchun)
 #    --no-firewall       ufw'ni sozlamaslik
 #
@@ -25,7 +26,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(dirname "$SCRIPT_DIR")"
 ENV_FILE="$APP_DIR/server/.env"
 
-DOMAIN="" EMAIL="" PORT=5050 PM2_NAME="restopro" TG_TOKEN="" TG_CHAT=""
+DOMAIN="" EMAIL="" PORT=5050 PM2_NAME="restopro" TG_TOKEN="" TG_CHAT="" LICENSE_KEY_ARG=""
 WITH_SSL=1 WITH_FIREWALL=1
 NODE_MAJOR=22
 MONGO_SERIES=8.0
@@ -35,7 +36,7 @@ ok()   { echo -e "    \033[32m✓\033[0m $*"; }
 warn() { echo -e "    \033[33m⚠\033[0m $*"; }
 fail() { echo -e "\n\033[31m❌ $*\033[0m" >&2; exit 1; }
 
-usage() { sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -45,6 +46,7 @@ while [ $# -gt 0 ]; do
     --name)        PM2_NAME="${2:-}"; shift 2 ;;
     --tg-token)    TG_TOKEN="${2:-}"; shift 2 ;;
     --tg-chat)     TG_CHAT="${2:-}";  shift 2 ;;
+    --license-key) LICENSE_KEY_ARG="${2:-}"; shift 2 ;;
     --no-ssl)      WITH_SSL=0;        shift ;;
     --no-firewall) WITH_FIREWALL=0;   shift ;;
     -h|--help)     usage 0 ;;
@@ -128,6 +130,13 @@ env_default MONGO_URI "mongodb://127.0.0.1:27017/restopro"
 env_set     PORT "$PORT"
 env_set     CLIENT_URL "https://$DOMAIN,http://$DOMAIN"
 env_set     ALLOW_TUNNELS "false"
+env_set     NODE_ENV "production"
+[ -z "$LICENSE_KEY_ARG" ] || env_set LICENSE_KEY "$LICENSE_KEY_ARG"
+# Litsenziya tizimi sozlangan bo'lsa (vendor.json da ochiq kalit) — kalit majburiy
+if grep -q '"publicKey": *"[A-Za-z0-9+/=]\{20,\}"' "$APP_DIR/server/license/vendor.json" 2>/dev/null \
+   && [ -z "$(env_get LICENSE_KEY)" ]; then
+  fail "Litsenziya kaliti kerak: --license-key RP-XXXX-XXXX-XXXX"
+fi
 env_default SYNC_KEY "$(openssl rand -hex 32)"   # kassalar (Electron) ulanishi uchun
 env_default BACKUP_DIR "/var/backups/restopro"
 env_default BACKUP_KEEP "14"
@@ -257,6 +266,7 @@ if [ -n "$ADMIN_PASSWORD" ]; then
   echo "  👤 Login: admin    Parol: $ADMIN_PASSWORD"
   echo "     (birinchi kirishda parolni almashtirish so'raladi)"
 fi
+[ -z "$(env_get LICENSE_KEY)" ] || echo "  🔑 Litsenziya: $(env_get LICENSE_KEY)   (holat: pm2 logs $PM2_NAME | grep Litsenziya)"
 echo "  🔁 Kassa ulash: SYNC_URL=$SCHEME://$DOMAIN  SYNC_KEY=$(env_get SYNC_KEY)"
 echo "  📋 Loglar:    pm2 logs $PM2_NAME"
 echo "  🔄 Yangilash: $SCRIPT_DIR/update.sh"

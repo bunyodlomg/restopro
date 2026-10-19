@@ -5,6 +5,7 @@ import { AuthProvider, useAuth }       from './context/AuthContext.jsx'
 import { SettingsProvider }            from './context/SettingsContext.jsx'
 import { ThemeProvider, useTheme }     from './context/ThemeContext.jsx'
 import { playSound, soundForElement }  from './utils/sound.js'
+import LicenseGate                     from './components/LicenseGate.jsx'
 
 import AdminLayout  from './layouts/AdminLayout.jsx'
 import WaiterLayout from './layouts/WaiterLayout.jsx'
@@ -121,7 +122,7 @@ export default function App() {
       <AuthProvider>
         <SettingsProvider>
           <BrowserRouter>
-            <AppRoutes/>
+            <LicenseGate><AppRoutes/></LicenseGate>
           </BrowserRouter>
         </SettingsProvider>
       </AuthProvider>

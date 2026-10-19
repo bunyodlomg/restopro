@@ -137,6 +137,8 @@ async function startServer() {
     SYNC_URL: config.mode === 'sync' ? config.syncUrl : '',
     SYNC_KEY: config.mode === 'sync' ? config.syncKey : '',
     ADMIN_PASSWORD: config.mode === 'standalone' ? (config.adminPassword || '') : '',
+    // Lokal rejimda litsenziya to'g'ridan-to'g'ri tekshiriladi; cloud rejimida — cloud orqali
+    LICENSE_KEY: config.mode === 'standalone' ? (config.licenseKey || '') : '',
   }
   const out = log('server.log')
   server = spawn(process.execPath, [path.join(SERVER_DIR, 'server.js')], { cwd: SERVER_DIR, env, windowsHide: true })
@@ -240,6 +242,8 @@ ipcMain.handle('kassa:get', () => ({
   mode: config.mode || null,
   syncUrl: config.syncUrl || '',
   hasKey: !!config.syncKey,
+  hasLicense: !!config.licenseKey,
+  licenseRequired: licenseRequired(),
   port: config.port,
   waiterUrls: waiterUrls(),
   adminPassword: config.mode === 'standalone' && !config.adminPasswordSeen ? config.adminPassword : null,
@@ -258,7 +262,13 @@ ipcMain.handle('kassa:test', async (_e, { syncUrl, syncKey }) => {
   }
 })
 
-ipcMain.handle('kassa:save', async (_e, { mode, syncUrl, syncKey }) => {
+// vendor.json da ochiq kalit bo'lsa — lokal rejimda litsenziya kaliti majburiy
+function licenseRequired() {
+  try { return !!JSON.parse(fs.readFileSync(path.join(SERVER_DIR, 'license', 'vendor.json'), 'utf8')).publicKey } catch { return false }
+}
+
+ipcMain.handle('kassa:save', async (_e, { mode, syncUrl, syncKey, licenseKey }) => {
+  if (licenseKey) config.licenseKey = String(licenseKey).trim().toUpperCase().slice(0, 40)
   if (mode === 'sync') {
     config.mode = 'sync'
     config.syncUrl = normalizeUrl(syncUrl)

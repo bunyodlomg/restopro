@@ -1,11 +1,21 @@
-# 🍽 RestoPro — Oshxona Boshqaruv Tizimi
+# RestoPro — Restoran Boshqaruv Tizimi
 
 ## Tarkib
 ```
-restopro-full/
-├── server/      ← Backend (Node.js + Express + MongoDB)
-└── frontend/    ← Frontend (React + Vite)
+restopro/
+├── server/          ← Backend (Node.js + Express + MongoDB)
+├── frontend/        ← Frontend (React + Vite)
+├── desktop/         ← Kassa dasturi (Electron, Windows .exe)
+├── deploy/          ← O'rnatish, yangilash, backup skriptlari
+├── license-server/  ← Litsenziya serveri (sotuvchi uchun: oylik obuna, to'xtatish)
+└── docs/            ← Qo'llanma, narxlar, shartnoma namunasi
 ```
+
+## Hujjatlar
+- [Foydalanish qo'llanmasi](docs/QOLLANMA.md) — egasi, ofitsant va kassa uchun
+- [Litsenziya va oylik obuna](docs/LITSENZIYA.md) — litsenziya serveri, mijoz ulash, to'lov, to'xtatish
+- [Narxlar va xizmat shartlari](docs/NARX.md)
+- [Shartnoma namunasi](docs/SHARTNOMA.md)
 
 ## Yangi mijoz serveriga o'rnatish (Ubuntu 22.04 / 24.04)
 1. VPS oling, domenning DNS **A** yozuvini server IP manziliga yo'naltiring.
@@ -14,8 +24,10 @@ restopro-full/
 git clone https://github.com/bunyodlomg/restopro.git /opt/restopro
 cd /opt/restopro
 ./deploy/install.sh --domain cafe.example.uz --email siz@example.uz \
+                    --license-key RP-XXXX-XXXX-XXXX \
                     --tg-token <BOT_TOKEN> --tg-chat <CHAT_ID>
 ```
+Litsenziya kaliti litsenziya serveringiz admin panelida yaratiladi ([batafsil](docs/LITSENZIYA.md)).
 Skript Node.js 22, MongoDB 8, pm2, nginx, SSL (Let's Encrypt), firewall va kunlik backup'ni
 o'rnatadi, `.env` ni xavfsiz kalitlar bilan yaratadi va oxirida admin parolini ko'rsatadi.
 Qayta ishga tushirish xavfsiz — mavjud sozlamalar saqlanadi. Barcha parametrlar: `./deploy/install.sh --help`.
@@ -112,15 +124,13 @@ tiklash vaqtida to'xtatilib, keyin qayta ishga tushiriladi.
 > Telegram'ga kelgan arxivni ham shu buyruq bilan tiklash mumkin: faylni serverga yuklab, yo'lini bering.
 
 ## Brend sozlamalari
-`frontend/src/brand.js` faylida:
-```js
-export const BRAND = {
-  name: "Sizning Oshxona Nomi",  // ← o'zgartiring
-  logo: "🍽",                     // ← yoki SVG
-  primary: "#D4831F",             // ← rang
-  apiUrl: "http://localhost:5000",// ← server manzili
-}
-```
+Restoran nomi, logotipi, asosiy rangi va chek ko'rinishi ilovaning o'zida o'zgartiriladi:
+**Sozlama → Brend / Ko'rinish / Chek**. Kodni o'zgartirish shart emas.
+
+## Litsenziya (ishlab chiqishda)
+`server/license/vendor.json` bo'sh bo'lsa, litsenziya tekshiruvi o'chiq.
+To'ldirilgandan keyin lokal ishlab chiqishda `server/.env` ga `LICENSE_DEV=1` yozing
+(`NODE_ENV=production` da bu ishlamaydi).
 
 ## Portlar
 - Server:   `http://localhost:5000`
