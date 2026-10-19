@@ -48,6 +48,9 @@ router.get('/public', async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }) }
 })
 
+// GET /api/settings/my-ip — admin restoran Wi-Fi'idan turib o'z tashqi IP'sini qo'shishi uchun
+router.get('/my-ip', auth, adminOnly, (req, res) => res.json({ ip: require('../utils/onPremise').normIp(req.ip) }))
+
 // GET /api/settings
 router.get('/', auth, async (req, res) => {
   try { res.json(await getOrCreate()) }
@@ -64,6 +67,20 @@ router.put('/', auth, adminOnly, upload.single('logo'), async (req, res) => {
     if (serviceFeeEnabled !== undefined) update.serviceFeeEnabled = serviceFeeEnabled === 'true' || serviceFeeEnabled === true
     if (serviceFeePercent !== undefined) update.serviceFeePercent = +serviceFeePercent
     if (req.file)                        update.brandLogo         = `/uploads/${req.file.filename}`
+    if (req.body.staffAccessEnabled !== undefined) update.staffAccessEnabled = String(req.body.staffAccessEnabled) === 'true'
+    if (req.body.qrMenuEnabled      !== undefined) update.qrMenuEnabled      = String(req.body.qrMenuEnabled) === 'true'
+    if (req.body.qrBaseUrl !== undefined) {
+      const u = String(req.body.qrBaseUrl).trim().replace(/\/+$/, '')
+      if (u && !/^https?:\/\/[^\s/]+$/i.test(u)) return res.status(400).json({ message: 'QR manzili noto\'g\'ri (masalan: http://192.168.1.10:5050)' })
+      update.qrBaseUrl = u
+    }
+    if (req.body.wifiIps !== undefined) {
+      let ips = req.body.wifiIps
+      if (typeof ips === 'string') { try { ips = JSON.parse(ips) } catch { ips = ips.split(/[\s,]+/) } }
+      ips = [...new Set((Array.isArray(ips) ? ips : []).map(x => String(x).trim()).filter(Boolean))].slice(0, 10)
+      if (ips.some(ip => !/^[\d.]{7,15}$|^[0-9a-f:]{2,39}$/i.test(ip))) return res.status(400).json({ message: 'IP manzil noto\'g\'ri' })
+      update.wifiIps = ips
+    }
 
     // Chek dizayni — FormData orqali JSON satr ko'rinishida keladi
     if (req.body.receipt !== undefined) {
@@ -83,6 +100,8 @@ router.put('/', auth, adminOnly, upload.single('logo'), async (req, res) => {
     }
 
     const s = await Settings.findByIdAndUpdate('main', update, { new: true, upsert: true })
+    require('../utils/settingsCache').invalidate()
+    if (update.staffAccessEnabled !== undefined) req.app.get('io').emit('staffAccess', { enabled: update.staffAccessEnabled })
     res.json(s)
   } catch (err) { res.status(500).json({ message: err.message }) }
 })

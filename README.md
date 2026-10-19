@@ -6,6 +6,7 @@ restopro/
 ├── server/          ← Backend (Node.js + Express + MongoDB)
 ├── frontend/        ← Frontend (React + Vite)
 ├── desktop/         ← Kassa dasturi (Electron, Windows .exe)
+├── terminal/        ← Ofitsant monobloki uchun ilova (PIN bilan kirish, Windows .exe)
 ├── deploy/          ← O'rnatish, yangilash, backup skriptlari
 ├── license-server/  ← Litsenziya serveri (sotuvchi uchun: oylik obuna, to'xtatish)
 └── docs/            ← Qo'llanma, narxlar, shartnoma namunasi

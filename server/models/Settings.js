@@ -37,6 +37,15 @@ const SettingsSchema = new Schema({
   // Maxsus tovush fayllari
   sounds: { type: SoundsSchema, default: () => ({}) },
 
+  // Xodimlar (admin bo'lmaganlar) tizimga kira oladimi — bitta tugma bilan hammasini o'chirish
+  staffAccessEnabled: { type: Boolean, default: true },
+
+  // QR menyu: mijoz stoldagi QR kodni skanerlab buyurtma beradi (faqat restoran Wi-Fi'idan)
+  qrMenuEnabled: { type: Boolean, default: false },
+  qrBaseUrl:     { type: String,  default: '' },     // QR ichidagi manzil (bo'sh = avtomatik)
+  // Cloud serverda: restoran Wi-Fi'ining tashqi IP manzillari (kassada LAN avtomatik ruxsat)
+  wifiIps:       { type: [String], default: [] },
+
   // Soboy oxirgi tartib raqami (kunlik reset emas, umumiy)
   soboyCounter: { type: Number, default: 0 },
 

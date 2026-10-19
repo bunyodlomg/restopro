@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, History, UtensilsCrossed, Package2,
-  Grid3X3, Users, Wallet, Settings, LogOut, Sun, Moon, KeyRound, ShoppingBag,
+  Grid3X3, Users, Wallet, Settings, LogOut, Sun, Moon, KeyRound, ShoppingBag, CalendarClock,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -16,7 +16,8 @@ import SyncBadge from '../components/shared/SyncBadge.jsx'
 const NAV = [
   { to: '/admin',             label: 'Bosh',     Icon: LayoutDashboard, end: true },
   { to: '/admin/orders',      label: 'Buyurtma', Icon: ClipboardList },
-  { to: '/waiter',            label: 'Kassa',    Icon: ShoppingBag },
+  { to: '/admin/kassa',       label: 'Kassa',    Icon: ShoppingBag },
+  { to: '/admin/reservations', label: 'Bron',    Icon: CalendarClock },
   { to: '/admin/history',     label: 'Tarix',    Icon: History },
   { to: '/admin/products',    label: 'Taomlar',  Icon: UtensilsCrossed },
   { to: '/admin/ingredients', label: 'Ombor',    Icon: Package2 },

@@ -4,9 +4,10 @@ import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import { createSocket } from '../../api/socket.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
-import { buildReceiptHTML } from '../../utils/receipt.js'
+import { printReceipt as printOrder } from '../../utils/receipt.js'
 import Modal from '../../components/shared/Modal.jsx'
 import { OrderNum } from '../waiter/MyOrders.jsx'
+import GuestOrders from '../../components/GuestOrders.jsx'
 import { Seg, Loading, Empty, PageHead, money, orderTotal, itemCount, minutesSince, fmtDuration } from '../../components/ui.jsx'
 
 const CATS = [
@@ -17,16 +18,10 @@ const CATS = [
   { k: 'soboy', l: 'Soboy' },
 ]
 
-export function printReceipt(order, settings) {
-  // Chek ko'rinishi Sozlamalar → Chek bo'limidan boshqariladi
-  const html = buildReceiptHTML(order, settings)
-  const w = window.open('', '_blank', 'width=340,height=640')
-  if (!w) { toast.error('Chop etish oynasi bloklandi. Brauzer ruxsatini tekshiring.', { duration: 5000 }); return }
-  w.document.write(html); w.document.close(); w.focus()
-  setTimeout(() => {
-    try { w.print(); setTimeout(() => w.close(), 1000) }
-    catch (e) { toast.error('Chop etilmadi: ' + e.message, { duration: 5000 }) }
-  }, 300)
+export async function printReceipt(order, settings) {
+  const r = await printOrder(order, settings)
+  if (!r.ok) toast.error(r.error || 'Chek chiqmadi', { duration: 5000 })
+  else if (window.rpNative) toast.success('Chek printerga yuborildi')
 }
 
 function OrderCard({ order, settings, onClose, onCancel, busy }) {
@@ -38,7 +33,7 @@ function OrderCard({ order, settings, onClose, onCancel, busy }) {
         <OrderNum order={order}/>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: 16 }} className="truncate">{order.waiterName || '—'}</div>
-          <div className="label">
+          <div className="label truncate">
             {new Date(order.createdAt).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}
             {' · '}<span className={mins > 60 ? 'late' : ''}>{fmtDuration(mins)}</span>
             {' · '}{itemCount(order)} ta
@@ -70,10 +65,10 @@ function OrderCard({ order, settings, onClose, onCancel, busy }) {
           <span className="label">Jami</span>
           <b className="mono" style={{ fontSize: 26, letterSpacing: '-.04em' }}>{money(orderTotal(order))}</b>
         </div>
-        <div className="row" style={{ gap: 10 }}>
-          <button className="btn btn-ghost btn-lg" onClick={() => onCancel(order)} disabled={busy}><X size={20}/> Bekor</button>
-          <button className="btn btn-dark btn-lg" style={{ flex: 1 }} onClick={() => onClose(order)} disabled={busy}>
-            <Check size={20}/> To'landi — yopish
+        <div className="ocard-actions">
+          <button className="btn btn-ghost btn-lg btn-icon" title="Bekor qilish" aria-label="Bekor qilish" onClick={() => onCancel(order)} disabled={busy}><X size={22}/></button>
+          <button className="btn btn-dark btn-lg" onClick={() => onClose(order)} disabled={busy}>
+            <Check size={20}/> To'landi
           </button>
         </div>
       </div>
@@ -136,6 +131,8 @@ export default function Orders() {
         actions={<button className={`btn btn-lg ${sound ? 'btn-dark' : 'btn-soft'}`} onClick={toggleSound}>
           {sound ? <Bell size={20}/> : <BellOff size={20}/>}{sound ? 'Ovoz yoqilgan' : "Ovoz o'chiq"}
         </button>}/>
+
+      <GuestOrders/>
 
       <Seg value={cat} onChange={setCat} items={CATS.map(c => ({ ...c, n: count(c.k) }))} style={{ marginBottom: 18 }}/>
 

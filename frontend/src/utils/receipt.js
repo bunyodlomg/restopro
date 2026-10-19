@@ -83,16 +83,38 @@ export function buildReceiptHTML(order = {}, settings = {}) {
   </body></html>`
 }
 
-// Chekni yangi oynada chop etish. Muvaffaqiyatda true qaytaradi.
-export function printReceipt(order, settings) {
+// Chekni chop etish.
+//  - Kassa / ofitsant terminali (Electron): to'g'ridan-to'g'ri standart printerga, oynasiz
+//  - Oddiy brauzer: yashirin iframe orqali (yangi oyna ochilmaydi — popup bloklanmaydi)
+// { ok, error } qaytaradi.
+export async function printReceipt(order, settings) {
   const html = buildReceiptHTML(order, settings)
-  const win = window.open('', '_blank', 'width=340,height=640')
-  if (!win) return false
-  win.document.write(html)
-  win.document.close()
-  win.focus()
-  setTimeout(() => {
-    try { win.print(); setTimeout(() => win.close(), 1000) } catch { /* noop */ }
-  }, 300)
-  return true
+  const paperWidth = Number(settings?.receipt?.paperWidth) === 80 ? 80 : 58
+  if (window.rpNative?.print) {
+    try { return await window.rpNative.print(html, { paperWidth }) }
+    catch (err) { return { ok: false, error: err.message } }
+  }
+  return printViaIframe(html)
+}
+
+function printViaIframe(html) {
+  return new Promise(resolve => {
+    const frame = document.createElement('iframe')
+    frame.setAttribute('aria-hidden', 'true')
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden'
+    document.body.appendChild(frame)
+    const cleanup = () => setTimeout(() => frame.remove(), 1500)
+    frame.onload = () => {
+      // Rasm (logo) yuklanishini kutish
+      setTimeout(() => {
+        try {
+          frame.contentWindow.focus()
+          frame.contentWindow.print()
+          resolve({ ok: true })
+        } catch (err) { resolve({ ok: false, error: err.message }) }
+        cleanup()
+      }, 250)
+    }
+    frame.srcdoc = html
+  })
 }

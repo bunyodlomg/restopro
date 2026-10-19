@@ -198,12 +198,14 @@ router.get('/monthly', auth, adminOnly, async (req, res) => {
 
 // ─── POST /api/orders ───────────────────────────────────────────
 // Stol band bo'lsa — mavjud buyurtmaga qo'shish (merge)
-router.post('/', auth, async (req, res) => {
-  try {
-    const { tableId, tableNumber, category, waiterName, items, note } = req.body
+const fail = (status, message) => Object.assign(new Error(message), { status })
+
+// Buyurtma yaratish yoki band stolning ochiq buyurtmasiga qo'shish.
+// Ofitsant (POST /api/orders) va mijozning QR buyurtmasi (qabul qilinganda) shu yerdan o'tadi.
+async function placeOrder(io, { tableId, tableNumber, category, waiterName, items, note }, user) {
 
     if (!Array.isArray(items) || items.length === 0)
-      return res.status(400).json({ message: 'Kamida bitta taom tanlang' })
+      throw fail(400, 'Kamida bitta taom tanlang')
 
     // Narxlarni DB dan tekshirish
     const enrichedItems = []
@@ -211,7 +213,7 @@ router.post('/', auth, async (req, res) => {
       // Manfiy yoki kasr miqdor jami summani kamaytirib yuborishi mumkin
       const quantity = item.quantity === undefined ? 1 : Number(item.quantity)
       if (!Number.isInteger(quantity) || quantity < 1 || quantity > 999)
-        return res.status(400).json({ message: 'Miqdor 1 dan 999 gacha butun son bo\'lishi kerak' })
+        throw fail(400, 'Miqdor 1 dan 999 gacha butun son bo\'lishi kerak')
       const product = await Product.findById(item.productId)
       if (!product || !product.isActive) continue
       enrichedItems.push({
@@ -221,7 +223,7 @@ router.post('/', auth, async (req, res) => {
         quantity,
       })
     }
-    if (!enrichedItems.length) return res.status(400).json({ message: 'Mahsulotlar topilmadi' })
+    if (!enrichedItems.length) throw fail(400, 'Mahsulotlar topilmadi')
 
     // Xizmat haqi sozlamasini olish
     let serviceFee = 0
@@ -261,8 +263,8 @@ router.post('/', auth, async (req, res) => {
         existing.totalPrice = existing.items.reduce((s,i) => s + i.price * i.quantity, 0)
         existing.serviceFee = Math.round(existing.totalPrice * (serviceFeePercent / 100))
         await existing.save()
-        req.app.get('io').emit('orderUpdated', existing)
-        return res.json(existing)
+        io.emit('orderUpdated', existing)
+        return { order: existing, merged: true }
       }
     }
 
@@ -272,8 +274,8 @@ router.post('/', auth, async (req, res) => {
       tableId:     category === 'soboy' ? null : tableId,
       tableNumber: category === 'soboy' ? soboySuffix : tableNumber,
       category,
-      waiterName:  waiterName || req.user.name,
-      waiterId:    req.user._id,
+      waiterName:  waiterName || user.name,
+      waiterId:    user._id,
       items:       enrichedItems,
       totalPrice,
       serviceFee,
@@ -287,14 +289,21 @@ router.post('/', auth, async (req, res) => {
         { status: 'busy', currentOrder: order._id },
         { new: true }
       )
-      req.app.get('io').emit('tableUpdated', updatedTable)
+      io.emit('tableUpdated', updatedTable)
     }
 
-    req.app.get('io').emit('newOrder', order)
-    res.status(201).json(order)
+    io.emit('newOrder', order)
+    return { order, merged: false }
+}
+
+router.post('/', auth, async (req, res) => {
+  try {
+    const { order, merged } = await placeOrder(req.app.get('io'), { ...req.body, waiterName: req.body.waiterName || req.user.name }, req.user)
+    res.status(merged ? 200 : 201).json(order)
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ message: err.message })
     console.error('Order xatosi:', err)
-    res.status(500).json({ message: err.message })
+    res.status(500).json({ message: 'Server xatosi' })
   }
 })
 
@@ -441,3 +450,4 @@ router.delete('/:id', auth, adminOnly, async (req, res) => {
 })
 
 module.exports = router
+module.exports.placeOrder = placeOrder

@@ -20,7 +20,7 @@
     "appId": "uz.restopro.kassa",
     "productName": "RestoPro Kassa",
     "directories": { "output": "dist" },
-    "files": ["main.js", "preload.js", "setup.html", "assets/**"],
+    "files": ["main.js", "preload.js", "preload-app.js", "print.js", "setup.html", "assets/**"],
     "extraResources": [
       { "from": "resources/server",  "to": "server" },
       { "from": "resources/web",     "to": "web" },

@@ -39,8 +39,26 @@ Ochiq buyurtmalarning hammasi shu yerda turadi. Ofitsant yangi buyurtma yuborsa,
 
 Buyurtmani faqat administrator yopishi yoki bekor qilishi mumkin.
 
+Ekran tepasidagi sariq **«Mijozlar buyurtmasi»** bloki — mijozlar stoldagi QR kod orqali yuborgan buyurtmalar (pastdagi «QR menyu» bo'limiga qarang).
+
 ### Kassa
-Administrator ham ofitsant ekrani orqali buyurtma qabul qilishi mumkin (pastdagi «Ofitsant» bo'limiga qarang).
+Administrator ham shu yerdan buyurtma qabul qiladi: stolni tanlaydi, taomlarni qo'shadi, **Oshxonaga yuborish** ni bosadi. Chap menyu doim ko'rinib turadi, shuning uchun istalgan bo'limga bir bosishda qaytish mumkin.
+
+### Bron
+Mijoz telefon qilib stol yoki xona bron qilganda:
+1. **+ Yangi bron** — mijoz ismi, telefoni, stol/xona, sana, vaqt, necha soatga, mehmonlar soni, oldindan to'lov va izoh.
+2. Bir stolga bir vaqtda ikki bron qo'yib bo'lmaydi — tizim ogohlantiradi.
+3. Mijoz kelganda **Keldi**, kelmasa **Kelmadi** tugmasini bosing.
+
+Bron qilingan stol **Stollar** ekranida sariq rangda «BRON · 19:00» deb ko'rinadi — ofitsant uni boshqa mijozga bermaydi.
+
+### QR menyu
+Mijoz stoldagi QR kodni telefoni bilan skanerlaydi, menyu va narxlarni ko'radi va buyurtma beradi. Stol raqami QR koddan avtomatik aniqlanadi.
+1. **Stollar → QR kodlar** — QR menyuni yoqing va **Chop etish** tugmasi bilan har stol uchun QR kodlarni chop eting.
+2. Buyurtma **faqat restoran Wi-Fi'iga ulangan** telefondan qabul qilinadi.
+3. Mijoz buyurtmasi darhol oshxonaga bormaydi: ofitsant yoki admin ekranida sariq blokda chiqadi (ovozli signal bilan). **Qabul qilish** bosilsa — stol buyurtmasiga qo'shiladi, **✕** — rad etiladi. Mijoz telefonida natija ko'rinadi.
+4. Kassa kompyuteriga routerda **doimiy IP** biriktiring — aks holda manzil o'zgarib, QR kodlar ishlamay qolishi mumkin.
+5. Cloud server orqali ishlatilsa: **Sozlama → QR menyu** bo'limida restoran Wi-Fi'ining tashqi IP manzilini qo'shing.
 
 ### Tarix
 Yopilgan va bekor qilingan buyurtmalar.
@@ -65,8 +83,10 @@ Zal, xona va ko'cha bo'yicha stollar.
 - Band stolni o'chirib bo'lmaydi.
 
 ### Xodimlar
-Ofitsant yoki administrator qo'shish: ism, login, parol, rol, oylik maosh.
-- Xodim ishdan ketsa, uning hisobini o'chiring yoki parolini almashtiring.
+Ofitsant yoki administrator qo'shish: ism, login, parol, rol, oylik maosh va **PIN** (monoblokda kirish uchun 4 raqam).
+- **Umumiy kalit** (sahifa tepasida) — barcha ofitsantlar kirishini bitta tugma bilan o'chiradi. Ular darhol tizimdan chiqariladi va qayta kira olmaydi; adminlar ishlayveradi. Masalan, ish tugagach yoki tushunmovchilik bo'lganda.
+- **Kirish** ustunidagi kalit — bitta xodimni alohida o'chirish/yoqish.
+- Xodim ishdan ketsa — uning kirishini darhol o'chiring. Shundan keyin u hech qanday qurilmadan buyurtma bera olmaydi.
 
 ### Ish haqi
 Oy tanlanadi va har bir xodim bo'yicha qancha to'langani va qancha qolgani ko'rinadi.
@@ -88,6 +108,12 @@ Oy tanlanadi va har bir xodim bo'yicha qancha to'langani va qancha qolgani ko'ri
 ---
 
 ## 2. Ofitsant
+
+### Monoblokda PIN bilan kirish
+Restorandagi umumiy monoblokda (**RestoPro Ofitsant** ilovasi) har bir ofitsant o'zining **4 raqamli PIN kodi** bilan kiradi.
+- Buyurtma yuborilgach tizim avtomatik chiqadi va keyingi ofitsant o'z PIN'i bilan kiradi.
+- 2 daqiqa hech narsa bosilmasa ham avtomatik chiqadi.
+- PIN faqat restoran tarmog'ida ishlaydi. 5 marta noto'g'ri kiritilsa, 5 daqiqaga bloklanadi.
 
 ### Telefondan kirish
 1. Telefonni restoran **Wi-Fi**'iga ulang.
@@ -133,6 +159,15 @@ Bugungi buyurtmalaringiz: faol va yopilganlar. Administrator buyurtmani yopganda
 - Yuqori panelda **OFFLINE** yozuvi va hali yuborilmagan o'zgarishlar soni ko'rinadi.
 - Internet qaytgach, hammasi serverga avtomatik yuboriladi va yozuv **ONLINE** ga o'zgaradi.
 
+### Chek chiqarish
+Kassa ilovasida chek **to'g'ridan-to'g'ri standart printerga** chiqadi (oyna ochilmaydi). Printer Windows'da «standart» (Default) qilib belgilangan bo'lishi kerak.
+
+### Ofitsant monobloki (RestoPro Ofitsant)
+1. `RestoPro-Ofitsant-Setup.exe` ni o'rnating.
+2. Server manzilini kiriting — kassa kompyuterining manzili (masalan, `http://192.168.1.10:5050`) yoki cloud manzil. **Tekshirish** tugmasi ulanishni sinaydi.
+3. Ilova to'liq ekranda ochiladi va PIN klaviaturasini ko'rsatadi. Kompyuter yoqilganda avtomatik ishga tushadi.
+4. Chiqish: soat yonidagi belgi → **Chiqish**, yoki `Ctrl+Shift+Q`.
+
 ### Tray menyusi (soat yonidagi RestoPro belgisi)
 - **Sozlamalar** — server, kalit yoki rejimni o'zgartirish.
 - **Loglar papkasi** — muammo bo'lsa, shu fayllarni texnik yordamga yuboring.
@@ -147,7 +182,10 @@ Bugungi buyurtmalaringiz: faol va yopilganlar. Administrator buyurtmani yopganda
 |---|---|
 | Telefonda sahifa ochilmayapti | Telefon restoran Wi-Fi'iga ulanganini tekshiring. Kassa kompyuteri yoqiq bo'lishi kerak. |
 | «Birinchi sinxronlash kutilmoqda» | Kassa kompyuterini internetga ulang. Bu faqat birinchi ishga tushirishda kerak. |
-| Chek chiqmayapti | Printer yoqiq va qog'oz borligini tekshiring. Windows'da printer «standart» qilib belgilangan bo'lsin. Brauzer qalqib chiquvchi oynani bloklamasligi kerak. |
+| Chek chiqmayapti | Printer yoqiq va qog'oz borligini tekshiring. Windows'da printer «standart» (Default) qilib belgilangan bo'lsin. |
+| Mijoz QR kodni skanerlaganda «Wi-Fi'ga ulaning» chiqadi | Mijoz telefoni restoran Wi-Fi'iga ulangan bo'lishi kerak (mobil internet orqali ishlamaydi). |
+| QR kod ochilmayapti | Kassa kompyuterining IP manzili o'zgargan bo'lishi mumkin. Routerda doimiy IP biriktiring va QR kodlarni qayta chop eting. |
+| Ofitsant kira olmayapti | **Xodimlar** sahifasida umumiy kalit va uning shaxsiy «Kirish» kaliti yoqilganini tekshiring. |
 | Parol esdan chiqdi | Administrator **Xodimlar** bo'limida yangi parol o'rnatadi. Administrator parolini o'zgartirish uchun texnik yordamga murojaat qiling. |
 | «Obuna muddati tugagan» | To'lovni amalga oshiring va **Qayta tekshirish** tugmasini bosing. Ma'lumotlar saqlangan. |
 | «Litsenziyani tekshirib bo'lmadi» | Kompyuter uzoq vaqt internetsiz ishlagan. Internetga ulang va **Qayta tekshirish** ni bosing. |

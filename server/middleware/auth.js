@@ -1,6 +1,9 @@
 const jwt  = require('jsonwebtoken')
 const User = require('../models/User')
 const { JWT_SECRET } = require('../config')
+const settingsCache = require('../utils/settingsCache')
+
+const STAFF_OFF = 'Xodimlar uchun kirish admin tomonidan vaqtincha o\'chirilgan'
 
 // Parol almashtirilmaguncha faqat shu yo'llarga ruxsat beriladi
 const PASSWORD_CHANGE_ALLOWED = ['/api/auth/me', '/api/auth/change-password']
@@ -26,6 +29,10 @@ module.exports = async function authMiddleware(req, res, next) {
     if (!user.isActive)
       return res.status(401).json({ message: 'Akkaunt bloklangan. Adminga murojaat qiling.' })
 
+    // Admin barcha xodimlar kirishini bitta tugma bilan o'chirishi mumkin
+    if (user.role !== 'admin' && (await settingsCache.get()).staffAccessEnabled === false)
+      return res.status(401).json({ message: STAFF_OFF, code: 'STAFF_DISABLED' })
+
     if (user.mustChangePassword && !PASSWORD_CHANGE_ALLOWED.includes(req.originalUrl.split('?')[0]))
       return res.status(403).json({ message: 'Avval parolni o\'zgartiring', code: 'PASSWORD_CHANGE_REQUIRED' })
 
@@ -42,3 +49,5 @@ module.exports.adminOnly = function(req, res, next) {
     return res.status(403).json({ message: 'Faqat admin uchun' })
   next()
 }
+
+module.exports.STAFF_OFF = STAFF_OFF

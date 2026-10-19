@@ -9,7 +9,7 @@ on:
     tags: ['kassa-v*']
     # Ishchi branch: har push'da .exe artefakt sifatida yig'iladi (Release faqat tegdan)
     branches: ['claude/pensive-maxwell-gih8c6']
-    paths: ['desktop/**', 'frontend/**', 'server/**', '.github/workflows/desktop.yml']
+    paths: ['desktop/**', 'terminal/**', 'frontend/**', 'server/**', '.github/workflows/desktop.yml']
 
 permissions:
   contents: write
@@ -46,3 +46,32 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: desktop/dist/*.exe
+
+  # Ofitsantlar monobloki uchun terminal (PIN bilan kirish, chek printerga)
+  terminal:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Bog'liqliklar
+        working-directory: terminal
+        run: npm ci --no-audit --no-fund
+
+      - name: Installer yig'ish
+        working-directory: terminal
+        run: npm run dist:win
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RestoPro-Ofitsant-Setup
+          path: terminal/dist/*.exe
+
+      - name: Release'ga qo'shish (teg bo'lsa)
+        if: startsWith(github.ref, 'refs/tags/kassa-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: terminal/dist/*.exe

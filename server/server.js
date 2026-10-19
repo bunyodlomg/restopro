@@ -69,6 +69,8 @@ io.use(async (socket, next) => {
     const payload = jwt.verify(socket.handshake.auth?.token || '', JWT_SECRET)
     const user = await User.findById(payload._id).select('role isActive')
     if (!user || !user.isActive) return next(new Error('unauthorized'))
+    if (user.role !== 'admin' && (await require('./utils/settingsCache').get()).staffAccessEnabled === false)
+      return next(new Error('unauthorized'))
     socket.data.user = { _id: user._id, role: user.role }
     next()
   } catch {
@@ -117,6 +119,10 @@ app.use('/api/orders',      require('./routes/orders'))
 app.use('/api/tables',      require('./routes/tables'))
 app.use('/api/salaries',    require('./routes/salaries'))
 app.use('/api/settings',    require('./routes/settings'))
+app.use('/api/reservations', require('./routes/reservations'))
+const guestRoutes = require('./routes/guest')
+app.use('/api/guest',        guestRoutes.guest)
+app.use('/api/guest-orders', guestRoutes.staff)
 
 // ── Health check ───────────────────────────────────────────────
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date() }))

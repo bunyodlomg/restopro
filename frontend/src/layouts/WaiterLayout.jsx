@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { Grid3X3, ClipboardList, LogOut, Sun, Moon, LayoutDashboard } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -6,6 +6,7 @@ import { useSettings } from '../context/SettingsContext.jsx'
 import { useTheme } from '../context/ThemeContext.jsx'
 import { BrandMark, initials } from '../components/ui.jsx'
 import SyncBadge from '../components/shared/SyncBadge.jsx'
+import { createSocket } from '../api/socket.js'
 
 const NAV = [
   { to: '/waiter',           label: 'Stollar',      Icon: Grid3X3, end: true },
@@ -40,6 +41,17 @@ export function TopBar({ children }) {
 
 export default function WaiterLayout() {
   const location = useLocation()
+  const { isAdmin, logout } = useAuth()
+  const navigate = useNavigate()
+
+  // Admin xodimlar kirishini o'chirsa — ofitsant darhol chiqariladi
+  useEffect(() => {
+    if (isAdmin) return
+    const s = createSocket()
+    s.on('staffAccess', ({ enabled }) => { if (!enabled) { logout(); navigate('/login', { replace: true }) } })
+    return () => s.disconnect()
+  }, [isAdmin])
+
   // Buyurtma olish ekrani butun ekranni egallaydi
   const isOrderScreen = /^\/waiter\/(order|soboy)/.test(location.pathname)
   if (isOrderScreen) return <Outlet/>

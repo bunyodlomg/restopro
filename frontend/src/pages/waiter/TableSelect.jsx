@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, ShoppingBag, Grid3X3 } from 'lucide-react'
+import { Users, ShoppingBag, Grid3X3, CalendarClock } from 'lucide-react'
+import GuestOrders from '../../components/GuestOrders.jsx'
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import { createSocket } from '../../api/socket.js'
-import { money, initials, minutesSince, fmtDuration, Seg, Loading, Empty, orderTotal, itemCount } from '../../components/ui.jsx'
+import { money, initials, minutesSince, fmtDuration, Seg, Loading, Empty, orderTotal, itemCount, usePosBase, hhmm } from '../../components/ui.jsx'
 
 const CATS = [
   { k: 'zal',    l: 'Zal' },
@@ -19,14 +20,17 @@ export default function TableSelect() {
   const [orders, setOrders] = useState([])
   const [cat, setCat] = useState(() => localStorage.getItem('rp_table_cat') || 'zal')
   const [loading, setLoading] = useState(true)
+  const [reservations, setReservations] = useState([])
   const [, tick] = useState(0)
   const navigate = useNavigate()
+  const base = usePosBase()
 
   const load = async () => {
     try {
       const [t, o] = await Promise.all([API.get('/api/tables'), API.get('/api/orders?status=pending')])
       setTables(t.data.filter(x => x.category !== 'soboy'))
       setOrders(o.data)
+      API.get('/api/reservations').then(r => setReservations(r.data)).catch(() => {})
     } catch { toast.error("Yuklab bo'lmadi") }
     finally { setLoading(false) }
   }
@@ -41,7 +45,8 @@ export default function TableSelect() {
     s.on('newOrder', reloadOrders)
     s.on('orderUpdated', reloadOrders)
     s.on('orderClosed', () => { reloadOrders(); API.get('/api/tables').then(r => setTables(r.data.filter(x => x.category !== 'soboy'))).catch(() => {}) })
-    s.on('syncApplied', ({ colls }) => { if (colls.includes('tables') || colls.includes('orders')) load() })
+    s.on('reservationsChanged', () => API.get('/api/reservations').then(r => setReservations(r.data)).catch(() => {}))
+    s.on('syncApplied', ({ colls }) => { if (colls.some(c => ['tables', 'orders', 'reservations'].includes(c))) load() })
     const timer = setInterval(() => tick(n => n + 1), 30000)   // band vaqtini yangilash
     return () => { s.disconnect(); clearInterval(timer) }
   }, [])
@@ -54,13 +59,25 @@ export default function TableSelect() {
     return m
   }, [orders])
 
+  // Bugungi eng yaqin faol bron (kelish vaqti o'tgan bo'lsa ham 2 soatgacha ko'rsatiladi)
+  const resByTable = useMemo(() => {
+    const m = {}
+    const now = Date.now(), endOfDay = new Date().setHours(23, 59, 59, 999)
+    for (const r of reservations) {
+      const t = new Date(r.startAt).getTime()
+      if (r.status !== 'booked' || t > endOfDay || t < now - 2 * 3600000) continue
+      if (!m[r.tableId] || t < new Date(m[r.tableId].startAt).getTime()) m[r.tableId] = r
+    }
+    return m
+  }, [reservations])
+
   const list = tables.filter(t => t.category === cat).sort((a, b) => a.number - b.number)
   const counts = Object.fromEntries(CATS.map(c => [c.k, tables.filter(t => t.category === c.k).length]))
   const busy = list.filter(t => t.status === 'busy')
   const openSum = busy.reduce((s, t) => s + orderTotal(byTable[t._id]), 0)
 
-  const pick = t => navigate(`/waiter/order/${t._id}`, { state: { table: t } })
-  const soboy = () => navigate('/waiter/soboy', { state: { table: { _id: 'soboy', number: 0, category: 'soboy' } } })
+  const pick = t => navigate(`${base}/order/${t._id}`, { state: { table: t } })
+  const soboy = () => navigate(`${base}/soboy`, { state: { table: { _id: 'soboy', number: 0, category: 'soboy' } } })
 
   return (
     <div className="page">
@@ -74,12 +91,22 @@ export default function TableSelect() {
         <button className="btn btn-primary btn-lg" onClick={soboy}><ShoppingBag size={20}/> Soboy buyurtma</button>
       </div>
 
+      <GuestOrders/>
+
       {loading ? <Loading/> : list.length === 0 ? (
         <Empty icon={Grid3X3} title="Bu bo'limda stol yo'q" text="Stollarni admin panelidagi «Stollar» bo'limidan qo'shish mumkin."/>
       ) : (
         <div className="tgrid">
           {list.map(t => {
             const o = byTable[t._id]
+            const res = resByTable[t._id]
+            if (t.status !== 'busy' && res) return (
+              <button key={t._id} className="tcard res" onClick={() => pick(t)}>
+                <span className="tcard-st"><i className="dot"/>Bron · {hhmm(res.startAt)}</span>
+                <span className="tcard-n">{pad(t.number)}</span>
+                <span className="tcard-foot"><CalendarClock size={16}/><span className="truncate">{res.name} · {res.guests} kishi</span></span>
+              </button>
+            )
             if (t.status !== 'busy') return (
               <button key={t._id} className="tcard" onClick={() => pick(t)}>
                 <span className="tcard-st"><i className="dot"/>Bo'sh</span>
@@ -90,7 +117,7 @@ export default function TableSelect() {
             const mins = o ? minutesSince(o.createdAt) : 0
             return (
               <button key={t._id} className="tcard busy" onClick={() => pick(t)}>
-                <span className="tcard-st"><i className="dot"/>Band</span>
+                <span className="tcard-st"><i className="dot"/>Band{res ? ` · bron ${hhmm(res.startAt)}` : ''}</span>
                 <span className="tcard-n">{pad(t.number)}</span>
                 <span className="tcard-sum">{o ? money(orderTotal(o)) : '—'}</span>
                 <span className="tcard-meta">

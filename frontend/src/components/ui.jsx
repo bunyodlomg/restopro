@@ -1,4 +1,5 @@
 import React from 'react'
+import { useLocation } from 'react-router-dom'
 import { API_URL } from '../config.js'
 import { useSettings } from '../context/SettingsContext.jsx'
 
@@ -19,6 +20,12 @@ export const orderTotal = o => !o ? 0
     + (o.serviceFee || 0)
 export const itemCount = o => (o?.items || []).reduce((s, i) => s + i.quantity, 0)
 export const fmtDuration = m => (m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}` : `${m} daq`)
+
+// Kassa (buyurtma olish) ekranlari qayerda: admin menyusi ichida yoki ofitsant panelida
+export const usePosBase = () => (useLocation().pathname.startsWith('/admin') ? '/admin/kassa' : '/waiter')
+
+const hhmm = d => new Date(d).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })
+export { hhmm }
 
 // ── Brend belgisi: yuklangan logo yoki nomning bosh harfi ──
 export function BrandMark({ size = 42, radius }) {

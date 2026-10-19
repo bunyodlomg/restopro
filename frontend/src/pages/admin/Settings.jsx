@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react'
 import {
   Building2, Paintbrush, Volume2, Percent, Receipt, Upload, Trash2, Play, RotateCcw,
   Sun, Moon, Check, Minus, Plus, MousePointerClick, Navigation, CircleCheck, PartyPopper,
-  TriangleAlert, BellRing,
+  TriangleAlert, BellRing, QrCode, Wifi, X,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
@@ -19,6 +20,7 @@ const TABS = [
   { k: 'sound',   l: 'Tovush',      icon: Volume2 },
   { k: 'service', l: 'Xizmat haqi', icon: Percent },
   { k: 'receipt', l: 'Chek',        icon: Receipt },
+  { k: 'qr',      l: 'QR menyu',    icon: QrCode },
 ]
 
 const SOUND_TYPES = [
@@ -127,6 +129,24 @@ export default function SettingsPage() {
       toast.success('Standart tovushga qaytarildi')
     } catch { toast.error('Xatolik') }
     finally { setSoundBusy(null) }
+  }
+
+  // QR menyu sozlamalari darhol saqlanadi
+  const saveOne = async (k, v) => {
+    const fd = new FormData(); fd.append(k, v)
+    try { await API.put('/api/settings', fd); await refresh(); return true }
+    catch (err) { toast.error(err.response?.data?.message || 'Saqlab bo\'lmadi'); return false }
+  }
+  const [newIp, setNewIp] = useState('')
+  const ips = settings.wifiIps || []
+  const addIp = async ip => {
+    ip = String(ip || '').trim()
+    if (!ip) return
+    if (await saveOne('wifiIps', JSON.stringify([...ips, ip]))) { setNewIp(''); toast.success("IP qo'shildi") }
+  }
+  const addMyIp = async () => {
+    try { const { data } = await API.get('/api/settings/my-ip'); await addIp(data.ip) }
+    catch { toast.error('IP aniqlanmadi') }
   }
 
   const name = form.brandName || 'RestoPro'
@@ -256,6 +276,42 @@ export default function SettingsPage() {
                 <input className="input mono" type="number" min={0} max={100} value={form.serviceFeePercent}
                   onChange={e => set('serviceFeePercent', Math.max(0, Math.min(100, Number(e.target.value) || 0)))}/>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === 'qr' && (
+        <div className="col" style={{ gap: 14, maxWidth: 820 }}>
+          <div className="card card-pad">
+            <Switch checked={!!settings.qrMenuEnabled} onChange={v => saveOne('qrMenuEnabled', String(v))}
+              label="Mijoz QR orqali buyurtma bera oladi" hint="Stoldagi QR kod → menyu va narxlar → buyurtma. Ofitsant yoki admin tasdiqlagach oshxonaga ketadi."/>
+            <div className="row" style={{ gap: 10, marginTop: 14 }}>
+              <Link to="/admin/tables/qr" className="btn btn-dark btn-lg"><QrCode size={20}/> QR kodlarni chop etish</Link>
+            </div>
+          </div>
+          <div className="card card-pad">
+            <div className="card-head"><span className="card-title row" style={{ gap: 8 }}><Wifi size={19}/> Restoran Wi-Fi manzillari</span><span className="label">faqat cloud server uchun</span></div>
+            <p className="muted" style={{ margin: '0 0 14px', fontSize: 14.5 }}>
+              Kassa kompyuterida ishlaganda restoran Wi-Fi'i avtomatik taniladi — bu yerga hech narsa yozish shart emas.
+              Agar mijozlar cloud manzil orqali kirsa, restoran Wi-Fi'ining tashqi IP manzilini qo'shing: restoranda,
+              Wi-Fi'ga ulangan holda «Hozirgi IP ni qo'shish» tugmasini bosing.
+            </p>
+            {ips.length > 0 && (
+              <div className="row wrap" style={{ gap: 8, marginBottom: 14 }}>
+                {ips.map(ip => (
+                  <span key={ip} className="tag mono" style={{ fontSize: 13, padding: '6px 6px 6px 10px', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {ip}
+                    <button className="btn btn-ghost btn-icon btn-sm" style={{ width: 26, minHeight: 26 }} aria-label="O'chirish"
+                      onClick={() => saveOne('wifiIps', JSON.stringify(ips.filter(x => x !== ip)))}><X size={14}/></button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
+              <button className="btn btn-primary btn-lg" onClick={addMyIp}><Wifi size={19}/> Hozirgi IP ni qo'shish</button>
+              <input className="input mono" style={{ width: 200 }} value={newIp} onChange={e => setNewIp(e.target.value)} placeholder="84.54.12.3"/>
+              <button className="btn btn-soft btn-lg" onClick={() => addIp(newIp)} disabled={!newIp.trim()}>Qo'shish</button>
             </div>
           </div>
         </div>

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { UserPlus, Trash2, Search, Pencil, Users as UsersIcon } from 'lucide-react'
+import { UserPlus, Trash2, Search, Pencil, Users as UsersIcon, ShieldOff, ShieldCheck, KeyRound } from 'lucide-react'
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import Modal, { ModalField } from '../../components/shared/Modal.jsx'
-import { PageHead, Loading, Empty, money, initials } from '../../components/ui.jsx'
+import { PageHead, Loading, Empty, Switch, money, initials } from '../../components/ui.jsx'
+import { useSettings } from '../../context/SettingsContext.jsx'
+import { useAuth } from '../../context/AuthContext.jsx'
 
-const EMPTY = { name: '', username: '', password: '', role: 'waiter', phone: '', salary: '' }
+const EMPTY = { name: '', username: '', password: '', role: 'waiter', phone: '', salary: '', pin: '' }
 
 export default function Users() {
   const [users, setUsers] = useState([])
@@ -17,6 +19,28 @@ export default function Users() {
   const [removing, setRemoving] = useState(null)
   const [form, setForm] = useState(EMPTY)
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }))
+  const { settings, refresh } = useSettings()
+  const { user: me } = useAuth()
+  const staffOn = settings.staffAccessEnabled !== false
+  const [confirmOff, setConfirmOff] = useState(false)
+
+  // Barcha xodimlar (admin bo'lmaganlar) kirishini yoqish/o'chirish
+  const setStaffAccess = async enabled => {
+    const fd = new FormData(); fd.append('staffAccessEnabled', String(enabled))
+    try {
+      await API.put('/api/settings', fd); await refresh()
+      toast.success(enabled ? 'Xodimlar kirishi yoqildi' : "Barcha xodimlar tizimdan chiqarildi")
+      setConfirmOff(false)
+    } catch (e) { toast.error(e.response?.data?.message || 'Xatolik') }
+  }
+  // Bitta xodimni yoqish/o'chirish
+  const toggleActive = async (u, isActive) => {
+    try {
+      const { data } = await API.put(`/api/users/${u._id}`, { isActive })
+      setUsers(p => p.map(x => (x._id === u._id ? data : x)))
+      toast.success(isActive ? `${u.name} — kirish yoqildi` : `${u.name} — kirish o'chirildi`)
+    } catch (e) { toast.error(e.response?.data?.message || 'Xatolik') }
+  }
 
   const load = async () => {
     try { const { data } = await API.get('/api/users'); setUsers(data) }
@@ -28,7 +52,7 @@ export default function Users() {
   const openAdd = () => { setEditing(null); setForm(EMPTY); setOpen(true) }
   const openEdit = u => {
     setEditing(u)
-    setForm({ name: u.name, username: u.username, password: '', role: u.role, phone: u.phone || '', salary: u.salary || '' })
+    setForm({ name: u.name, username: u.username, password: '', role: u.role, phone: u.phone || '', salary: u.salary || '', pin: '', clearPin: false })
     setOpen(true)
   }
 
@@ -40,6 +64,10 @@ export default function Users() {
       const body = { ...form }
       if (form.salary) body.salary = +form.salary
       if (!body.password) delete body.password
+      if (body.pin && !/^\d{4}$/.test(body.pin)) { setSaving(false); return toast.error('PIN 4 ta raqam bo\'lsin') }
+      if (body.clearPin) body.pin = ''
+      else if (!body.pin) delete body.pin
+      delete body.clearPin
       if (editing) {
         const { data } = await API.put(`/api/users/${editing._id}`, body)
         setUsers(p => p.map(u => (u._id === editing._id ? data : u)))
@@ -79,6 +107,18 @@ export default function Users() {
           <button className="btn btn-primary btn-lg" onClick={openAdd}><UserPlus size={20}/> Xodim qo'shish</button>
         </>}/>
 
+      <div className={`card card-pad staff-switch ${staffOn ? '' : 'off'}`}>
+        {staffOn ? <ShieldCheck size={28}/> : <ShieldOff size={28}/>}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <b style={{ fontSize: 17 }}>{staffOn ? 'Xodimlar tizimga kira oladi' : "Xodimlar kirishi o'chirilgan"}</b>
+          <div className="hint" style={{ color: 'inherit', opacity: .75 }}>
+            {staffOn ? "O'chirsangiz barcha ofitsantlar darhol chiqariladi va qayta kira olmaydi. Adminlar ishlayveradi."
+              : 'Hech bir ofitsant kira olmaydi va buyurtma bera olmaydi. Ish boshlanganda yoqing.'}
+          </div>
+        </div>
+        <Switch checked={staffOn} onChange={v => (v ? setStaffAccess(true) : setConfirmOff(true))}/>
+      </div>
+
       <div className="card">
         {loading ? <Loading/> : filtered.length === 0 ? (
           <Empty icon={UsersIcon} title={s ? 'Topilmadi' : "Xodim yo'q"} text={s ? `«${q}» bo'yicha xodim yo'q` : "Birinchi xodimni qo'shing."}/>
@@ -86,11 +126,11 @@ export default function Users() {
           <div className="table-wrap">
             <table className="table">
               <thead>
-                <tr><th>Xodim</th><th>Login</th><th>Rol</th><th className="r">Oylik</th><th/></tr>
+                <tr><th>Xodim</th><th>Login</th><th>Rol</th><th className="r">Oylik</th><th>Kirish</th><th/></tr>
               </thead>
               <tbody>
                 {filtered.map(u => (
-                  <tr key={u._id}>
+                  <tr key={u._id} style={{ opacity: u.isActive === false ? .55 : 1 }}>
                     <td>
                       <div className="row">
                         <span className="avatar" style={{ width: 42, height: 42 }}>{initials(u.name)}</span>
@@ -101,8 +141,14 @@ export default function Users() {
                       </div>
                     </td>
                     <td className="mono muted">{u.username}</td>
-                    <td>{u.role === 'admin' ? <span className="tag tag-accent">Admin</span> : <span className="tag">Ofitsant</span>}</td>
+                    <td>
+                      <div className="row" style={{ gap: 6 }}>
+                        {u.role === 'admin' ? <span className="tag tag-accent">Admin</span> : <span className="tag">Ofitsant</span>}
+                        {u.hasPin && <span className="tag" title="Monoblokda PIN bilan kiradi"><KeyRound size={12}/> PIN</span>}
+                      </div>
+                    </td>
                     <td className="r mono">{u.salary ? money(u.salary) : <span className="muted">—</span>}</td>
+                    <td>{u._id === me?._id ? <span className="muted">siz</span> : <Switch checked={u.isActive !== false} onChange={v => toggleActive(u, v)}/>}</td>
                     <td className="r">
                       <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
                         <button className="btn btn-soft btn-icon" title="Tahrirlash" onClick={() => openEdit(u)}><Pencil size={18}/></button>
@@ -149,10 +195,34 @@ export default function Users() {
               <input className="input" type="number" inputMode="numeric" value={form.salary} onChange={set('salary')} placeholder="2000000"/>
             </ModalField>
           </div>
-          <ModalField label="Telefon">
-            <input className="input" type="tel" value={form.phone} onChange={set('phone')} placeholder="+998 90 123 45 67"/>
-          </ModalField>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <ModalField label="Telefon">
+              <input className="input" type="tel" value={form.phone} onChange={set('phone')} placeholder="+998 90 123 45 67"/>
+            </ModalField>
+            <ModalField label={editing?.hasPin ? 'Yangi PIN (4 raqam)' : 'PIN (4 raqam)'} hint="Monoblokda tez kirish uchun">
+              <input className="input mono" inputMode="numeric" maxLength={4} value={form.pin}
+                onChange={e => setForm(f => ({ ...f, pin: e.target.value.replace(/\D/g, '').slice(0, 4), clearPin: false }))}
+                placeholder={editing?.hasPin ? '••••  (o\'rnatilgan)' : '4826'} autoComplete="off"/>
+            </ModalField>
+          </div>
+          {editing?.hasPin && (
+            <label className="row" style={{ gap: 8, cursor: 'pointer' }}>
+              <input type="checkbox" checked={!!form.clearPin} onChange={e => setForm(f => ({ ...f, clearPin: e.target.checked, pin: '' }))}/>
+              PIN'ni o'chirish
+            </label>
+          )}
         </div>
+      </Modal>
+
+      <Modal open={confirmOff} onClose={() => setConfirmOff(false)} title="Barcha xodimlar kirishini o'chirish" maxWidth={460}
+        footer={<>
+          <button className="btn btn-ghost btn-lg" onClick={() => setConfirmOff(false)}>Yo'q</button>
+          <button className="btn btn-danger btn-lg" onClick={() => setStaffAccess(false)}>Ha, o'chirish</button>
+        </>}>
+        <p style={{ margin: 0, fontSize: 16 }}>
+          Barcha ofitsantlar telefon va monobloklardan darhol chiqariladi va qayta kira olmaydi. Adminlar ishlashda davom etadi.
+          Qayta yoqish uchun shu tugmani bosing.
+        </p>
       </Modal>
 
       <Modal open={!!removing} onClose={() => setRemoving(null)} title="Xodimni o'chirish" maxWidth={440}

@@ -1,0 +1,35 @@
+{
+  "name": "restopro-ofitsant",
+  "productName": "RestoPro Ofitsant",
+  "version": "1.0.0",
+  "description": "RestoPro — ofitsantlar monobloki uchun terminal (PIN bilan kirish)",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "33.2.0",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "uz.restopro.terminal",
+    "productName": "RestoPro Ofitsant",
+    "directories": { "output": "dist" },
+    "files": ["main.js", "preload.js", "preload-app.js", "print.js", "setup.html", "offline.html", "assets/**"],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "RestoPro Ofitsant",
+      "artifactName": "RestoPro-Ofitsant-Setup-${version}.exe"
+    }
+  }
+}

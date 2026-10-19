@@ -6,8 +6,9 @@ import API from '../../api/api.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { createSocket } from '../../api/socket.js'
+import { isTerminal } from '../../utils/terminal.js'
 import SyncBadge from '../../components/shared/SyncBadge.jsx'
-import { BrandMark, money, initials, fileUrl, minutesSince, fmtDuration, Loading, Empty } from '../../components/ui.jsx'
+import { BrandMark, usePosBase, money, initials, fileUrl, minutesSince, fmtDuration, Loading, Empty } from '../../components/ui.jsx'
 
 const ALL = 'Barchasi'
 const CAT_LABEL = { zal: 'Zal', xona: 'Xona', "ko'cha": "Ko'cha", soboy: 'Soboy' }
@@ -22,7 +23,8 @@ export default function OrderCreate() {
   const { tableId } = useParams()
   const { state } = useLocation()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const base = usePosBase()
+  const { user, logout } = useAuth()
   const { settings } = useSettings()
   const isSoboy = !tableId || tableId === 'soboy'
 
@@ -102,7 +104,7 @@ export default function OrderCreate() {
 
   const leave = () => {
     if (newCount && !confirm("Yuborilmagan taomlar bor. Chiqib ketilsinmi?")) return
-    navigate('/waiter')
+    navigate(base)
   }
 
   const submit = async () => {
@@ -118,7 +120,9 @@ export default function OrderCreate() {
         items: lines.map(l => ({ productId: l.p._id, quantity: l.n })),
       })
       toast.success(isSoboy ? 'Soboy buyurtma yuborildi' : `Stol ${table?.number} — oshxonaga yuborildi`)
-      navigate('/waiter')
+      // Monoblok (terminal) rejimida ofitsant buyurtmadan keyin avtomatik chiqadi
+      if (isTerminal() && user?.role !== 'admin') { logout(); navigate('/login', { replace: true }) }
+      else navigate(base)
     } catch (err) {
       toast.error(err.response?.data?.message || 'Yuborib bo\'lmadi')
       setSending(false)

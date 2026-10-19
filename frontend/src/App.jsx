@@ -25,6 +25,10 @@ import Settings     from './pages/admin/Settings.jsx'
 import TableSelect  from './pages/waiter/TableSelect.jsx'
 import OrderCreate  from './pages/waiter/OrderCreate.jsx'
 import MyOrders     from './pages/waiter/MyOrders.jsx'
+import Reservations from './pages/admin/Reservations.jsx'
+import QrCodes      from './pages/admin/QrCodes.jsx'
+import GuestMenu    from './pages/guest/GuestMenu.jsx'
+import TerminalLock from './components/TerminalLock.jsx'
 
 function Loader() {
   return <div className="center-fill" style={{ minHeight: '100vh', background: 'var(--bg)' }}><div className="spinner"/></div>
@@ -88,6 +92,11 @@ function AppRoutes() {
           <Route path="users"       element={<Users/>}/>
           <Route path="salaries"    element={<Salaries/>}/>
           <Route path="settings"    element={<Settings/>}/>
+          <Route path="reservations" element={<Reservations/>}/>
+          <Route path="tables/qr"   element={<QrCodes/>}/>
+          <Route path="kassa"       element={<TableSelect/>}/>
+          <Route path="kassa/order/:tableId" element={<OrderCreate/>}/>
+          <Route path="kassa/soboy" element={<OrderCreate/>}/>
         </Route>
         <Route path="/waiter" element={<RequireWaiter><WaiterLayout/></RequireWaiter>}>
           <Route index                 element={<TableSelect/>}/>
@@ -117,12 +126,19 @@ function AppRoutes() {
 }
 
 export default function App() {
+  // Mijozning QR menyusi — tizimga kirishsiz, alohida sahifa
+  if (window.location.pathname.startsWith('/m/')) return (
+    <ThemeProvider>
+      <GuestMenu token={decodeURIComponent(window.location.pathname.slice(3).split('/')[0])}/>
+      <Toaster position="top-center" toastOptions={{ style: { background: '#0B0B0C', color: '#fff', borderRadius: '14px', fontWeight: 600 } }}/>
+    </ThemeProvider>
+  )
   return (
     <ThemeProvider>
       <AuthProvider>
         <SettingsProvider>
           <BrowserRouter>
-            <LicenseGate><AppRoutes/></LicenseGate>
+            <LicenseGate><TerminalLock/><AppRoutes/></LicenseGate>
           </BrowserRouter>
         </SettingsProvider>
       </AuthProvider>

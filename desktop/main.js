@@ -179,15 +179,17 @@ function createMainWindow() {
   if (mainWin) { mainWin.show(); mainWin.focus(); return }
   mainWin = new BrowserWindow({
     width: 1366, height: 860, minWidth: 1000, minHeight: 640, show: false,
-    title: 'RestoPro Kassa', autoHideMenuBar: true, backgroundColor: '#0A1413',
+    title: 'RestoPro Kassa', autoHideMenuBar: true, backgroundColor: '#0B0B0C',
     icon: path.join(__dirname, 'assets', 'icon.png'),
+    webPreferences: { preload: path.join(__dirname, 'preload-app.js'), contextIsolation: true, nodeIntegration: false },
   })
   mainWin.loadURL(`http://127.0.0.1:${config.port}/`)
   mainWin.once('ready-to-show', () => mainWin.show())
   // Tashqi havolalar brauzerda ochilsin
+  // about:blank va boshqa protokollar rad etiladi (Windows "Get an app to open 'about' link" chiqarmasin)
   mainWin.webContents.setWindowOpenHandler(({ url }) => {
-    if (!url.startsWith(`http://127.0.0.1:${config.port}`)) { shell.openExternal(url); return { action: 'deny' } }
-    return { action: 'allow' }
+    if (/^https?:\/\//i.test(url) && !url.startsWith(`http://127.0.0.1:${config.port}`)) shell.openExternal(url)
+    return { action: 'deny' }
   })
   mainWin.on('close', e => {
     if (quitting) return
@@ -205,7 +207,7 @@ function createSetupWindow() {
   if (setupWin) { setupWin.focus(); return }
   setupWin = new BrowserWindow({
     width: 560, height: 680, resizable: false, title: 'RestoPro Kassa — sozlash',
-    autoHideMenuBar: true, backgroundColor: '#0A1413',
+    autoHideMenuBar: true, backgroundColor: '#0B0B0C',
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
   })
@@ -236,6 +238,9 @@ function refreshTrayMenu() {
     { label: 'Chiqish', click: () => app.quit() },
   ]))
 }
+
+// ── Chek chop etish (oynasiz, standart printerga) ──────────────
+ipcMain.handle('rp:print', (_e, html, opts) => require('./print').printHtml(html, { ...opts, deviceName: config.printer }))
 
 // ── Setup oynasi bilan aloqa ───────────────────────────────────
 ipcMain.handle('kassa:get', () => ({

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Trash2, Grid3X3 } from 'lucide-react'
+import { Plus, Trash2, Grid3X3, QrCode } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import { createSocket } from '../../api/socket.js'
@@ -72,9 +73,12 @@ export default function Tables() {
   return (
     <div className="page">
       <PageHead title="Stollar" sub={`${label} · ${list.length} ta stol · ${busy} ta band`}
-        actions={<button className="btn btn-primary btn-lg" onClick={addTable} disabled={adding}>
-          <Plus size={20}/>{adding ? "Qo'shilmoqda" : "Stol qo'shish"}
-        </button>}/>
+        actions={<>
+          <Link to="/admin/tables/qr" className="btn btn-soft btn-lg"><QrCode size={20}/> QR kodlar</Link>
+          <button className="btn btn-primary btn-lg" onClick={addTable} disabled={adding}>
+            <Plus size={20}/>{adding ? "Qo'shilmoqda" : "Stol qo'shish"}
+          </button>
+        </>}/>
 
       <Seg value={cat} onChange={setCat} items={CATS} style={{ marginBottom: 18 }}/>
 
