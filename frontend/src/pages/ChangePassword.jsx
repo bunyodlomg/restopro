@@ -1,29 +1,28 @@
 import React, { useState } from 'react'
-import { KeyRound, LogOut } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useAuth } from '../context/AuthContext.jsx'
 import { useNavigate } from 'react-router-dom'
-import { BRAND } from '../brand.js'
+import { useAuth } from '../context/AuthContext.jsx'
+import AuthFrame from '../components/auth/AuthFrame.jsx'
+import { Field } from '../components/ui.jsx'
 
 const MIN_PASSWORD = 6
-
-const labelStyle = { display:'block', fontSize:'0.75rem', fontWeight:700, color:'var(--text-3)', marginBottom:6, letterSpacing:'0.06em', textTransform:'uppercase' }
 
 export default function ChangePassword() {
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
-  const [confirm,     setConfirm]     = useState('')
-  const [error,       setError]       = useState('')
-  const [loading,     setLoading]     = useState(false)
+  const [confirm, setConfirm] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const { user, changePassword, logout } = useAuth()
   const navigate = useNavigate()
   const forced = !!user?.mustChangePassword
 
-  const submit = async (e) => {
+  const submit = async e => {
     e.preventDefault()
     setError('')
     if (newPassword.length < MIN_PASSWORD) return setError(`Yangi parol kamida ${MIN_PASSWORD} belgidan iborat bo'lsin`)
-    if (newPassword !== confirm)           return setError('Yangi parollar mos kelmadi')
+    if (newPassword !== confirm) return setError('Yangi parollar mos kelmadi')
     setLoading(true)
     try {
       const u = await changePassword(oldPassword, newPassword)
@@ -34,71 +33,34 @@ export default function ChangePassword() {
     } finally { setLoading(false) }
   }
 
-  const handleLogout = () => { logout(); navigate('/login', { replace: true }) }
-
   return (
-    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'var(--bg)', padding:'1rem' }}>
-      <div className="animate-scale-in" style={{
-        width:'100%', maxWidth:380, background:'var(--card)', border:'1px solid var(--border)',
-        borderRadius:'var(--r-3xl)', overflow:'hidden', boxShadow:'var(--shadow-xl)',
-      }}>
-        <div style={{ height:3, background:'linear-gradient(90deg,var(--brand),var(--brand-lt),var(--brand))' }}/>
+    <AuthFrame>
+      <h1 style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-.03em', margin: 0 }}>Parolni o'zgartirish</h1>
+      <p className="muted" style={{ margin: '8px 0 28px', fontSize: 16 }}>
+        {forced ? "Xavfsizlik uchun davom etishdan oldin yangi parol o'rnating." : `${user?.name || ''} — yangi parol`}
+      </p>
 
-        <div style={{ padding:'2.25rem 2rem' }}>
-          <div style={{ textAlign:'center', marginBottom:'1.5rem' }}>
-            <div style={{ fontSize:'1.875rem', marginBottom:'0.75rem' }}>{BRAND.logo}</div>
-            <h1 style={{ fontFamily:'Sora,sans-serif', fontWeight:800, fontSize:'1.25rem', color:'var(--text)', marginBottom:4 }}>
-              Parolni o'zgartirish
-            </h1>
-            {forced && (
-              <p style={{ fontSize:'0.8rem', color:'var(--text-3)' }}>
-                Xavfsizlik uchun davom etishdan oldin yangi parol o'rnating.
-              </p>
-            )}
-          </div>
-
-          {error && (
-            <div className="animate-slide-up" style={{
-              padding:'0.75rem 1rem', borderRadius:12, marginBottom:'1rem',
-              background:'rgba(239,68,68,0.07)', border:'1px solid rgba(239,68,68,0.2)',
-              color:'#F87171', fontSize:'0.825rem', fontWeight:500,
-            }}>⚠️ {error}</div>
-          )}
-
-          <form onSubmit={submit} style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
-            <div>
-              <label style={labelStyle}>Joriy parol</label>
-              <input type="password" value={oldPassword} onChange={e => setOldPassword(e.target.value)}
-                className="rp-input" autoComplete="current-password" required/>
-            </div>
-            <div>
-              <label style={labelStyle}>Yangi parol</label>
-              <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
-                className="rp-input" autoComplete="new-password" minLength={MIN_PASSWORD} required/>
-            </div>
-            <div>
-              <label style={labelStyle}>Yangi parol (takror)</label>
-              <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
-                className="rp-input" autoComplete="new-password" minLength={MIN_PASSWORD} required/>
-            </div>
-
-            <button type="submit" disabled={loading} className="btn-primary"
-              style={{ justifyContent:'center', padding:'0.8rem', fontSize:'0.95rem', marginTop:'0.5rem', width:'100%' }}>
-              {loading ? <><span className="spinner-sm"/> Saqlanmoqda...</> : <><KeyRound size={16}/> Saqlash</>}
-            </button>
-
-            {forced ? (
-              <button type="button" onClick={handleLogout} className="btn-ghost" style={{ justifyContent:'center', width:'100%' }}>
-                <LogOut size={16}/> Chiqish
-              </button>
-            ) : (
-              <button type="button" onClick={() => navigate(-1)} className="btn-ghost" style={{ justifyContent:'center', width:'100%' }}>
-                Bekor qilish
-              </button>
-            )}
-          </form>
-        </div>
-      </div>
-    </div>
+      <form onSubmit={submit} className="col" style={{ gap: 18 }}>
+        {error && <div className="alert"><AlertCircle size={20}/>{error}</div>}
+        <Field label="Joriy parol">
+          <input className="input" type="password" value={oldPassword} onChange={e => setOldPassword(e.target.value)}
+            autoComplete="current-password" autoFocus required/>
+        </Field>
+        <Field label="Yangi parol" hint={`Kamida ${MIN_PASSWORD} belgi`}>
+          <input className="input" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
+            autoComplete="new-password" minLength={MIN_PASSWORD} required/>
+        </Field>
+        <Field label="Yangi parol (takror)">
+          <input className="input" type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
+            autoComplete="new-password" minLength={MIN_PASSWORD} required/>
+        </Field>
+        <button type="submit" className="btn btn-primary btn-xl btn-block" disabled={loading} style={{ marginTop: 6 }}>
+          {loading ? <><span className="spinner-sm"/> Saqlanmoqda</> : 'Saqlash'}
+        </button>
+        {forced
+          ? <button type="button" className="btn btn-ghost btn-lg btn-block" onClick={() => { logout(); navigate('/login', { replace: true }) }}>Chiqish</button>
+          : <button type="button" className="btn btn-ghost btn-lg btn-block" onClick={() => navigate(-1)}>Bekor qilish</button>}
+      </form>
+    </AuthFrame>
   )
 }

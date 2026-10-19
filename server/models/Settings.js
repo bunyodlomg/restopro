@@ -3,7 +3,7 @@ const { Schema, model } = require('mongoose')
 // ─── Chek (receipt) dizayni ───────────────────────────────────
 const ReceiptSchema = new Schema({
   headerText:   { type: String,  default: '' },                       // nom ostidagi qator (manzil/telefon)
-  footerText:   { type: String,  default: "Rahmat! Yana keling 🍽" },
+  footerText:   { type: String,  default: 'Rahmat! Yana keling' },
   showLogo:     { type: Boolean, default: true },                     // yuqorida emoji-logo
   showWaiter:   { type: Boolean, default: true },                     // ofitsant ismi
   showDateTime: { type: Boolean, default: true },                     // sana/vaqt
@@ -25,7 +25,7 @@ const SettingsSchema = new Schema({
   _id: { type: String, default: 'main' },
 
   brandName:   { type: String, default: 'RestoPro' },
-  brandLogo:   { type: String, default: '🍽' },      // emoji yoki fayl yo'li
+  brandLogo:   { type: String, default: '' },        // yuklangan rasm yo'li (/uploads/...) yoki bo'sh
 
   // Xizmat haqi (service fee) — soboy kategoriyasiga qo'llanilmaydi
   serviceFeeEnabled: { type: Boolean, default: false },

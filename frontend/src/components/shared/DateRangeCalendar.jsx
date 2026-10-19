@@ -43,14 +43,14 @@ export default function DateRangeCalendar({ start, end, onChange }) {
   }
 
   return (
-    <div style={{ width: 266 }}>
+    <div style={{ width: 292 }}>
       {/* Sarlavha + navigatsiya */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <button type="button" data-sound="nav" className="cal-nav"
           onClick={() => setView(new Date(year, month - 1, 1))}>
           <ChevronLeft size={16} />
         </button>
-        <span style={{ fontFamily: 'Sora,sans-serif', fontWeight: 700, fontSize: '0.9rem', color: 'var(--text)' }}>
+        <span style={{ fontWeight: 700, fontSize: 16, letterSpacing: '-.01em' }}>
           {MONTHS[month]} {year}
         </span>
         <button type="button" data-sound="nav" className="cal-nav"
@@ -62,7 +62,7 @@ export default function DateRangeCalendar({ start, end, onChange }) {
       {/* Hafta kunlari */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', marginBottom: 2 }}>
         {WEEKDAYS.map(w => (
-          <div key={w} style={{ textAlign: 'center', fontSize: '0.64rem', fontWeight: 700, color: 'var(--text-3)', padding: '4px 0' }}>
+          <div key={w} className="label" style={{ textAlign: 'center', padding: '6px 0', letterSpacing: '.04em' }}>
             {w}
           </div>
         ))}
@@ -79,9 +79,9 @@ export default function DateRangeCalendar({ start, end, onChange }) {
           const between = start && end && k > start && k < end
           // Diapazon foni — uchlarda yarim, o'rtada to'liq
           let bg = 'transparent'
-          if (between) bg = 'var(--brand-glow)'
-          else if (isStart && end && end !== start) bg = 'linear-gradient(to right, transparent 50%, var(--brand-glow) 50%)'
-          else if (isEnd && start && end !== start) bg = 'linear-gradient(to left, transparent 50%, var(--brand-glow) 50%)'
+          if (between) bg = 'var(--thumb)'
+          else if (isStart && end && end !== start) bg = 'linear-gradient(to right, transparent 50%, var(--thumb) 50%)'
+          else if (isEnd && start && end !== start) bg = 'linear-gradient(to left, transparent 50%, var(--thumb) 50%)'
           return (
             <div key={i} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '2px 0', background: bg }}>
               <button

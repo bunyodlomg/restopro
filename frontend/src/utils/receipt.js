@@ -4,8 +4,10 @@
 //  Ham chop etishda (Orders), ham jonli ko'rinishda (Settings) ishlatiladi.
 // ============================================================
 
-const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => (
-  { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]
+import { API_URL } from '../config.js'
+
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
 ))
 
 const num = (n) => (Number(n) || 0).toLocaleString()
@@ -13,7 +15,7 @@ const num = (n) => (Number(n) || 0).toLocaleString()
 // Standart qiymatlar — settings.receipt bo'lmasa
 const DEFAULTS = {
   headerText:   '',
-  footerText:   "Rahmat! Yana keling 🍽",
+  footerText:   'Rahmat! Yana keling',
   showLogo:     true,
   showWaiter:   true,
   showDateTime: true,
@@ -34,9 +36,11 @@ export function buildReceiptHTML(order = {}, settings = {}) {
   const total = subtotal + fee
   const isSoboy = order.category === 'soboy'
 
+  // Logo faqat yuklangan rasm bo'lsa chiqadi; aks holda brend nomi qalin yoziladi
   const logo = settings.brandLogo || ''
-  const emojiLogo = logo && !logo.startsWith('/')          // rasm logo chekda chiqarilmaydi
-  const showLogo = r.showLogo && emojiLogo
+  const isImage = logo.startsWith('/') || logo.startsWith('http')
+  const logoUrl = isImage ? (logo.startsWith('http') ? logo : `${API_URL}${logo}`) : ''
+  const showLogo = r.showLogo && isImage
 
   const itemRows = items.map((i) =>
     `<div class="row"><span>${i.quantity}× ${esc(i.name)}</span><span>${num(i.price * i.quantity)}</span></div>`
@@ -49,18 +53,19 @@ export function buildReceiptHTML(order = {}, settings = {}) {
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Chek</title><style>
     *{margin:0;padding:0;box-sizing:border-box}
     html,body{background:#fff;color:#000}
-    body{font-family:'Courier New',monospace;font-size:${fs}px;line-height:1.4;width:${w}mm;padding:4mm}
-    .logo{text-align:center;font-size:${fs * 2.4}px;line-height:1;margin-bottom:2px}
-    h2{text-align:center;font-size:${fs + 3}px;font-weight:bold;letter-spacing:.5px}
+    body{font-family:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,'Courier New',monospace;font-size:${fs}px;line-height:1.4;width:${w}mm;padding:4mm}
+    .logo{text-align:center;margin-bottom:4px}
+    .logo img{max-width:60%;max-height:${fs * 5}px;object-fit:contain;filter:grayscale(1)}
+    h2{text-align:center;font-size:${fs + 4}px;font-weight:700;letter-spacing:.02em;text-transform:uppercase}
     .sub{text-align:center;font-size:${fs - 1}px;color:#444;margin-top:2px}
     hr{border:0;border-top:1px dashed #999;margin:6px 0}
     .row{display:flex;justify-content:space-between;gap:8px;padding:1.5px 0}
     .row span:last-child{white-space:nowrap;text-align:right}
-    .total{font-weight:bold;font-size:${fs + 2}px}
+    .total{font-weight:700;font-size:${fs + 3}px;padding-top:3px}
     .footer{text-align:center;font-size:${fs - 1}px;color:#555;margin-top:8px;white-space:pre-line}
     @media print{body{width:auto}}
   </style></head><body>
-    ${showLogo ? `<div class="logo">${logo}</div>` : ''}
+    ${showLogo ? `<div class="logo"><img src="${esc(logoUrl)}" alt=""></div>` : ''}
     <h2>${esc(settings.brandName || 'RestoPro')}</h2>
     ${r.headerText ? `<div class="sub">${esc(r.headerText)}</div>` : ''}
     <div class="sub">

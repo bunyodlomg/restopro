@@ -40,6 +40,14 @@ async function getOrCreate() {
   return s
 }
 
+// GET /api/settings/public — login sahifasi uchun faqat nom va logo (token shart emas)
+router.get('/public', async (req, res) => {
+  try {
+    const s = await getOrCreate()
+    res.json({ brandName: s.brandName, brandLogo: s.brandLogo })
+  } catch (err) { res.status(500).json({ message: err.message }) }
+})
+
 // GET /api/settings
 router.get('/', auth, async (req, res) => {
   try { res.json(await getOrCreate()) }

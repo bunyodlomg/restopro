@@ -26,12 +26,7 @@ import OrderCreate  from './pages/waiter/OrderCreate.jsx'
 import MyOrders     from './pages/waiter/MyOrders.jsx'
 
 function Loader() {
-  return (
-    <div style={{ background:'var(--bg)', minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:'1rem' }}>
-      <div className="spinner"/>
-      <p style={{ color:'var(--text-3)', fontSize:'0.875rem', fontFamily:'DM Sans,sans-serif' }}>Yuklanmoqda...</p>
-    </div>
-  )
+  return <div className="center-fill" style={{ minHeight: '100vh', background: 'var(--bg)' }}><div className="spinner"/></div>
 }
 function RequireAdmin({ children }) {
   const { user, loading, isAdmin } = useAuth()
@@ -101,19 +96,20 @@ function AppRoutes() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace/>}/>
       </Routes>
-      <Toaster position="top-right" toastOptions={{
+      <Toaster position="top-center" toastOptions={{
         duration: 3000,
         style: {
-          background: isDark ? '#1D1A15' : '#fff',
-          color: isDark ? '#F2EDE6' : '#1A1612',
-          border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+          background: isDark ? '#F4F4F2' : '#0B0B0C',
+          color: isDark ? '#0B0B0C' : '#fff',
           borderRadius: '14px',
-          fontFamily: 'DM Sans,sans-serif',
-          fontSize: '0.875rem',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          padding: '12px 16px',
+          fontFamily: 'var(--font)',
+          fontSize: '15px',
+          fontWeight: 600,
+          boxShadow: '0 12px 40px rgba(0,0,0,.25)',
         },
-        success: { iconTheme: { primary:'#22C55E', secondary: isDark ? '#1D1A15' : '#fff' } },
-        error:   { iconTheme: { primary:'#EF4444', secondary: isDark ? '#1D1A15' : '#fff' } },
+        success: { iconTheme: { primary: '#22C55E', secondary: isDark ? '#F4F4F2' : '#0B0B0C' } },
+        error:   { iconTheme: { primary: '#FF3B2F', secondary: isDark ? '#F4F4F2' : '#0B0B0C' } },
       }}/>
     </>
   )
