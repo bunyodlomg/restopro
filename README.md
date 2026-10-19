@@ -39,6 +39,33 @@ Birinchi ishga tushishda `admin` foydalanuvchisi yaratiladi:
 
 Birinchi kirishda parolni almashtirish majburiy.
 
+## Zaxira nusxa (backup)
+`deploy/backup.sh` MongoDB bazasi va `server/uploads` papkasini bitta arxivga yig'adi:
+`restopro-YYYYMMDD-HHMMSS.tar.gz`. Oxirgi `BACKUP_KEEP` ta arxiv saqlanadi, eskilari o'chiriladi.
+`BACKUP_TELEGRAM_*` to'ldirilgan bo'lsa, har bir arxiv Telegram'ga yuboriladi (49 MB gacha).
+Xato bo'lsa, Telegram'ga ogohlantirish keladi.
+
+Serverda bir marta sozlash:
+```bash
+sudo apt install mongodb-database-tools    # mongodump / mongorestore
+chmod +x deploy/backup.sh deploy/restore.sh
+./deploy/backup.sh                         # sinov
+# Har kuni 03:30 da avtomatik:
+(crontab -l 2>/dev/null; echo "30 3 * * * $PWD/deploy/backup.sh >> /var/log/restopro-backup.log 2>&1") | crontab -
+```
+`apt` paket topmasa, MongoDB rasmiy repozitoriysini qo'shing yoki
+[Database Tools](https://www.mongodb.com/try/download/database-tools) `.deb` faylini o'rnating.
+
+Tiklash:
+```bash
+./deploy/restore.sh                                  # arxivlar ro'yxati
+./deploy/restore.sh /var/backups/restopro/restopro-20260101-033000.tar.gz
+```
+Tiklashdan oldin joriy holat avtomatik zaxiralanadi. pm2 jarayoni (`PM2_NAME`, standart `restopro`)
+tiklash vaqtida to'xtatilib, keyin qayta ishga tushiriladi.
+
+> Telegram'ga kelgan arxivni ham shu buyruq bilan tiklash mumkin: faylni serverga yuklab, yo'lini bering.
+
 ## Brend sozlamalari
 `frontend/src/brand.js` faylida:
 ```js
