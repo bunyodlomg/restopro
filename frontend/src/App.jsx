@@ -9,6 +9,7 @@ import { playSound, soundForElement }  from './utils/sound.js'
 import AdminLayout  from './layouts/AdminLayout.jsx'
 import WaiterLayout from './layouts/WaiterLayout.jsx'
 import Login        from './pages/Login.jsx'
+import ChangePassword from './pages/ChangePassword.jsx'
 
 import Dashboard    from './pages/admin/Dashboard.jsx'
 import Orders       from './pages/admin/Orders.jsx'
@@ -36,10 +37,18 @@ function RequireAdmin({ children }) {
   const { user, loading, isAdmin } = useAuth()
   if (loading) return <Loader/>
   if (!user)    return <Navigate to="/login" replace/>
+  if (user.mustChangePassword) return <Navigate to="/change-password" replace/>
   if (!isAdmin) return <Navigate to="/waiter" replace/>
   return children
 }
 function RequireWaiter({ children }) {
+  const { user, loading } = useAuth()
+  if (loading) return <Loader/>
+  if (!user)   return <Navigate to="/login" replace/>
+  if (user.mustChangePassword) return <Navigate to="/change-password" replace/>
+  return children
+}
+function RequireUser({ children }) {
   const { user, loading } = useAuth()
   if (loading) return <Loader/>
   if (!user)   return <Navigate to="/login" replace/>
@@ -72,6 +81,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/"      element={<RootRedirect/>}/>
         <Route path="/login" element={<Login/>}/>
+        <Route path="/change-password" element={<RequireUser><ChangePassword/></RequireUser>}/>
         <Route path="/admin" element={<RequireAdmin><AdminLayout/></RequireAdmin>}>
           <Route index              element={<Dashboard/>}/>
           <Route path="orders"      element={<Orders/>}/>

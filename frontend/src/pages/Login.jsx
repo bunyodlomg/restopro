@@ -18,7 +18,8 @@ export default function Login() {
     setError(''); setLoading(true)
     try {
       const user = await login(username, password)
-      navigate(user.role === 'admin' ? '/admin' : '/waiter', { replace: true })
+      if (user.mustChangePassword) navigate('/change-password', { replace: true })
+      else navigate(user.role === 'admin' ? '/admin' : '/waiter', { replace: true })
     } catch (err) {
       setError(err.response?.data?.message || "Login yoki parol noto'g'ri")
     } finally { setLoading(false) }

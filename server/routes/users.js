@@ -18,6 +18,10 @@ router.post('/', auth, adminOnly, async (req, res) => {
     const { name, username, password, role, phone, salary } = req.body
     if (!name || !username || !password)
       return res.status(400).json({ message: 'Ism, username va parol majburiy' })
+    if (String(password).length < 6)
+      return res.status(400).json({ message: 'Parol kamida 6 belgidan iborat bo\'lsin' })
+    if (role && !['admin', 'waiter'].includes(role))
+      return res.status(400).json({ message: 'Noto\'g\'ri rol' })
 
     const exists = await User.findOne({ username: username.toLowerCase().trim() })
     if (exists) return res.status(400).json({ message: 'Bu username band' })
@@ -38,9 +42,32 @@ router.post('/', auth, adminOnly, async (req, res) => {
 // PUT /api/users/:id
 router.put('/:id', auth, adminOnly, async (req, res) => {
   try {
-    const { password, ...rest } = req.body
-    const update = { ...rest }
-    if (password) update.password = await bcrypt.hash(password, 10)
+    const { name, username, password, role, phone, salary, isActive } = req.body
+    const isSelf = req.params.id === req.user._id.toString()
+
+    // Faqat ruxsat etilgan maydonlar yangilanadi
+    const update = {}
+    if (name     !== undefined) update.name     = String(name).trim()
+    if (phone    !== undefined) update.phone    = String(phone)
+    if (salary   !== undefined) update.salary   = +salary || 0
+    if (username !== undefined) {
+      update.username = String(username).toLowerCase().trim()
+      const taken = await User.findOne({ username: update.username, _id: { $ne: req.params.id } })
+      if (taken) return res.status(400).json({ message: 'Bu username band' })
+    }
+    if (role !== undefined) {
+      if (!['admin', 'waiter'].includes(role)) return res.status(400).json({ message: 'Noto\'g\'ri rol' })
+      if (isSelf && role !== 'admin') return res.status(400).json({ message: 'O\'zingizni admin rolidan chiqara olmaysiz' })
+      update.role = role
+    }
+    if (isActive !== undefined) {
+      if (isSelf && !isActive) return res.status(400).json({ message: 'O\'zingizni bloklay olmaysiz' })
+      update.isActive = !!isActive
+    }
+    if (password) {
+      if (String(password).length < 6) return res.status(400).json({ message: 'Parol kamida 6 belgidan iborat bo\'lsin' })
+      update.password = await bcrypt.hash(String(password), 10)
+    }
     const user = await User.findByIdAndUpdate(req.params.id, update, { new: true })
     if (!user) return res.status(404).json({ message: 'Topilmadi' })
     res.json(user)

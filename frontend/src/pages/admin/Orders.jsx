@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { io } from 'socket.io-client'
+import { createSocket } from '../../api/socket.js'
 import { Bell, BellOff, CheckCircle, XCircle, Clock, Printer, Percent } from 'lucide-react'
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
-import { API_URL } from '../../config.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { buildReceiptHTML } from '../../utils/receipt.js'
 
@@ -153,7 +152,7 @@ export default function Orders() {
       .then(({ data }) => setOrders(data.filter(o => o.status === 'pending')))
       .catch(console.error)
       .finally(() => setLoading(false))
-    const socket = io(API_URL, { transports:['websocket'], reconnection:true })
+    const socket = createSocket({ transports:['websocket'], reconnection:true })
     socket.on('newOrder',     o  => setOrders(p => [...p, o]))
     socket.on('orderUpdated', o  => setOrders(p => p.map(x => x._id === o._id ? o : x)))
     socket.on('orderClosed',  id => setOrders(p => p.filter(x => x._id !== id)))

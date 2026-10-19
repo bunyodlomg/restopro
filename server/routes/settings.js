@@ -5,8 +5,10 @@ const Settings = require('../models/Settings')
 const auth     = require('../middleware/auth')
 const { adminOnly } = require('../middleware/auth')
 const multer   = require('multer')
+const { imageFilter, audioFilter } = require('../utils/uploadFilters')
 
 const UPLOAD_DIR = path.join(__dirname, '..', 'uploads')
+const SOUND_TYPES = ['tick','nav','confirm','success','warn','newOrder']
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true })
 
 const storage = multer.diskStorage({
@@ -16,22 +18,20 @@ const storage = multer.diskStorage({
     cb(null, `logo_${Date.now()}${ext}`)
   },
 })
-const upload = multer({ storage, limits: { fileSize: 2 * 1024 * 1024 } })
+const upload = multer({ storage, limits: { fileSize: 2 * 1024 * 1024 }, fileFilter: imageFilter })
 
 const soundStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename:    (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase()
-    cb(null, `sound_${req.params.type}_${Date.now()}${ext}`)
+    const type = SOUND_TYPES.includes(req.params.type) ? req.params.type : 'x'
+    cb(null, `sound_${type}_${Date.now()}${ext}`)
   },
 })
 const soundUpload = multer({
   storage: soundStorage,
   limits: { fileSize: 2 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('audio/')) cb(null, true)
-    else cb(new Error('Faqat audio fayllar ruxsat etiladi'))
-  },
+  fileFilter: audioFilter,
 })
 
 async function getOrCreate() {
@@ -80,7 +80,6 @@ router.put('/', auth, adminOnly, upload.single('logo'), async (req, res) => {
 })
 
 // PUT /api/settings/sound/:type — maxsus tovush yuklash
-const SOUND_TYPES = ['tick','nav','confirm','success','warn','newOrder']
 router.put('/sound/:type', auth, adminOnly, soundUpload.single('sound'), async (req, res) => {
   try {
     if (!SOUND_TYPES.includes(req.params.type)) return res.status(400).json({ message: "Noto'g'ri tovush turi" })

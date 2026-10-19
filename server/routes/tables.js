@@ -31,9 +31,13 @@ router.post('/', auth, adminOnly, async (req, res) => {
 })
 
 // PUT /api/tables/:id
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', auth, adminOnly, async (req, res) => {
   try {
-    const table = await Table.findByIdAndUpdate(req.params.id, req.body, { new: true })
+    // Holat (band/bo'sh) faqat buyurtmalar orqali o'zgaradi
+    const update = {}
+    if (req.body.number      !== undefined) update.number      = +req.body.number
+    if (req.body.description !== undefined) update.description = String(req.body.description).slice(0, 200)
+    const table = await Table.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true })
     if (!table) return res.status(404).json({ message: 'Topilmadi' })
     req.app.get('io').emit('tableUpdated', table)
     res.json(table)

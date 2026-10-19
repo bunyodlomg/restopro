@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { io } from 'socket.io-client'
+import { createSocket } from '../../api/socket.js'
 import { ChevronRight, Package } from 'lucide-react'
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
-import { API_URL } from '../../config.js'
 
 const CATS = [
   { k:'zal',    l:'Zal',    e:'🪑', color:'#3B82F6', bg:'rgba(59,130,246,0.1)' },
@@ -32,7 +31,7 @@ export default function TableSelect() {
   useEffect(() => {
     load()
     if (cat === 'soboy') return
-    const s = io(API_URL)
+    const s = createSocket()
     s.on('tableUpdated', t  => setTables(p => p.map(x  => x._id === t._id ? t : x)))
     s.on('tableCreated', t  => { if (t.category === cat) setTables(p => [...p, t]) })
     s.on('tableDeleted', id => setTables(p => p.filter(x => x._id !== id)))

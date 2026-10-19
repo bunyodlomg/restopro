@@ -1,5 +1,5 @@
 import React,{useState,useEffect,useRef}from'react'
-import{io}from'socket.io-client'
+import{createSocket}from'../../api/socket.js'
 import{Clock,CheckCircle,XCircle,ChevronLeft,ChevronRight}from'lucide-react'
 import toast from'react-hot-toast'
 import API from'../../api/api.js'
@@ -31,7 +31,7 @@ export default function MyOrders(){
       setOrders(Array.isArray(data)?data:(data.orders||[]))
     }).catch(console.error).finally(()=>setLoading(false))
 
-    const s=io(API_URL)
+    const s=createSocket()
     s.on('newOrder',o=>setOrders(p=>p.some(x=>x._id===o._id)?p:[...p,o]))
     s.on('orderUpdated',o=>setOrders(p=>p.map(x=>x._id===o._id?o:x)))
     s.on('orderClosed',id=>{

@@ -24,6 +24,14 @@ export function AuthProvider({ children }) {
     return data.user
   }
 
+  const changePassword = async (oldPassword, newPassword) => {
+    await API.put('/api/auth/change-password', { oldPassword, newPassword })
+    const updated = { ...user, mustChangePassword: false }
+    localStorage.setItem('rp_user', JSON.stringify(updated))
+    setUser(updated)
+    return updated
+  }
+
   const logout = () => {
     localStorage.removeItem('rp_token')
     localStorage.removeItem('rp_user')
@@ -34,7 +42,7 @@ export function AuthProvider({ children }) {
   const isWaiter = user?.role === 'waiter' || user?.role === 'ofitsant'
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, isAdmin, isWaiter }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, changePassword, isAdmin, isWaiter }}>
       {children}
     </AuthContext.Provider>
   )

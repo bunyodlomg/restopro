@@ -4,13 +4,13 @@ import{motion,AnimatePresence}from'framer-motion'
 import {
   LayoutDashboard, ClipboardList, History, UtensilsCrossed,
   Package2, Hash, Users, Wallet, Settings, LogOut,
-  ChevronLeft, ChevronRight, Menu, X, Sun, Moon
+  ChevronLeft, ChevronRight, Menu, X, Sun, Moon, KeyRound
 } from 'lucide-react'
 import { useAuth }     from '../context/AuthContext.jsx'
 import { useSettings } from '../context/SettingsContext.jsx'
 import { useTheme }    from '../context/ThemeContext.jsx'
 import { API_URL }     from '../config.js'
-import { io }          from 'socket.io-client'
+import { createSocket } from '../api/socket.js'
 import toast           from 'react-hot-toast'
 import { getNewOrderSoundUrl } from '../utils/sound.js'
 
@@ -36,7 +36,7 @@ export default function AdminLayout() {
 
   // Yangi buyurtma — admin qaysi sahifada bo'lsa ham ovoz + bildirishnoma
   useEffect(() => {
-    const socket = io(API_URL, { transports: ['websocket'], reconnection: true })
+    const socket = createSocket({ transports: ['websocket'], reconnection: true })
     socket.on('newOrder', o => {
       if (localStorage.getItem('rp_sound') === 'true') {
         try { new Audio(getNewOrderSoundUrl(API_URL)).play().catch(() => {}) } catch {}
@@ -176,6 +176,9 @@ export default function AdminLayout() {
                 <div style={{ fontSize:'0.65rem', color:'var(--text-3)', textTransform:'uppercase', letterSpacing:'0.06em', fontWeight:600 }}>{user?.role}</div>
               </div>
             </div>
+            <button onClick={() => navigate('/change-password')} className="btn-ghost" style={{ width:'100%', justifyContent:'flex-start', padding:'0.7rem 0.85rem', marginBottom:6 }}>
+              <KeyRound size={16}/> Parolni o'zgartirish
+            </button>
             <button onClick={handleLogout} className="btn-danger" style={{ width:'100%', justifyContent:'flex-start', padding:'0.7rem 0.85rem' }}>
               <LogOut size={16}/> Chiqish
             </button>

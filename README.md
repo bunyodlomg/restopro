@@ -13,7 +13,7 @@ restopro-full/
 ```bash
 cd server
 cp .env.example .env
-# .env faylda MONGO_URI ni o'zgartiring
+# .env faylda MONGO_URI va JWT_SECRET ni to'ldiring
 npm install
 npm run dev
 ```
@@ -27,12 +27,17 @@ npm install
 npm run dev
 ```
 
-### Default kirish ma'lumotlari
-| Login    | Parol     | Role    |
-|----------|-----------|---------|
-| `admin`  | `admin123`| Admin   |
+### Birinchi kirish
+`server/.env` faylida `JWT_SECRET` majburiy (kamida 32 belgi). U bo'lmasa server ishga tushmaydi:
+```bash
+openssl rand -hex 32   # natijani JWT_SECRET= ga yozing
+```
 
-⚠️ **Muhim:** Ishga tushgandan keyin parolni o'zgartiring!
+Birinchi ishga tushishda `admin` foydalanuvchisi yaratiladi:
+- `ADMIN_PASSWORD` berilgan bo'lsa, parol shu bo'ladi;
+- aks holda tasodifiy parol yaratilib, server konsoliga (`pm2 logs`) bir marta chiqariladi.
+
+Birinchi kirishda parolni almashtirish majburiy.
 
 ## Brend sozlamalari
 `frontend/src/brand.js` faylida:

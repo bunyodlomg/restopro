@@ -1,10 +1,9 @@
 import React,{useState,useEffect}from'react'
 import{motion}from'framer-motion'
-import{io}from'socket.io-client'
+import{createSocket}from'../../api/socket.js'
 import{PlusCircle,Trash2}from'lucide-react'
 import toast from'react-hot-toast'
 import API from'../../api/api.js'
-import{API_URL}from'../../config.js'
 import PageHeader from'../../components/shared/PageHeader.jsx'
 const CATS=[{k:'zal',l:'Zal',e:'🪑',c:'#3B82F6'},{k:'xona',l:'Xona',e:'🚪',c:'#8B5CF6'},{k:"ko'cha",l:"Ko'cha",e:'🌳',c:'#22C55E'},{k:'soboy',l:'Soboy',e:'🍱',c:'#F59E0B'}]
 export default function Tables(){
@@ -13,7 +12,7 @@ export default function Tables(){
   const[loading,setLoading]=useState(false)
   const[adding,setAdding]=useState(false)
   useEffect(()=>{
-    const s=io(API_URL)
+    const s=createSocket()
     s.on('tableCreated',t=>setTables(p=>p.some(x=>x._id===t._id)?p:[...p,t]))
     s.on('tableDeleted',id=>setTables(p=>p.filter(t=>t._id!==id)))
     s.on('tableUpdated',t=>setTables(p=>p.map(x=>x._id===t._id?t:x)))

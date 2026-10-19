@@ -9,6 +9,7 @@ const UserSchema = new Schema({
   salary:    { type: Number, default: 0 },   // oylik maoshi (so'm)
   hiredAt:   { type: Date,   default: Date.now },
   isActive:  { type: Boolean, default: true },
+  mustChangePassword: { type: Boolean, default: false },  // birinchi kirishda parolni almashtirish
 }, { timestamps: true })
 
 UserSchema.methods.toJSON = function() {

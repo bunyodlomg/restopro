@@ -3,29 +3,33 @@ const bcrypt  = require('bcryptjs')
 const jwt     = require('jsonwebtoken')
 const User    = require('../models/User')
 const auth    = require('../middleware/auth')
+const limiter = require('../middleware/loginLimiter')
+const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config')
+
+const MIN_PASSWORD = 6
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', limiter.check, async (req, res) => {
   try {
     const { username, password } = req.body
     if (!username || !password)
       return res.status(400).json({ message: 'Login va parol kiritilishi shart' })
 
     const user = await User.findOne({ username: username.toLowerCase().trim() })
-    if (!user)
+    const match = user && await bcrypt.compare(password, user.password)
+    if (!match) {
+      limiter.fail(req)
       return res.status(401).json({ message: 'Login yoki parol noto\'g\'ri' })
+    }
+    limiter.success(req)
 
     if (!user.isActive)
       return res.status(403).json({ message: 'Akkaunt bloklangan. Adminga murojaat qiling.' })
 
-    const match = await bcrypt.compare(password, user.password)
-    if (!match)
-      return res.status(401).json({ message: 'Login yoki parol noto\'g\'ri' })
-
     const token = jwt.sign(
       { _id: user._id, role: user.role, name: user.name },
-      process.env.JWT_SECRET || 'secret',
-      { expiresIn: '7d' }
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
     )
 
     res.json({
@@ -36,6 +40,7 @@ router.post('/login', async (req, res) => {
         username: user.username,
         role:     user.role,
         phone:    user.phone,
+        mustChangePassword: !!user.mustChangePassword,
       }
     })
   } catch (err) {
@@ -59,10 +64,18 @@ router.get('/me', auth, async (req, res) => {
 router.put('/change-password', auth, async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body
+    if (!oldPassword || !newPassword)
+      return res.status(400).json({ message: 'Eski va yangi parol kiritilishi shart' })
+    if (String(newPassword).length < MIN_PASSWORD)
+      return res.status(400).json({ message: `Yangi parol kamida ${MIN_PASSWORD} belgidan iborat bo'lsin` })
+    if (oldPassword === newPassword)
+      return res.status(400).json({ message: 'Yangi parol eskisidan farq qilishi kerak' })
+
     const user = await User.findById(req.user._id)
     const match = await bcrypt.compare(oldPassword, user.password)
     if (!match) return res.status(400).json({ message: 'Eski parol noto\'g\'ri' })
-    user.password = await bcrypt.hash(newPassword, 10)
+    user.password = await bcrypt.hash(String(newPassword), 10)
+    user.mustChangePassword = false
     await user.save()
     res.json({ message: 'Parol o\'zgartirildi' })
   } catch (err) {
