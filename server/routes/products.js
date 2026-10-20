@@ -4,7 +4,12 @@ const fs      = require('fs')
 const multer  = require('multer')
 const { imageFilter } = require('../utils/uploadFilters')
 const Product = require('../models/Product')
+const Category = require('../models/Category')
+const { byName } = require('./categories')
 const auth    = require('../middleware/auth')
+
+// Taom bo'limi faqat "Bo'limlar" ro'yxatidan (yozilish farqi bo'lsa ro'yxatdagi nom olinadi)
+const categoryOf = raw => (String(raw || '').trim() ? byName(String(raw).trim()) : null)
 const { adminOnly } = require('../middleware/auth')
 
 // ── Uploads papkasini avtomatik yaratish ──────────────────────
@@ -57,8 +62,9 @@ router.get('/', async (req, res) => {
 // ── GET /api/products/categories ─────────────────────────────
 router.get('/categories', async (req, res) => {
   try {
-    const cats = await Product.distinct('category', { isActive: true })
-    res.json(cats.filter(Boolean).sort())
+    // Bo'limlar ro'yxati + ro'yxatda yo'q, lekin taomlarda qolgan eski nomlar (sync kelguncha)
+    const [listed, used] = await Promise.all([Category.distinct('name'), Product.distinct('category', { isActive: true })])
+    res.json([...new Set([...listed, ...used])].filter(Boolean).sort())
   } catch { res.status(500).json({ message: 'Server xatosi' }) }
 })
 
@@ -79,6 +85,8 @@ router.post('/', auth, adminOnly, upload.single('image'), async (req, res) => {
 
     if (!name?.trim())  return res.status(400).json({ message: 'Nomi majburiy' })
     if (!price)         return res.status(400).json({ message: 'Narxi majburiy' })
+    const cat = await categoryOf(category)
+    if (!cat) return res.status(400).json({ message: 'Bo\'limni ro\'yxatdan tanlang' })
 
     let parsedIngredients = []
     if (ingredients) {
@@ -91,7 +99,7 @@ router.post('/', auth, adminOnly, upload.single('image'), async (req, res) => {
     const product = await Product.create({
       name:        name.trim(),
       price:       +price,
-      category:    category?.trim() || 'Asosiy',
+      category:    cat.name,
       image:       req.file ? `/uploads/${req.file.filename}` : '',
       ingredients: parsedIngredients,
     })
@@ -117,7 +125,12 @@ router.put('/:id', auth, adminOnly, upload.single('image'), async (req, res) => 
     const update = {}
     if (name?.trim())           update.name     = name.trim()
     if (price !== undefined)    update.price    = +price
-    if (category?.trim())       update.category = category.trim()
+    // Bo'lim o'zgarmagan bo'lsa tekshirilmaydi (ro'yxatga hali tushmagan eski nom ham saqlanadi)
+    if (category?.trim() && category.trim() !== existing.category) {
+      const cat = await categoryOf(category)
+      if (!cat) return res.status(400).json({ message: 'Bo\'limni ro\'yxatdan tanlang' })
+      update.category = cat.name
+    }
     if (isActive !== undefined) update.isActive = isActive === 'true' || isActive === true
 
     // Yangi rasm yuklansa — eski rasmni o'chir

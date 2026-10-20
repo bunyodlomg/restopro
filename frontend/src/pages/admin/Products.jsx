@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Plus, Pencil, Trash2, ImagePlus, Search, UtensilsCrossed, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, ImagePlus, Search, UtensilsCrossed, X, FolderOpen } from 'lucide-react'
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import Modal from '../../components/shared/Modal.jsx'
 import { Field, Switch, Loading, Empty, PageHead, money, initials, fileUrl } from '../../components/ui.jsx'
+import CategoriesModal from './CategoriesModal.jsx'
 
 const UNITS = ['kg', 'g', 'l', 'ml', 'dona', 'litr', 'paket']
 const ALL = 'Barchasi'
+const NEW_CAT = '__new'   // select'dagi "+ Yangi bo'lim" varianti
 
 function Thumb({ src, name }) {
   const [err, setErr] = useState(false)
@@ -28,12 +30,14 @@ export default function Products() {
   const [imagePreview, setImagePreview] = useState('')
   const [imageFile, setImageFile] = useState(null)
   const [form, setForm] = useState({ name: '', price: '', category: '', ingredients: [], isActive: true })
+  const [catsOpen, setCatsOpen] = useState(false)
+  const [newCat, setNewCat] = useState('')
 
   const load = async () => {
     try {
       const [p, c, ing] = await Promise.all([
         API.get('/api/products?active=false'),
-        API.get('/api/products/categories'),
+        API.get('/api/categories'),
         API.get('/api/ingredients'),
       ])
       setProducts(p.data); setCategories(c.data); setIngredients(ing.data)
@@ -41,6 +45,12 @@ export default function Products() {
     finally { setLoading(false) }
   }
   useEffect(() => { load() }, [])
+  const loadCategories = async () => { const { data } = await API.get('/api/categories'); setCategories(data) }
+
+  // Bo'lim nomlari: ro'yxatdagilar + ro'yxatga hali tushmagan eski nomlar (taomlarda qolgan)
+  const catNames = useMemo(
+    () => [...new Set([...categories.map(c => c.name), ...products.map(p => p.category).filter(Boolean)])],
+    [categories, products])
 
   const catCounts = useMemo(() => {
     const c = { [ALL]: products.length }
@@ -55,7 +65,8 @@ export default function Products() {
 
   const openAdd = () => {
     setEditing(null)
-    setForm({ name: '', price: '', category: catFilter !== ALL ? catFilter : (categories[0] || ''), ingredients: [], isActive: true })
+    setForm({ name: '', price: '', category: catFilter !== ALL ? catFilter : (categories[0]?.name || ''), ingredients: [], isActive: true })
+    setNewCat('')
     setImagePreview(''); setImageFile(null); setModalOpen(true)
   }
   const openEdit = p => {
@@ -69,6 +80,7 @@ export default function Products() {
       })) || [],
     })
     setImagePreview(p.image ? fileUrl(p.image) : '')
+    setNewCat('')
     setImageFile(null); setModalOpen(true)
   }
 
@@ -79,12 +91,13 @@ export default function Products() {
 
   const save = async () => {
     if (!form.name || !form.price) return toast.error('Nomi va narxi majburiy')
+    if (!form.category || form.category === NEW_CAT) return toast.error("Bo'limni tanlang")
     setSaving(true)
     try {
       const fd = new FormData()
       fd.append('name', form.name)
       fd.append('price', form.price)
-      fd.append('category', form.category || 'Asosiy')
+      fd.append('category', form.category)
       if (editing) fd.append('isActive', String(form.isActive))
       fd.append('ingredients', JSON.stringify(form.ingredients.filter(r => r.ingredient && r.quantity)))
       if (imageFile) fd.append('image', imageFile)
@@ -109,16 +122,27 @@ export default function Products() {
   }
 
   const getIngUnit = id => ingredients.find(i => i._id === id)?.unit || 'kg'
-  const catsAll = [ALL, ...categories]
+  const catsAll = [ALL, ...catNames]
+
+  // Taom oynasidan chiqmasdan yangi bo'lim qo'shish
+  const addCategory = async () => {
+    try {
+      const { data } = await API.post('/api/categories', { name: newCat })
+      await loadCategories()
+      setForm(f => ({ ...f, category: data.name })); setNewCat('')
+      toast.success("Bo'lim qo'shildi")
+    } catch (e) { toast.error(e.response?.data?.message || 'Xatolik') }
+  }
 
   return (
     <div className="page">
-      <PageHead title="Taomlar" sub={`${products.length} ta taom · ${categories.length} ta bo'lim`}
+      <PageHead title="Taomlar" sub={`${products.length} ta taom · ${catNames.length} ta bo'lim`}
         actions={<>
           <div className="input-icon" style={{ width: 260 }}>
             <Search size={20}/>
             <input className="input" value={q} onChange={e => setQ(e.target.value)} placeholder="Taom qidirish"/>
           </div>
+          <button className="btn btn-soft btn-lg" onClick={() => setCatsOpen(true)}><FolderOpen size={20}/> Bo'limlar</button>
           <button className="btn btn-primary btn-lg" onClick={openAdd}><Plus size={20}/> Yangi taom</button>
         </>}/>
 
@@ -182,10 +206,21 @@ export default function Products() {
           </Field>
         </div>
 
-        <Field label="Bo'lim">
-          <input className="input" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} placeholder="Masalan: Milliy taomlar" list="cats-list"/>
-          <datalist id="cats-list">{categories.map(c => <option key={c} value={c}/>)}</datalist>
+        <Field label="Bo'lim" required>
+          <select className="input" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+            <option value="" disabled>Bo'limni tanlang</option>
+            {[...new Set([...categories.map(c => c.name), ...(form.category && form.category !== NEW_CAT ? [form.category] : [])])]
+              .map(c => <option key={c} value={c}>{c}</option>)}
+            <option value={NEW_CAT}>+ Yangi bo'lim…</option>
+          </select>
         </Field>
+        {form.category === NEW_CAT && (
+          <div className="row" style={{ gap: 8, marginTop: -4, marginBottom: 12 }}>
+            <input className="input" style={{ flex: 1 }} value={newCat} onChange={e => setNewCat(e.target.value)} maxLength={40} autoFocus
+              placeholder="Yangi bo'lim nomi, masalan: Ichimliklar" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCategory() } }}/>
+            <button type="button" className="btn btn-primary" disabled={!newCat.trim()} onClick={addCategory}><Plus size={18}/> Qo'shish</button>
+          </div>
+        )}
         {editing && <Switch checked={form.isActive} onChange={v => setForm(f => ({ ...f, isActive: v }))}
           label="Sotuvda" hint="O'chirilsa, taom ofitsant menyusida ko'rinmaydi (masalan, tugab qolganda)"/>}
 
@@ -215,6 +250,9 @@ export default function Products() {
           )}
         </div>
       </Modal>
+
+      <CategoriesModal open={catsOpen} onClose={() => setCatsOpen(false)} categories={categories}
+        onChange={async () => { await load(); setCatFilter(ALL) }}/>
 
       <Modal open={!!deleting} onClose={() => setDeleting(null)} title="Taomni o'chirish" maxWidth={440}
         footer={<>
