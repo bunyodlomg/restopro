@@ -201,6 +201,10 @@ app.post('/api/v1/check', limit, (req, res) => {
   }
   const stats = cleanStats(req.body?.stats)
   if (stats) c.stats = stats
+  // Cloud kassani ulash ma'lumotini yuboradi — admin panelda "Kassani ulash" (nusxalash uchun)
+  const sync = req.body?.stats?.sync
+  if (sync && /^https?:\/\/[\w.-]+(:\d+)?$/.test(String(sync.url || '')) && /^[\w-]{32,128}$/.test(String(sync.key || '')))
+    c.sync = { url: String(sync.url), key: String(sync.key), at: new Date().toISOString() }
   saveDb()
 
   const now = Date.now()

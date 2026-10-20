@@ -248,9 +248,26 @@ function openEdit(id) {
       <div class="muted" style="margin-top:4px">Shuncha kun litsenziya serveri bilan bog'lanmasa — bloklanadi (internetni uzib bepul ishlatib bo'lmasin).</div></label>` +
     F('Izoh', 'note', c.note) +
     `<div><div class="label" style="margin:6px 0">To'lovlar tarixi</div>${pays}</div>` +
+    `<div><div class="label" style="margin:6px 0">Kassani ulash</div>${connectHtml(c)}</div>` +
     `<div><div class="label" style="margin:6px 0">Qurilmalar</div>${devicesHtml(c)}</div>`,
     `<button value="del" class="danger" style="margin-right:auto" onclick="del('${c.id}')">O'chirish</button>` + FOOT('Saqlash'),
     async fd => api('PUT', '/customers/' + id, Object.fromEntries(fd)))
+}
+// Kassa sozlash oynasi uchun: server manzili + SYNC kaliti (cloud o'zi yuboradi).
+// Ulanish kodi — ikkalasi bitta qatorda: kassada "Ulanish kodi" maydoniga qo'yiladi.
+const b64u = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+function connectHtml(c) {
+  if (!c.sync) return '<span class="muted">Hali ma\'lumot yo\'q — cloud server yangilangach va kimdir saytni ochgach bir daqiqada paydo bo\'ladi.</span>'
+  const code = 'RP1.' + b64u(JSON.stringify({ u: c.sync.url, k: c.sync.key }))
+  const line = (label, val, show) => `<div class="row" style="justify-content:space-between;gap:8px">
+      <span class="muted" style="min-width:110px">${label}</span>
+      <span class="key" style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(show)}</span>
+      <button type="button" onclick="copy('${esc(val)}')">Nusxa</button></div>`
+  return `<div class="col" style="display:grid;gap:8px">
+      ${line('Ulanish kodi', code, code.slice(0, 28) + '…')}
+      ${line('Server manzili', c.sync.url, c.sync.url)}
+      ${line('Sync kaliti', c.sync.key, '••••••••••••' + c.sync.key.slice(-4))}
+      <span class="muted">Kassa sozlash oynasidagi «Ulanish kodi» maydoniga qo'ying — manzil va kalit o'zi to'ldiriladi.</span></div>`
 }
 function devicesHtml(c) {
   const st = c.stats

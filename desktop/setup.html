@@ -45,6 +45,9 @@
     </div>
 
     <div id="sync-fields">
+      <div class="field"><span>Ulanish kodi</span>
+        <input id="code" type="text" placeholder="RP1.… — litsenziya panelidan nusxalang" autocomplete="off" spellcheck="false">
+        <div class="hint">Sotuvchi panelida: restoran → «…» → Kassani ulash → Ulanish kodi. Qo'ysangiz, manzil va kalit o'zi to'ldiriladi.</div></div>
       <div class="field"><span>Server manzili</span>
         <input id="url" type="text" placeholder="https://cafe.example.uz" autocomplete="off" spellcheck="false"></div>
       <div class="field"><span>Sync kaliti</span>
@@ -96,6 +99,21 @@
     $('test').hidden = m !== 'sync'
   }
   function show(type, text) { const el = $('msg'); el.className = 'msg ' + type; el.textContent = text }
+
+  // Ulanish kodi: RP1.<base64url({ u: server manzili, k: sync kaliti })> — litsenziya panelidan
+  $('code').addEventListener('input', () => {
+    const raw = $('code').value.trim()
+    if (!raw) return
+    try {
+      if (!raw.startsWith('RP1.')) throw new Error()
+      const b64 = raw.slice(4).replace(/-/g, '+').replace(/_/g, '/')
+      const { u, k } = JSON.parse(decodeURIComponent(escape(atob(b64))))
+      if (!u || !k) throw new Error()
+      $('url').value = u
+      $('key').value = k
+      show('ok', "Ulanish kodi qabul qilindi — «Ulanishni tekshirish» ni bosing")
+    } catch { show('err', "Ulanish kodi noto'g'ri — panelda «Nusxa» tugmasi bilan qayta nusxalang") }
+  })
 
   document.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', () => { syncModeUi(); $('msg').className = 'msg' }))
 

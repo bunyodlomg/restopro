@@ -99,12 +99,29 @@ license.onChange(s => io.emit('license', s))
 {
   const stats = require('./license/stats')
   const isCloud = !!process.env.SYNC_KEY && !process.env.SYNC_URL
-  license.setStatsProvider(() => (isCloud ? stats.report(io) : stats.localStats(io)))
+  // Cloud: kassani ulash ma'lumotlari ham (manzil + SYNC_KEY) — sotuvchi litsenziya panelidan
+  // nusxalab oladi, VPS'ga kirib .env qidirish shart emas
+  license.setStatsProvider(async () => (isCloud
+    ? { ...(await stats.report(io)), sync: publicUrl ? { url: publicUrl, key: process.env.SYNC_KEY } : undefined }
+    : stats.localStats(io)))
 }
 
 io.on('connection', socket => {
   console.log(`🔌 Socket ulandi: ${socket.id}`)
   socket.on('disconnect', () => console.log(`🔌 Socket uzildi: ${socket.id}`))
+})
+
+// Serverning ochiq manzili (https://cafe.example.uz) — kelgan so'rovlardan aniqlanadi (nginx orqali).
+// Litsenziya panelida "Kassani ulash" uchun. PUBLIC_URL bilan aniq berish ham mumkin.
+let publicUrl = (process.env.PUBLIC_URL || '').replace(/\/+$/, '')
+const LOCAL_HOST = /^(localhost|127\.|\[::1\]|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/
+app.use((req, res, next) => {
+  if (!publicUrl) {
+    const host = req.get('x-forwarded-host') || req.get('host') || ''
+    if (host && !LOCAL_HOST.test(host) && !/^\d+\.\d+\.\d+\.\d+(:\d+)?$/.test(host))
+      publicUrl = `${req.get('x-forwarded-proto') || 'https'}://${host}`   // domen — odatda nginx'da HTTPS
+  }
+  next()
 })
 
 // ── Middleware ─────────────────────────────────────────────────
