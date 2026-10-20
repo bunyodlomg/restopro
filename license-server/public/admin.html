@@ -249,7 +249,7 @@ async function act(id, what) {
   } catch (e) { toast('Xato: ' + e.message) }
 }
 async function del(id) {
-  if (!confirm("Mijozni butunlay o'chirasizmi? Odatda «To'xtatish» yetarli.")) return
+  if (!confirm("Mijozni butunlay o'chirasizmi?\nRestoran tizimi shu zahoti bloklanadi va kalitini qayta tiklab bo'lmaydi (yangi mijoz yaratsangiz, yangi kalit kerak bo'ladi). Odatda «To'xtatish» yetarli.")) return
   await api('DELETE', '/customers/' + id); $('#dlg').close(); load()
 }
 

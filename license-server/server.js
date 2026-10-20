@@ -296,7 +296,8 @@ function adminAuth(req, res, next) {
 
 const admin = express.Router()
 admin.use(adminAuth)
-admin.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')))
+// no-store: yangilangandan keyin brauzer eski panelni keshdan ko'rsatmasin
+admin.get('/', (req, res) => { res.set('Cache-Control', 'no-store'); res.sendFile(path.join(__dirname, 'public', 'admin.html')) })
 
 const ONLINE_MS = 3 * 60000   // restoran serveri har daqiqada tekshiradi
 const isOnline = at => !!at && Date.now() - new Date(at) < ONLINE_MS

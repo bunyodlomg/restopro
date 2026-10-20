@@ -104,6 +104,7 @@ async function fetchToken() {
       },
       signal: AbortSignal.timeout(20000),
     })
+    if (r.status === 410) throw revokedError()   // cloud: sotuvchi litsenziyani bekor qilgan
     if (!r.ok) throw new Error(r.status === 404 ? 'Cloud serverda litsenziya hali yo\'q' : `Cloud javobi: ${r.status}`)
     return r.json()
   }
@@ -116,9 +117,16 @@ async function fetchToken() {
     signal: AbortSignal.timeout(20000),
   })
   const j = await r.json().catch(() => ({}))
-  if (r.status === 404) throw new Error('Litsenziya kaliti topilmadi')
+  // Kalit bazada yo'q (sotuvchi mijozni o'chirgan) — faqat litsenziya serverining aniq javobi bo'yicha
+  if (r.status === 404 && j.code === 'UNKNOWN_KEY') throw revokedError()
+  if (r.status === 404) throw new Error('Litsenziya serveri javobi: 404')
   if (!r.ok) throw new Error(j.message || `Litsenziya serveri javobi: ${r.status}`)
   return j
+}
+
+// Sotuvchi mijozni o'chirgan — saqlangan javob bilan ishlashda davom etmaslik kerak (aks holda 14 kun ishlaydi)
+function revokedError() {
+  return Object.assign(new Error('Litsenziya kaliti topilmadi (sotuvchi bekor qilgan)'), { revoked: true })
 }
 
 async function check() {
@@ -131,12 +139,16 @@ async function check() {
     const cur = verify(saved?.token)
     // Eskiroq javob yangisini almashtira olmaydi
     if (!cur || p.iat >= cur.iat) {
-      await persist({ token, lastCheckAt: Date.now(), ...(verifyUpdate(updateToken) ? { updateToken } : {}) })
+      await persist({ token, revoked: false, lastCheckAt: Date.now(), ...(verifyUpdate(updateToken) ? { updateToken } : {}) })
       bus.emit('token')
-    }
+    } else if (saved?.revoked) await persist({ revoked: false })
     lastError = null
   } catch (err) {
     lastError = err.cause?.code ? `Ulanib bo'lmadi (${err.cause.code})` : err.message
+    if (err.revoked && !saved?.revoked) {
+      await persist({ revoked: true, token: null, updateToken: null })
+      bus.emit('token')   // kutib turgan kassalar ham darhol bilsin
+    }
   }
   await persist({ maxSeen: now() })
   announce()
@@ -168,13 +180,17 @@ async function watch() {
         if (r.status === 404) return               // eski cloud — faqat davriy tekshiruv
         if (!r.ok) throw new Error(String(r.status))
         const j = await r.json()
-        if (j.iat && j.iat !== iat && Date.now() - lastTry > 2000) await check()
+        // iat 0 — cloud'da javob yo'q (bekor qilingan) — bu ham o'zgarish
+        if (j.iat !== iat && Date.now() - lastTry > 2000) await check()
       } else {
         r = await fetch(`${LICENSE_URL}/api/v1/wait`, {
           method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ key: LICENSE_KEY, rev }), signal: AbortSignal.timeout(40000),
         })
-        if (r.status === 404 && !(await r.clone().json().catch(() => ({}))).code) return   // eski litsenziya serveri
+        if (r.status === 404) {
+          if (!(await r.json().catch(() => ({}))).code) return   // eski litsenziya serveri — faqat davriy tekshiruv
+          await pause(60000); continue                           // kalit o'chirilgan — tez-tez so'ramaymiz
+        }
         if (!r.ok) throw new Error(String(r.status))
         const j = await r.json()
         if (rev !== null && j.rev !== rev) await check()   // sotuvchi holatni o'zgartirdi
@@ -202,6 +218,7 @@ function status() {
   const base = { enabled: true, role: ROLE, lastCheckAt: saved?.lastCheckAt || null, lastError, keyHint: LICENSE_KEY ? LICENSE_KEY.slice(-4) : null }
   if (!loaded) return { ...base, state: 'checking', blocked: false }
   const p = verify(saved?.token)
+  if (saved?.revoked) return { ...base, state: 'revoked', blocked: true, contact: vendor.contact || '' }
   if (!p) {
     const reason = !VIA_CLOUD && !LICENSE_KEY ? 'nokey' : 'missing'
     return { ...base, state: reason, blocked: true, contact: vendor.contact || '' }
@@ -263,6 +280,7 @@ router.post('/refresh', async (req, res) => {
 
 // Cloud → kassa: oxirgi imzolangan javob (routes/sync.js dan, SYNC_KEY bilan)
 const currentToken = () => (verify(saved?.token) ? saved.token : null)
+const isRevoked = () => !!saved?.revoked
 const currentUpdateToken = () => (verifyUpdate(saved?.updateToken) ? saved.updateToken : null)
 
 // GET /api/license/update-token — kassa va ofitsant terminali ilovalari yangilanishni
@@ -275,4 +293,4 @@ router.get('/update-token', async (req, res) => {
   res.json({ url: `${LICENSE_URL}/updates`, token })
 })
 
-module.exports = { start, status, requireLicense, router, currentToken, currentUpdateToken, verify, onChange, setStatsProvider, waitToken }
+module.exports = { start, status, requireLicense, router, currentToken, currentUpdateToken, isRevoked, verify, onChange, setStatsProvider, waitToken }

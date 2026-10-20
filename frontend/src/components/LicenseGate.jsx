@@ -10,6 +10,7 @@ const fmt = s => (s ? new Date(s).toLocaleDateString('ru-RU') : '—')
 const BLOCKED_TEXT = {
   suspended: ["Obuna to'xtatilgan", "Obuna sotuvchi tomonidan to'xtatildi. Barcha ma'lumotlaringiz saqlangan — to'lovdan keyin tizim avtomatik ochiladi."],
   expired:   ["Obuna muddati tugagan", "Oylik to'lov muddati va qo'shimcha muhlat o'tdi. Ma'lumotlaringiz saqlangan — to'lovdan keyin tizim avtomatik ochiladi."],
+  revoked:   ["Litsenziya bekor qilingan", "Bu restoranning litsenziyasi sotuvchi tomonidan bekor qilindi. Ma'lumotlaringiz saqlangan — davom ettirish uchun sotuvchiga murojaat qiling."],
   stale:     ["Litsenziyani tekshirib bo'lmadi", "Tizim uzoq vaqt litsenziya serveri bilan bog'lanmadi. Internetga ulang va «Qayta tekshirish» tugmasini bosing."],
   missing:   ["Litsenziya faollashtirilmagan", "Litsenziya hali tekshirilmadi. Internetga ulanganini tekshiring va «Qayta tekshirish» tugmasini bosing."],
   nokey:     ["Litsenziya kaliti kiritilmagan", "Sotuvchidan olingan litsenziya kalitini sozlamalarga kiriting (kassada: tray belgisi → Sozlamalar)."],

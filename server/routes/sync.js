@@ -36,6 +36,8 @@ router.get('/ping', syncAuth, (req, res) => res.json({ ok: true, node: engine.NO
 router.get('/license', syncAuth, (req, res) => {
   const lic = require('../license')
   recordNode(req.get('x-node'), { version: req.get('x-version'), stats: req.get('x-stats') }).catch(() => {})
+  // Sotuvchi bekor qilgan — kassa ham saqlangan javobni tashlab, darhol bloklansin
+  if (lic.isRevoked()) return res.status(410).json({ code: 'REVOKED', message: 'Litsenziya bekor qilingan' })
   const token = lic.currentToken()
   if (!token) return res.status(404).json({ message: 'Litsenziya hali olinmagan' })
   res.json({ token, updateToken: lic.currentUpdateToken() })
