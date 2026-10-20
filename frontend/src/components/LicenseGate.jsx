@@ -10,10 +10,10 @@ const fmt = s => (s ? new Date(s).toLocaleDateString('ru-RU') : '—')
 const BLOCKED_TEXT = {
   suspended: ["Obuna to'xtatilgan", "Obuna sotuvchi tomonidan to'xtatildi. Barcha ma'lumotlaringiz saqlangan — to'lovdan keyin tizim avtomatik ochiladi."],
   expired:   ["Obuna muddati tugagan", "Oylik to'lov muddati va qo'shimcha muhlat o'tdi. Ma'lumotlaringiz saqlangan — to'lovdan keyin tizim avtomatik ochiladi."],
-  revoked:   ["Litsenziya bekor qilingan", "Bu restoranning litsenziyasi sotuvchi tomonidan bekor qilindi. Ma'lumotlaringiz saqlangan — davom ettirish uchun sotuvchiga murojaat qiling."],
+  revoked:   ["Litsenziya ulanmagan", "Bu server hech qaysi mijozga biriktirilmagan (yoki sotuvchi bekor qilgan). Ma'lumotlaringiz saqlangan — sotuvchiga quyidagi Server ID ni ayting: u biriktirishi bilan tizim o'zi ochiladi."],
   stale:     ["Litsenziyani tekshirib bo'lmadi", "Tizim uzoq vaqt litsenziya serveri bilan bog'lanmadi. Internetga ulang va «Qayta tekshirish» tugmasini bosing."],
   missing:   ["Litsenziya faollashtirilmagan", "Litsenziya hali tekshirilmadi. Internetga ulanganini tekshiring va «Qayta tekshirish» tugmasini bosing."],
-  nokey:     ["Litsenziya kaliti kiritilmagan", "Sotuvchidan olingan litsenziya kalitini sozlamalarga kiriting (kassada: tray belgisi → Sozlamalar)."],
+  nokey:     ["Litsenziya ulanmagan", "Sotuvchiga quyidagi Server ID ni ayting: u admin panelda shu serverni mijozga biriktirishi bilan tizim o'zi ochiladi."],
 }
 
 function Blocked({ lic, onRetry, busy }) {
@@ -24,6 +24,7 @@ function Blocked({ lic, onRetry, busy }) {
       <h1 style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-.03em', margin: '0 0 10px' }}>{title}</h1>
       <p className="muted" style={{ fontSize: 16, margin: '0 0 22px' }}>{text}</p>
       <div className="card card-pad col" style={{ gap: 10, marginBottom: 20 }}>
+        {lic.serverId && <div className="row" style={{ justifyContent: 'space-between' }}><span className="label">Server ID</span><b className="mono">{lic.serverId}</b></div>}
         {lic.customer && <div className="row" style={{ justifyContent: 'space-between' }}><span className="label">Mijoz</span><b>{lic.customer}</b></div>}
         {lic.paidUntil && <div className="row" style={{ justifyContent: 'space-between' }}><span className="label">To'langan sana</span><b className="mono">{fmt(lic.paidUntil)}</b></div>}
         {lic.contact && <div className="row" style={{ justifyContent: 'space-between' }}><span className="label">To'lov uchun</span><b className="mono">{lic.contact}</b></div>}

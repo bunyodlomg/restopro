@@ -112,26 +112,52 @@ function limit(req, res, next) {
   next()
 }
 
-// ── Darhol bildirish: admin holatni o'zgartirsa (to'xtatish, faollashtirish, to'lov) ──
+// ── Restoran serverini aniqlash: kalit yoki biriktirilgan server (instance) ──
+// Har bir restoran serveri o'zining tasodifiy ID'sini (instance) yuboradi. Kalit .env da bo'lmasa ham,
+// sotuvchi admin panelda shu serverni mijozga biriktirsa — server kalitni shu yerdan oladi.
+const findByInstance = inst => (inst ? db.customers.find(c => c.instances?.[inst]) : null)
+const customerFor = (key, inst) => findByKey(key) || findByInstance(inst)
+
+// Biriktirilmagan serverlar (admin panelda "Ulanmagan serverlar")
+db.pending = db.pending || {}
+const PENDING_DAYS = 7
+function notePending(inst, req) {
+  if (!inst) return
+  db.pending[inst] = {
+    lastSeen: new Date().toISOString(), ip: req.ip,
+    role: String(req.body?.role || '').slice(0, 20),
+    host: String(req.body?.host || '').slice(0, 120),
+    version: String(req.body?.version || '').slice(0, 20),
+    key: String(req.body?.key || '').slice(0, 20),     // eski/noto'g'ri kalit — qaysi restoran ekanini topish uchun
+  }
+}
+
+// ── Darhol bildirish: admin holatni o'zgartirsa (to'xtatish, faollashtirish, to'lov, biriktirish) ──
 // Restoran serveri /api/v1/wait da "kutib turadi" (long-poll); rev o'zgarishi bilan javob oladi
 // va darhol qayta tekshiradi — soatlab kutish yo'q.
-const waiting = new Map()   // customerId → Set<res>
+const waiting = new Map()   // customerId yoki 'inst:<id>' → Set<res>
+function release(id, rev) {
+  for (const res of waiting.get(id) || []) if (!res.headersSent) res.json({ rev })
+  waiting.delete(id)
+}
 function bump(c) {
   c.rev = (c.rev || 0) + 1
-  for (const res of waiting.get(c.id) || []) if (!res.headersSent) res.json({ rev: c.rev })
-  waiting.delete(c.id)
+  release(c.id, c.rev)
 }
 
 app.post('/api/v1/wait', limit, (req, res) => {
-  const c = findByKey(String(req.body?.key || '').trim().toUpperCase())
-  if (!c) return res.status(404).json({ code: 'UNKNOWN_KEY', message: 'Litsenziya kaliti topilmadi' })
-  const rev = c.rev || 0
+  const inst = String(req.body?.instance || '').slice(0, 64)
+  const c = customerFor(String(req.body?.key || '').trim().toUpperCase(), inst)
+  if (!c && !inst) return res.status(404).json({ code: 'UNKNOWN_KEY', message: 'Litsenziya kaliti topilmadi' })
+  // Biriktirilmagan server -1 ni kutadi: sotuvchi biriktirishi bilan javob oladi
+  const rev = c ? c.rev || 0 : -1
+  const id = c ? c.id : 'inst:' + inst
   // Mijoz hali joriy rev'ni bilmasa (birinchi so'rov) yoki eskisini bilsa — darhol javob
   if (req.body?.rev == null || Number(req.body.rev) !== rev) return res.json({ rev })
-  const set = waiting.get(c.id) || new Set()
-  waiting.set(c.id, set.add(res))
+  const set = waiting.get(id) || new Set()
+  waiting.set(id, set.add(res))
   const done = () => { clearTimeout(timer); set.delete(res) }
-  const timer = setTimeout(() => { done(); if (!res.headersSent) res.json({ rev: c.rev || 0 }) }, 25000)
+  const timer = setTimeout(() => { done(); if (!res.headersSent) res.json({ rev }) }, 25000)
   res.on('close', done)
 })
 
@@ -155,16 +181,20 @@ function cleanStats(raw) {
 
 app.post('/api/v1/check', limit, (req, res) => {
   const key = String(req.body?.key || '').trim().toUpperCase()
-  const c = findByKey(key)
-  if (!c) return res.status(404).json({ code: 'UNKNOWN_KEY', message: 'Litsenziya kaliti topilmadi' })
+  const inst = String(req.body?.instance || '').slice(0, 64)
+  const c = customerFor(key, inst)
+  if (!c) {
+    notePending(inst, req); saveDb()
+    return res.status(404).json({ code: 'UNKNOWN_KEY', message: 'Bu server hech qaysi mijozga biriktirilmagan' })
+  }
 
   c.lastSeen = new Date().toISOString()
   c.lastIp = req.ip
   c.version = String(req.body?.version || '').slice(0, 20)
-  const inst = String(req.body?.instance || '').slice(0, 64)
   if (inst) {
     c.instances = c.instances || {}
-    c.instances[inst] = { lastSeen: c.lastSeen, ip: req.ip, role: String(req.body?.role || '').slice(0, 20) }
+    c.instances[inst] = { lastSeen: c.lastSeen, ip: req.ip, role: String(req.body?.role || '').slice(0, 20), host: String(req.body?.host || '').slice(0, 120) }
+    delete db.pending[inst]
   }
   const stats = cleanStats(req.body?.stats)
   if (stats) c.stats = stats
@@ -172,6 +202,7 @@ app.post('/api/v1/check', limit, (req, res) => {
 
   const now = Date.now()
   res.json({
+    key: c.key,                    // server kalitni o'zida saqlaydi (.env shart emas)
     token: signToken({
       v: 1,
       k: c.key,
@@ -311,6 +342,35 @@ const money = v => Math.max(0, Math.round(Number(v) || 0))
 admin.get('/api/info', (req, res) => res.json({ publicKey: PUBLIC_KEY_B64, graceDays: GRACE_DAYS, onlineMs: ONLINE_MS, contact: VENDOR_CONTACT, updates: currentVersions(), uploadReady: UPLOAD_TOKEN.length >= 32 }))
 admin.get('/api/customers', (req, res) => res.json(db.customers.map(view)))
 
+// Ulanmagan serverlar: kaliti yo'q yoki eskirgan — sotuvchi mijozga biriktiradi (.env ga kirish shart emas)
+admin.get('/api/pending', (req, res) => {
+  const cutoff = Date.now() - PENDING_DAYS * DAY
+  for (const [inst, p] of Object.entries(db.pending)) if (new Date(p.lastSeen) < cutoff) delete db.pending[inst]
+  res.json(Object.entries(db.pending).map(([instance, p]) => ({ instance, ...p, online: isOnline(p.lastSeen) }))
+    .sort((a, b) => new Date(b.lastSeen) - new Date(a.lastSeen)))
+})
+admin.delete('/api/pending/:instance', (req, res) => {
+  delete db.pending[req.params.instance]; saveDb(); res.json({ ok: true })
+})
+
+// Serverni mijozga biriktirish — server kutib turgan bo'lsa, shu zahoti kalit va litsenziyani oladi
+function bind(c, inst) {
+  const p = db.pending[inst]
+  if (!p) return false
+  c.instances = c.instances || {}
+  c.instances[inst] = { lastSeen: p.lastSeen, ip: p.ip, role: p.role, host: p.host, boundAt: new Date().toISOString() }
+  delete db.pending[inst]
+  bump(c)
+  release('inst:' + inst, c.rev)
+  return true
+}
+admin.post('/api/customers/:id/bind', (req, res) => {
+  const c = findById(req.params.id)
+  if (!c) return res.status(404).json({ message: 'Topilmadi' })
+  if (!bind(c, String(req.body?.instance || ''))) return res.status(404).json({ message: 'Server topilmadi (ro\'yxatni yangilang)' })
+  saveDb(); res.json(view(c))
+})
+
 admin.post('/api/customers', (req, res) => {
   const name = str(req.body.name, 80)
   if (!name) return res.status(400).json({ message: 'Restoran nomi kerak' })
@@ -330,7 +390,9 @@ admin.post('/api/customers', (req, res) => {
     createdAt: new Date().toISOString(),
     payments: [],
   }
-  db.customers.push(c); saveDb()
+  db.customers.push(c)
+  if (req.body.instance) bind(c, String(req.body.instance))   // "Yangi mijoz" — ulanmagan serverdan
+  saveDb()
   res.status(201).json(view(c))
 })
 

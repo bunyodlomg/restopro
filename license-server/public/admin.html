@@ -63,6 +63,7 @@
     </div>
   </div>
   <div class="kpis" id="kpis"></div>
+  <div class="card" id="pending" style="display:none;padding:14px 16px;margin-bottom:16px;box-shadow:inset 0 0 0 2px var(--warn-soft)"></div>
   <div class="card" style="overflow-x:auto">
     <table>
       <thead><tr>
@@ -120,10 +121,42 @@ async function api(method, url, body) {
   return j
 }
 
-let list = []
+let list = [], pending = []
 async function load() {
-  list = await api('GET', '/customers')
+  ;[list, pending] = await Promise.all([api('GET', '/customers'), api('GET', '/pending')])
   render()
+  renderPending()
+}
+
+// Ulanmagan serverlar: kaliti yo'q yoki eskirgan. Mijozga biriktirilsa — server kalitni o'zi oladi
+// (VPS'ga kirib .env yozish shart emas) va bir necha soniyada ochiladi.
+const sid = inst => inst.slice(0, 8).toUpperCase()
+const isOn = at => !!at && Date.now() - new Date(at) < 3 * 60000   // server har daqiqada tekshiradi
+function renderPending() {
+  const el = $('#pending')
+  el.style.display = pending.length ? '' : 'none'
+  if (!pending.length) return
+  const opts = list.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')
+  el.innerHTML = `<b>Ulanmagan serverlar</b>
+    <div class="muted" style="margin:4px 0 10px">Bu serverlar litsenziyasiz — bloklangan. Mijozga biriktiring: server kalitni o'zi oladi va bir necha soniyada ochiladi. Server ID restoranning bloklangan ekranida ko'rinadi.</div>
+    ${pending.map(p => `<div class="row" style="justify-content:space-between;padding:8px 0;border-top:1px solid var(--rule)">
+      <div><span class="dot ${p.online ? 'on' : ''}"></span><b class="mono">${sid(p.instance)}</b>
+        <span class="muted">· ${esc(p.host || '—')} · ${esc(p.role || 'server')} · ${esc(p.ip || '')}${p.version ? ' · v' + esc(p.version) : ''} · ${ago(p.lastSeen)}${p.key ? ' · eski kalit …' + esc(p.key.slice(-4)) : ''}</span></div>
+      <div class="row">
+        ${list.length ? `<select id="b-${p.instance}" style="width:200px">${opts}</select><button class="dark" onclick="bindTo('${p.instance}')">Biriktirish</button>` : ''}
+        <button class="primary" onclick="openNew('${p.instance}')">+ Yangi mijoz</button>
+        <button class="ghost" title="Ro'yxatdan olib tashlash" onclick="dismiss('${p.instance}')">×</button>
+      </div></div>`).join('')}`
+}
+async function bindTo(inst) {
+  const id = $('#b-' + CSS.escape(inst)).value
+  const c = list.find(x => x.id === id)
+  if (!confirm(`${sid(inst)} serverini «${c.name}» ga biriktirasizmi?`)) return
+  try { await api('POST', `/customers/${id}/bind`, { instance: inst }); toast(`Biriktirildi — server bir necha soniyada ochiladi`); load() }
+  catch (e) { toast('Xato: ' + e.message) }
+}
+async function dismiss(inst) {
+  try { await api('DELETE', '/pending/' + encodeURIComponent(inst)); load() } catch (e) { toast('Xato: ' + e.message) }
 }
 function render() {
   const q = $('#q').value.trim().toLowerCase()
@@ -183,8 +216,10 @@ function dialog(title, fields, foot, onSubmit) {
 const F = (label, name, val = '', type = 'text', extra = '') => `<label><div class="label" style="margin-bottom:6px">${label}</div><input name="${name}" type="${type}" value="${esc(val)}" ${extra}></label>`
 const FOOT = ok => `<button value="cancel" class="ghost">Bekor</button><button value="ok" class="primary">${ok}</button>`
 
-function openNew() {
+function openNew(instance) {
+  const p = instance && pending.find(x => x.instance === instance)
   dialog('Yangi mijoz',
+    (p ? `<div class="muted">Server <b class="mono">${sid(p.instance)}</b> (${esc(p.host || p.ip || '')}) shu mijozga biriktiriladi.</div><input type="hidden" name="instance" value="${esc(p.instance)}">` : '') +
     F('Restoran nomi', 'name', '', 'text', 'required') +
     `<div class="grid2">${F('Egasi', 'owner')}${F('Telefon', 'phone')}</div>` +
     F('Manzil', 'address') +
@@ -193,7 +228,10 @@ function openNew() {
     FOOT('Yaratish'),
     async fd => {
       const c = await api('POST', '/customers', Object.fromEntries(fd))
-      setTimeout(() => { copy(c.key); toast('Kalit yaratildi va nusxa olindi: ' + c.key) }, 50)
+      setTimeout(() => {
+        if (p) toast(`«${c.name}» yaratildi — server bir necha soniyada ochiladi`)
+        else { copy(c.key); toast('Kalit yaratildi va nusxa olindi: ' + c.key) }
+      }, 50)
     })
 }
 function openEdit(id) {
@@ -219,7 +257,7 @@ function devicesHtml(c) {
   const row = (name, on, sub) => `<span><span class="dot ${on ? 'on' : ''}"></span>${name}${sub ? ` <span class="muted">${sub}</span>` : ''}</span><span class="muted">${on ? 'online' : 'offline'}</span>`
   const screens = Object.entries(d.screens).filter(([, n]) => n).map(([k, n]) => `<span>${APP[k] || esc(k)}</span><span class="nums">${n}</span>`).join('')
   return `<div class="dev">
-      ${row('Server (cloud)', c.online, ago(c.lastSeen))}
+      ${Object.entries(c.instances || {}).map(([id, i]) => row(`Server <span class="mono">${sid(id)}</span> ${esc(i.host || '')}`, isOn(i.lastSeen), `${esc(i.role || '')} · ${ago(i.lastSeen)}`)).join('')}
       ${d.nodes.map(n => row('Kassa ' + esc(n.id), n.online, `${ago(n.lastSeen)}${n.version ? ' · v' + esc(n.version) : ''}`)).join('')}
     </div>
     <div class="label" style="margin:10px 0 6px">Ulangan ekranlar</div>

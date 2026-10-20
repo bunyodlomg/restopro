@@ -27,7 +27,11 @@ const VERSION  = process.env.APP_VERSION || require('../package.json').version
 
 const PUBKEY      = process.env.LICENSE_PUBKEY || vendor.publicKey || ''
 const LICENSE_URL = (process.env.LICENSE_URL || vendor.licenseUrl || '').replace(/\/+$/, '')
+// .env dagi kalit endi ixtiyoriy: sotuvchi panelda serverni mijozga biriktirsa, kalit litsenziya
+// serveridan keladi va bazada saqlanadi (saved.key) — VPS'ga kirib .env yozish shart emas.
 const LICENSE_KEY = (process.env.LICENSE_KEY || '').trim().toUpperCase()
+// Sotuvchi panelida server qaysi restoranniki ekanini tanish uchun (domen yoki kompyuter nomi)
+const HOST = (process.env.PUBLIC_URL || (process.env.CLIENT_URL || '').split(',')[0] || require('os').hostname()).trim().slice(0, 120)
 const SYNC_URL    = (process.env.SYNC_URL || '').replace(/\/+$/, '')
 const SYNC_KEY    = process.env.SYNC_KEY || ''
 // Davriy tekshiruv (holat statistikasi ham shu bilan boradi); o'zgarishlar long-poll bilan darhol keladi
@@ -52,6 +56,7 @@ let saved = null          // { token, maxSeen, instance, lastCheckAt }
 let loaded = false
 let lastError = null
 let lastTry = 0
+const currentKey = () => saved?.key || LICENSE_KEY
 const bus = new EventEmitter()   // 'token' — yangi javob saqlandi (kassalar kutib turadi)
 bus.setMaxListeners(0)
 
@@ -69,7 +74,7 @@ function verify(token) {
     if (!crypto.verify(null, Buffer.from(body), publicKey, Buffer.from(sig, 'base64url'))) return null
     const p = JSON.parse(Buffer.from(body, 'base64url').toString())
     if (p.v !== 1 || !p.pu || !p.iat || !p.exp) return null
-    if (!VIA_CLOUD && LICENSE_KEY && p.k !== LICENSE_KEY) return null   // boshqa mijozning javobi
+    if (!VIA_CLOUD && currentKey() && p.k !== currentKey()) return null   // boshqa mijozning javobi
     return p
   } catch { return null }
 }
@@ -109,11 +114,10 @@ async function fetchToken() {
     return r.json()
   }
   if (!LICENSE_URL) throw new Error('Litsenziya serveri manzili yo\'q (vendor.json)')
-  if (!LICENSE_KEY) throw new Error('LICENSE_KEY o\'rnatilmagan')
   const r = await fetch(`${LICENSE_URL}/api/v1/check`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ key: LICENSE_KEY, instance: saved?.instance, version: VERSION, role: ROLE, stats }),
+    body: JSON.stringify({ key: currentKey() || undefined, instance: saved?.instance, host: HOST, version: VERSION, role: ROLE, stats }),
     signal: AbortSignal.timeout(20000),
   })
   const j = await r.json().catch(() => ({}))
@@ -133,7 +137,9 @@ async function check() {
   if (!ENABLED) return
   lastTry = Date.now()
   try {
-    const { token, updateToken } = await fetchToken()
+    const { token, updateToken, key } = await fetchToken()
+    // Sotuvchi serverni mijozga biriktirgan / kalit almashgan — yangi kalitni saqlaymiz
+    if (!VIA_CLOUD && key && key !== saved?.key) await persist({ key: String(key).toUpperCase() })
     const p = verify(token)
     if (!p) throw new Error('Litsenziya javobi imzosi noto\'g\'ri')
     const cur = verify(saved?.token)
@@ -185,7 +191,7 @@ async function watch() {
       } else {
         r = await fetch(`${LICENSE_URL}/api/v1/wait`, {
           method: 'POST', headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ key: LICENSE_KEY, rev }), signal: AbortSignal.timeout(40000),
+          body: JSON.stringify({ key: currentKey() || undefined, instance: saved?.instance, rev }), signal: AbortSignal.timeout(40000),
         })
         if (r.status === 404) {
           if (!(await r.json().catch(() => ({}))).code) return   // eski litsenziya serveri — faqat davriy tekshiruv
@@ -215,12 +221,12 @@ function waitToken(iat, ms = 25000) {
 
 function status() {
   if (!ENABLED) return { enabled: false, state: 'off', blocked: false }
-  const base = { enabled: true, role: ROLE, lastCheckAt: saved?.lastCheckAt || null, lastError, keyHint: LICENSE_KEY ? LICENSE_KEY.slice(-4) : null }
+  const base = { enabled: true, role: ROLE, lastCheckAt: saved?.lastCheckAt || null, lastError, keyHint: currentKey() ? currentKey().slice(-4) : null, serverId: serverId() }
   if (!loaded) return { ...base, state: 'checking', blocked: false }
   const p = verify(saved?.token)
   if (saved?.revoked) return { ...base, state: 'revoked', blocked: true, contact: vendor.contact || '' }
   if (!p) {
-    const reason = !VIA_CLOUD && !LICENSE_KEY ? 'nokey' : 'missing'
+    const reason = !VIA_CLOUD && !currentKey() ? 'nokey' : 'missing'
     return { ...base, state: reason, blocked: true, contact: vendor.contact || '' }
   }
   const t = now()
@@ -259,7 +265,7 @@ async function start() {
   setInterval(check, INTERVAL_MS).unref()
   setInterval(() => persist({ maxSeen: now() }), 10 * 60000).unref()
   setInterval(announce, 30000).unref()   // muddat vaqt o'tishi bilan tugasa ham ekranlar bilsin
-  if (VIA_CLOUD || (LICENSE_URL && LICENSE_KEY)) watch()
+  if (VIA_CLOUD || LICENSE_URL) watch()
 }
 
 // Bloklangan holatda ham ochiq qoladiganlar
@@ -279,6 +285,8 @@ router.post('/refresh', async (req, res) => {
 })
 
 // Cloud → kassa: oxirgi imzolangan javob (routes/sync.js dan, SYNC_KEY bilan)
+// Bloklangan ekranda ko'rinadi — sotuvchi panelidagi "Ulanmagan serverlar" bilan solishtirish uchun
+const serverId = () => (VIA_CLOUD ? null : String(saved?.instance || '').slice(0, 8).toUpperCase() || null)
 const currentToken = () => (verify(saved?.token) ? saved.token : null)
 const isRevoked = () => !!saved?.revoked
 const currentUpdateToken = () => (verifyUpdate(saved?.updateToken) ? saved.updateToken : null)
