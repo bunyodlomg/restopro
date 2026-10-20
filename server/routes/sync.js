@@ -10,6 +10,7 @@ const path    = require('path')
 const mongoose = require('mongoose')
 const engine  = require('../sync/engine')
 const { notifyApplied } = require('../sync/notify')
+const { mergeDuplicateOrders } = require('../sync/merge')
 
 const { UPLOAD_DIR } = require('../config')
 const SAFE_FILE  = /^[\w-]+\.(png|jpe?g|webp|gif|mp3|wav|ogg|m4a)$/i
@@ -61,7 +62,9 @@ router.get('/pull', syncAuth, async (req, res, next) => {
     const since = Math.max(0, parseInt(req.query.since, 10) || 0)
     const node  = String(req.query.node || '')
     if (!node) return res.status(400).json({ message: 'node kerak' })
-    sendEjson(res, await engine.collectChanges(since, node))
+    // since=0 — kassa noldan yuklayapti (baza tozalangan): o'zi yaratganlarini ham beramiz,
+    // aks holda ular hech qachon qaytib kelmaydi. Takror kelgani applyChanges'da o'tkazib yuboriladi.
+    sendEjson(res, await engine.collectChanges(since, since > 0 ? node : ''))
   } catch (err) { next(err) }
 })
 
@@ -71,6 +74,8 @@ router.post('/push', syncAuth, ejsonBody, async (req, res, next) => {
     const { items } = engine.decode(req.body || '{}')
     if (!Array.isArray(items)) return res.status(400).json({ message: 'items kerak' })
     const result = await engine.applyChanges(items)
+    // Kassa va cloud bir stolga alohida buyurtma ochgan bo'lsa — bittaga
+    if (await mergeDuplicateOrders(result.touched)) result.touched.push({ coll: 'orders' }, { coll: 'tables' })
     notifyApplied(req.app.get('io'), result)
     sendEjson(res, { applied: result.applied, skipped: result.skipped, conflicts: result.conflicts })
   } catch (err) { next(err) }

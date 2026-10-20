@@ -67,11 +67,14 @@ app.set('io', io)
 io.use(async (socket, next) => {
   try {
     const payload = jwt.verify(socket.handshake.auth?.token || '', JWT_SECRET)
-    const user = await User.findById(payload._id).select('role isActive')
+    const user = await User.findById(payload._id).select('role isActive sessionId')
     if (!user || !user.isActive) return next(new Error('unauthorized'))
     if (user.role !== 'admin' && (await require('./utils/settingsCache').get()).staffAccessEnabled === false)
       return next(new Error('unauthorized'))
+    if (!require('./utils/sessions').sessionValid(user, payload.sid)) return next(new Error('unauthorized'))
     socket.data.user = { _id: user._id, role: user.role }
+    socket.data.sid  = payload.sid
+    socket.join(`user:${user._id}`)   // boshqa qurilmadan kirilsa — shu xona orqali chiqariladi
     next()
   } catch {
     next(new Error('unauthorized'))

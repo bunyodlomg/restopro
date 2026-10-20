@@ -32,6 +32,8 @@ API.interceptors.response.use(
     }
     if (err.response?.status === 401 && !_redirecting) {
       _redirecting = true
+      // Login sahifasida nima uchun chiqarilgani ko'rsatiladi
+      if (err.response.data?.code === 'SESSION_REPLACED') sessionStorage.setItem('rp_logout_reason', err.response.data.message)
       localStorage.removeItem('rp_token')
       localStorage.removeItem('rp_user')
       window.location.href = '/login'

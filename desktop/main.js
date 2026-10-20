@@ -44,6 +44,8 @@ function loadConfig() {
   try { cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) } catch {}
   if (!cfg.jwtSecret) cfg.jwtSecret = crypto.randomBytes(32).toString('hex')
   if (!cfg.port) cfg.port = 5050
+  // Har kassaning o'z nomi — bir nechta kassa bir-birining o'zgarishlarini ko'rishi uchun
+  if (!cfg.nodeId) cfg.nodeId = 'kassa-' + crypto.randomBytes(4).toString('hex')
   saveConfig(cfg)
   return cfg
 }
@@ -134,7 +136,7 @@ async function startServer() {
     UPLOAD_DIR,
     SERVE_FRONTEND: WEB_DIR,
     ALLOW_LAN: 'true',
-    NODE_ID: 'kassa',
+    NODE_ID: config.nodeId,
     SYNC_URL: config.mode === 'sync' ? config.syncUrl : '',
     SYNC_KEY: config.mode === 'sync' ? config.syncKey : '',
     ADMIN_PASSWORD: config.mode === 'standalone' ? (config.adminPassword || '') : '',

@@ -2,6 +2,7 @@ const jwt  = require('jsonwebtoken')
 const User = require('../models/User')
 const { JWT_SECRET } = require('../config')
 const settingsCache = require('../utils/settingsCache')
+const { sessionValid, SESSION_REPLACED } = require('../utils/sessions')
 
 const STAFF_OFF = 'Xodimlar uchun kirish admin tomonidan vaqtincha o\'chirilgan'
 
@@ -23,11 +24,13 @@ module.exports = async function authMiddleware(req, res, next) {
   try {
     // Bloklangan yoki o'chirilgan xodim tokeni darhol ishlamay qolishi uchun
     // foydalanuvchi har so'rovda bazadan tekshiriladi (rol ham bazadan olinadi).
-    const user = await User.findById(payload._id).select('name role isActive mustChangePassword')
+    const user = await User.findById(payload._id).select('name role isActive mustChangePassword sessionId')
     if (!user)
       return res.status(401).json({ message: 'Foydalanuvchi topilmadi' })
     if (!user.isActive)
       return res.status(401).json({ message: 'Akkaunt bloklangan. Adminga murojaat qiling.' })
+    if (!sessionValid(user, payload.sid))
+      return res.status(401).json({ message: SESSION_REPLACED, code: 'SESSION_REPLACED' })
 
     // Admin barcha xodimlar kirishini bitta tugma bilan o'chirishi mumkin
     if (user.role !== 'admin' && (await settingsCache.get()).staffAccessEnabled === false)

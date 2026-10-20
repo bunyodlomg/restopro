@@ -9,12 +9,16 @@ const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config')
 const settingsCache = require('../utils/settingsCache')
 const { isOnPremise } = require('../utils/onPremise')
 const { STAFF_OFF } = require('../middleware/auth')
+const { startSession, kickStaleSessions } = require('../utils/sessions')
 
 const pinHashOf = (salt, pin) => crypto.createHash('sha256').update(salt + ':' + pin).digest('hex')
 
-// Muvaffaqiyatli kirish javobi (login va PIN uchun bir xil)
-function issue(res, user) {
-  const token = jwt.sign({ _id: user._id, role: user.role, name: user.name }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
+// Muvaffaqiyatli kirish javobi (login va PIN uchun bir xil).
+// Ofitsant uchun yangi sessiya — boshqa qurilmadagi oldingi kirish darhol chiqariladi.
+async function issue(req, res, user) {
+  const sid = await startSession(user)
+  const token = jwt.sign({ _id: user._id, role: user.role, name: user.name, sid }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
+  if (sid) kickStaleSessions(req.app.get('io'), [user._id]).catch(err => console.error('Sessiya:', err.message))
   res.json({
     token,
     user: {
@@ -50,7 +54,7 @@ router.post('/login', limiter.check, async (req, res) => {
     if (user.role !== 'admin' && (await settingsCache.get()).staffAccessEnabled === false)
       return res.status(403).json({ message: STAFF_OFF })
 
-    issue(res, user)
+    await issue(req, res, user)
   } catch (err) {
     console.error('Login xatosi:', err)
     res.status(500).json({ message: 'Server xatosi' })
@@ -88,7 +92,7 @@ router.post('/pin', async (req, res) => {
     pinFails.delete(key)
     if (user.role !== 'admin' && (await settingsCache.get()).staffAccessEnabled === false)
       return res.status(403).json({ message: STAFF_OFF })
-    issue(res, user)
+    await issue(req, res, user)
   } catch (err) {
     console.error('PIN xatosi:', err)
     res.status(500).json({ message: 'Server xatosi' })

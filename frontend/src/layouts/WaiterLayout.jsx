@@ -49,6 +49,11 @@ export default function WaiterLayout() {
     if (isAdmin) return
     const s = createSocket()
     s.on('staffAccess', ({ enabled }) => { if (!enabled) { logout(); navigate('/login', { replace: true }) } })
+    // Shu akkaunt bilan boshqa qurilmadan kirildi
+    s.on('sessionReplaced', ({ message }) => {
+      sessionStorage.setItem('rp_logout_reason', message)
+      logout(); navigate('/login', { replace: true })
+    })
     return () => s.disconnect()
   }, [isAdmin])
 

@@ -43,7 +43,11 @@ export default function Login() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(() => {
+    const reason = sessionStorage.getItem('rp_logout_reason') || ''
+    sessionStorage.removeItem('rp_logout_reason')
+    return reason
+  })
   const [loading, setLoading] = useState(false)
   const { login, loginPin, logout } = useAuth()
   const navigate = useNavigate()

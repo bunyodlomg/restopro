@@ -32,6 +32,9 @@ const OrderSchema = new Schema({
   // Idempotency — offline navbatdan takror yuborilgan so'rovlarni aniqlash uchun.
   // Klient generatsiya qilgan ID'lar (yangi yaratish yoki mavjud buyurtmaga merge).
   clientIds:   { type: [String], default: [], index: true },
+
+  // Kassa va cloud bir stolga bir vaqtda buyurtma ochsa — sync'da shu buyurtmaga qo'shilgan (bu bekor qilinadi)
+  mergedInto:  { type: Schema.Types.ObjectId, ref: 'Order', default: null },
 }, { timestamps: true })
 
 // Jami hisoblaydigan virtual field
