@@ -13,9 +13,6 @@ const UserSchema = new Schema({
   // Monoblokda 4 raqamli PIN bilan kirish. sha256(salt + pin) — kassa va cloud'da bir xil ishlaydi
   pinHash:   { type: String, default: '' },
   pinSalt:   { type: String, default: '' },
-  // Ofitsant bir vaqtda faqat bitta qurilmada: har kirishda yangilanadi, eski token ishlamay qoladi.
-  // Sync orqali kassa va cloud'ga tarqaladi.
-  sessionId: { type: String, default: '' },
 }, { timestamps: true })
 
 UserSchema.methods.toJSON = function() {
@@ -24,7 +21,7 @@ UserSchema.methods.toJSON = function() {
   obj.hasPin = !!obj.pinHash
   delete obj.pinHash
   delete obj.pinSalt
-  delete obj.sessionId
+  delete obj.sessionId   // eski versiyadan qolgan maydon (sessiyalar endi Session modelida)
   return obj
 }
 

@@ -84,7 +84,7 @@ export default function Orders() {
   const [cat, setCat] = useState('all')
   const [busyId, setBusyId] = useState(null)
   const [cancelling, setCancelling] = useState(null)
-  const [sound, setSound] = useState(() => localStorage.getItem('rp_sound') === 'true')
+  const [sound, setSound] = useState(() => localStorage.getItem('rp_sound') !== 'false')
   const { settings } = useSettings()
 
   useEffect(() => {

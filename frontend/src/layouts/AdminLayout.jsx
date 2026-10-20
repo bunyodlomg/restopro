@@ -72,7 +72,8 @@ export default function AdminLayout() {
   useEffect(() => {
     const socket = createSocket({ transports: ['websocket'], reconnection: true })
     socket.on('newOrder', o => {
-      if (localStorage.getItem('rp_sound') === 'true') {
+      // Ovoz standart yoqiq — faqat Buyurtmalar sahifasida o'chirilgan bo'lsa chalinmaydi
+      if (localStorage.getItem('rp_sound') !== 'false') {
         try { new Audio(getNewOrderSoundUrl(API_URL)).play().catch(() => {}) } catch {}
       }
       toast(`Yangi buyurtma — ${o.category === 'soboy' ? `Soboy №${o.tableNumber}` : `Stol ${o.tableNumber}`}`, { duration: 4000 })

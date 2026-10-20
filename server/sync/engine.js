@@ -7,7 +7,7 @@ const { EJSON } = mongoose.mongo.BSON
 const { NODE_ID, nextSeq, recordTombstones, tombstones } = require('./plugin')
 
 // Sinxronlanadigan modellar
-const MODELS = ['User', 'Product', 'Ingredient', 'Order', 'Table', 'Salary', 'Purchase', 'Settings', 'Reservation', 'GuestOrder', 'PrintJob']
+const MODELS = ['User', 'Session', 'Product', 'Ingredient', 'Order', 'Table', 'Salary', 'Purchase', 'Settings', 'Reservation', 'GuestOrder', 'PrintJob']
 const BATCH = 500
 
 const models = () => MODELS.map(name => mongoose.model(name))
@@ -84,7 +84,7 @@ async function applyChanges(items) {
     try {
       await coll.replaceOne({ _id: doc._id }, local, { upsert: true })
       result.applied++
-      result.touched.push({ coll: it.coll, id: String(doc._id) })
+      result.touched.push({ coll: it.coll, id: String(doc._id), created: !cur })
     } catch (err) {
       // Odatda unique ziddiyati: masalan ikkala tomonda bir xil username yaratilgan
       result.conflicts.push({ coll: it.coll, id: String(doc._id), error: err.message })

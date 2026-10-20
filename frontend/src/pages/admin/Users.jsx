@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { UserPlus, Trash2, Search, Pencil, Users as UsersIcon, ShieldOff, ShieldCheck, KeyRound } from 'lucide-react'
+import { UserPlus, Trash2, Search, Pencil, Users as UsersIcon, ShieldOff, ShieldCheck, KeyRound, LogOut } from 'lucide-react'
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import Modal, { ModalField } from '../../components/shared/Modal.jsx'
@@ -39,6 +39,15 @@ export default function Users() {
       const { data } = await API.put(`/api/users/${u._id}`, { isActive })
       setUsers(p => p.map(x => (x._id === u._id ? data : x)))
       toast.success(isActive ? `${u.name} — kirish yoqildi` : `${u.name} — kirish o'chirildi`)
+    } catch (e) { toast.error(e.response?.data?.message || 'Xatolik') }
+  }
+
+  // Ofitsant qurilmasi yo'qolgan / osilib qolgan — sessiyani yopib, boshqa qurilmadan kirishga ruxsat
+  const closeSession = async u => {
+    try {
+      await API.delete(`/api/users/${u._id}/session`)
+      setUsers(p => p.map(x => (x._id === u._id ? { ...x, online: false } : x)))
+      toast.success(`${u.name} — sessiya yopildi`)
     } catch (e) { toast.error(e.response?.data?.message || 'Xatolik') }
   }
 
@@ -145,12 +154,17 @@ export default function Users() {
                       <div className="row" style={{ gap: 6 }}>
                         {u.role === 'admin' ? <span className="tag tag-accent">Admin</span> : <span className="tag">Ofitsant</span>}
                         {u.hasPin && <span className="tag" title="Monoblokda PIN bilan kiradi"><KeyRound size={12}/> PIN</span>}
+                        {u.online && u.role !== 'admin' && <span className="tag tag-accent" title="Hozir bir qurilmada ishlayapti — boshqa qurilmadan kira olmaydi">Onlayn</span>}
                       </div>
                     </td>
                     <td className="r mono">{u.salary ? money(u.salary) : <span className="muted">—</span>}</td>
                     <td>{u._id === me?._id ? <span className="muted">siz</span> : <Switch checked={u.isActive !== false} onChange={v => toggleActive(u, v)}/>}</td>
                     <td className="r">
                       <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
+                        {u.online && u.role !== 'admin' && (
+                          <button className="btn btn-soft btn-icon" title="Sessiyani yopish — qurilmadan chiqariladi, boshqa qurilmadan kira oladi"
+                            onClick={() => closeSession(u)}><LogOut size={18}/></button>
+                        )}
                         <button className="btn btn-soft btn-icon" title="Tahrirlash" onClick={() => openEdit(u)}><Pencil size={18}/></button>
                         <button className="btn btn-danger btn-icon" title="O'chirish" onClick={() => setRemoving(u)}><Trash2 size={18}/></button>
                       </div>

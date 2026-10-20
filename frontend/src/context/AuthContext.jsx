@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import API from '../api/api.js'
+import { appKind, deviceId, roleAllowedHere } from '../utils/terminal.js'
 
 const AuthContext = createContext(null)
 
@@ -11,13 +12,20 @@ export function AuthProvider({ children }) {
     const stored = localStorage.getItem('rp_user')
     const token  = localStorage.getItem('rp_token')
     if (stored && token) {
-      try { setUser(JSON.parse(stored)) } catch {}
+      try {
+        const u = JSON.parse(stored)
+        // Kassa'da saqlangan ofitsant / terminalda saqlangan admin sessiyasi ochilmaydi
+        if (roleAllowedHere(u.role)) setUser(u)
+        else logout()
+      } catch {}
     }
     setLoading(false)
   }, [])
 
-  const login = async (username, password) => accept((await API.post('/api/auth/login', { username, password })).data)
-  const loginPin = async pin => accept((await API.post('/api/auth/pin', { pin })).data)
+  // Server ilova bo'yicha rolni tekshiradi va ofitsantni bitta qurilmaga bog'laydi
+  const client = () => ({ app: appKind() || undefined, deviceId: deviceId() })
+  const login = async (username, password) => accept((await API.post('/api/auth/login', { username, password, ...client() })).data)
+  const loginPin = async pin => accept((await API.post('/api/auth/pin', { pin, ...client() })).data)
 
   const accept = data => {
     localStorage.setItem('rp_token', data.token)
@@ -35,6 +43,9 @@ export function AuthProvider({ children }) {
   }
 
   const logout = () => {
+    // Ofitsant sessiyasini serverda yopish — akkaunt boshqa qurilma uchun darhol bo'shaydi
+    const token = localStorage.getItem('rp_token')
+    if (token) API.post('/api/auth/logout', null, { headers: { Authorization: `Bearer ${token}` }, skipAuthRedirect: true }).catch(() => {})
     localStorage.removeItem('rp_token')
     localStorage.removeItem('rp_user')
     setUser(null)

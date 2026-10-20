@@ -95,7 +95,8 @@ async function pull(io) {
       await pullFiles(items)
       const result = await engine.applyChanges(items)
       if (result.conflicts.length) addConflicts(result.conflicts.map(c => ({ ...c, side: 'kassa' })))
-      notifyApplied(io, result)
+      // Birinchi to'liq yuklashda eski ochiq buyurtmalar uchun ovoz chalinmasin
+      notifyApplied(io, result, { quiet: !status.initialized })
       // Cloud'da yaratilgan chek/talon — kutmasdan printerga
       if (result.touched.some(t => t.coll === 'printjobs')) require('../print').kick()
     }

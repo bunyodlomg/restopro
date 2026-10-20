@@ -11,6 +11,7 @@ const fs         = require('fs')
 const crypto     = require('crypto')
 const jwt        = require('jsonwebtoken')
 const User       = require('./models/User')
+const sessions   = require('./utils/sessions')   // Session modelini ham yuklaydi (sync migrate'dan oldin)
 const syncEngine = require('./sync/engine')
 const syncClient = require('./sync/client')
 const license    = require('./license')
@@ -67,19 +68,26 @@ app.set('io', io)
 io.use(async (socket, next) => {
   try {
     const payload = jwt.verify(socket.handshake.auth?.token || '', JWT_SECRET)
-    const user = await User.findById(payload._id).select('role isActive sessionId')
+    const user = await User.findById(payload._id).select('role isActive')
     if (!user || !user.isActive) return next(new Error('unauthorized'))
     if (user.role !== 'admin' && (await require('./utils/settingsCache').get()).staffAccessEnabled === false)
       return next(new Error('unauthorized'))
-    if (!require('./utils/sessions').sessionValid(user, payload.sid)) return next(new Error('unauthorized'))
+    if (user.role !== 'admin') {
+      const session = await sessions.getSession(user._id)
+      if (!sessions.sessionValid(user.role, session, payload.sid)) return next(new Error('unauthorized'))
+      if (session) await sessions.touchSession(user._id, payload.sid, session)
+    }
     socket.data.user = { _id: user._id, role: user.role }
     socket.data.sid  = payload.sid
-    socket.join(`user:${user._id}`)   // boshqa qurilmadan kirilsa — shu xona orqali chiqariladi
+    socket.join(`user:${user._id}`)   // sessiya yopilsa — shu xona orqali chiqariladi
     next()
   } catch {
     next(new Error('unauthorized'))
   }
 })
+
+// Ulanib turgan ofitsant qurilmasi faol hisoblanadi (boshqa qurilmadan kirib bo'lmaydi)
+sessions.startHeartbeat(io)
 
 io.on('connection', socket => {
   console.log(`🔌 Socket ulandi: ${socket.id}`)

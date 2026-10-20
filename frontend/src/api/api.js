@@ -30,7 +30,7 @@ API.interceptors.response.use(
       window.location.href = '/change-password'
       return Promise.reject(err)
     }
-    if (err.response?.status === 401 && !_redirecting) {
+    if (err.response?.status === 401 && !_redirecting && !err.config?.skipAuthRedirect) {
       _redirecting = true
       // Login sahifasida nima uchun chiqarilgani ko'rsatiladi
       if (err.response.data?.code === 'SESSION_REPLACED') sessionStorage.setItem('rp_logout_reason', err.response.data.message)

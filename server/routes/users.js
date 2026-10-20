@@ -5,6 +5,8 @@ const auth   = require('../middleware/auth')
 const { adminOnly } = require('../middleware/auth')
 const crypto = require('crypto')
 const { pinHashOf } = require('./auth')
+const Session = require('../models/Session')
+const { kickStaleSessions, ACTIVE_MS } = require('../utils/sessions')
 
 // PIN: 4 raqam, xodimlar orasida takrorlanmas. '' → PIN o'chiriladi
 async function pinUpdate(pin, userId) {
@@ -24,7 +26,9 @@ async function pinUpdate(pin, userId) {
 router.get('/', auth, adminOnly, async (req, res) => {
   try {
     const users = await User.find().sort({ createdAt: -1 })
-    res.json(users)
+    // Qaysi ofitsant hozir qurilmada faol (admin sessiyasini yopa olishi uchun)
+    const active = new Set((await Session.find({ seenAt: { $gt: new Date(Date.now() - ACTIVE_MS) } }).select('_id').lean()).map(s => String(s._id)))
+    res.json(users.map(u => ({ ...u.toJSON(), online: active.has(String(u._id)) })))
   } catch { res.status(500).json({ message: 'Server xatosi' }) }
 })
 
@@ -94,6 +98,16 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
     if (err.status) return res.status(err.status).json({ message: err.message })
     res.status(500).json({ message: 'Server xatosi' })
   }
+})
+
+// DELETE /api/users/:id/session — ofitsant sessiyasini yopish (qurilma yo'qolgan / osilib qolgan bo'lsa).
+// O'sha qurilma darhol chiqariladi, ofitsant boshqa qurilmadan kira oladi.
+router.delete('/:id/session', auth, adminOnly, async (req, res) => {
+  try {
+    await Session.deleteOne({ _id: req.params.id })
+    kickStaleSessions(req.app.get('io'), [req.params.id]).catch(() => {})
+    res.json({ message: 'Sessiya yopildi' })
+  } catch { res.status(500).json({ message: 'Server xatosi' }) }
 })
 
 // DELETE /api/users/:id

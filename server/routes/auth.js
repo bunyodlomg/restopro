@@ -9,16 +9,30 @@ const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config')
 const settingsCache = require('../utils/settingsCache')
 const { isOnPremise } = require('../utils/onPremise')
 const { STAFF_OFF } = require('../middleware/auth')
-const { startSession, kickStaleSessions } = require('../utils/sessions')
+const { startSession, endSession, kickStaleSessions, SESSION_ACTIVE } = require('../utils/sessions')
 
 const pinHashOf = (salt, pin) => crypto.createHash('sha256').update(salt + ':' + pin).digest('hex')
 
+// Qaysi ilovaga kim kiradi: Kassa (desktop) — faqat admin, Ofitsant terminali — faqat ofitsant.
+// Brauzer / telefon (app yo'q) — hamma. Sessiya ochilishidan OLDIN tekshiriladi.
+const APP_ROLES = {
+  kassa:    { ok: role => role === 'admin', message: 'Kassa dasturiga faqat admin kiradi. Ofitsant «RestoPro Ofitsant» ilovasi yoki telefon orqali kiradi.' },
+  terminal: { ok: role => role !== 'admin', message: 'Bu terminalga faqat ofitsantlar kira oladi. Admin kassa yoki sayt orqali kiradi.' },
+}
+
 // Muvaffaqiyatli kirish javobi (login va PIN uchun bir xil).
-// Ofitsant uchun yangi sessiya — boshqa qurilmadagi oldingi kirish darhol chiqariladi.
+// Ofitsant boshqa qurilmada faol bo'lsa — kirish rad etiladi (o'sha qurilma ishlayveradi).
 async function issue(req, res, user) {
-  const sid = await startSession(user)
+  const rule = APP_ROLES[req.body?.app]
+  if (rule && !rule.ok(user.role))
+    return res.status(403).json({ message: rule.message, code: 'WRONG_APP' })
+
+  const session = await startSession(user, req.body?.deviceId)
+  if (!session)
+    return res.status(409).json({ message: SESSION_ACTIVE, code: 'SESSION_ACTIVE' })
+  const { sid, closed = [] } = session
   const token = jwt.sign({ _id: user._id, role: user.role, name: user.name, sid }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
-  if (sid) kickStaleSessions(req.app.get('io'), [user._id]).catch(err => console.error('Sessiya:', err.message))
+  if (sid) kickStaleSessions(req.app.get('io'), [user._id, ...closed]).catch(err => console.error('Sessiya:', err.message))
   res.json({
     token,
     user: {
@@ -106,6 +120,16 @@ router.get('/me', auth, async (req, res) => {
     if (!user) return res.status(404).json({ message: 'Foydalanuvchi topilmadi' })
     res.json(user)
   } catch (err) {
+    res.status(500).json({ message: 'Server xatosi' })
+  }
+})
+
+// POST /api/auth/logout — ofitsant sessiyasini yopish (akkaunt boshqa qurilma uchun bo'shaydi)
+router.post('/logout', auth, async (req, res) => {
+  try {
+    await endSession(req.user._id, req.user.sid)
+    res.json({ ok: true })
+  } catch {
     res.status(500).json({ message: 'Server xatosi' })
   }
 })
