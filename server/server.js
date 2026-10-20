@@ -79,6 +79,10 @@ io.use(async (socket, next) => {
     }
     socket.data.user = { _id: user._id, role: user.role }
     socket.data.sid  = payload.sid
+    // Statistika uchun: qaysi ilova (kassa / terminal / brauzer) va qaysi qurilma
+    const { app: kind, device } = socket.handshake.auth || {}
+    socket.data.app    = ['kassa', 'terminal'].includes(kind) ? kind : 'web'
+    socket.data.device = String(device || '').slice(0, 64) || socket.id
     socket.join(`user:${user._id}`)   // sessiya yopilsa — shu xona orqali chiqariladi
     next()
   } catch {
@@ -88,6 +92,15 @@ io.use(async (socket, next) => {
 
 // Ulanib turgan ofitsant qurilmasi faol hisoblanadi (boshqa qurilmadan kirib bo'lmaydi)
 sessions.startHeartbeat(io)
+
+// Litsenziya: holat o'zgarsa (sotuvchi to'xtatdi / faollashtirdi) — barcha ekranlar shu zahoti biladi
+license.onChange(s => io.emit('license', s))
+// Sotuvchi panelida ko'rinadigan holat: cloud o'zi va kassalari haqida, kassa/lokal server — o'zi haqida
+{
+  const stats = require('./license/stats')
+  const isCloud = !!process.env.SYNC_KEY && !process.env.SYNC_URL
+  license.setStatsProvider(() => (isCloud ? stats.report(io) : stats.localStats(io)))
+}
 
 io.on('connection', socket => {
   console.log(`🔌 Socket ulandi: ${socket.id}`)

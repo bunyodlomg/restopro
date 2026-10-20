@@ -24,7 +24,7 @@
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .label { font: 600 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
   .mono { font-family: var(--mono); }
-  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 16px 0; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 16px 0; }
   .card { background: var(--panel); border-radius: 18px; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
   .kpi { padding: 14px 16px; } .kpi b { display: block; font: 600 26px var(--mono); letter-spacing: -.04em; margin-top: 6px; }
   .kpi.hero { background: #0B0B0C; color: #fff; }
@@ -39,6 +39,10 @@
   .t-expired, .t-suspended { background: var(--accent-soft); color: var(--accent-ink); }
   .key { font: 600 13px var(--mono); background: var(--thumb); padding: 5px 8px; border-radius: 8px; cursor: copy; white-space: nowrap; }
   .muted { color: var(--ink-3); font-size: 13px; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--ink-3); margin-right: 6px; vertical-align: 1px; }
+  .dot.on { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+  .nums { font: 600 14px var(--mono); white-space: nowrap; }
+  .dev { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; }
   dialog { border: 0; border-radius: 22px; padding: 0; width: min(520px, 94vw); background: var(--panel); color: var(--ink); }
   dialog::backdrop { background: rgba(0,0,0,.5); }
   .dh { padding: 18px 20px 6px; font: 700 20px var(--font); } .db { padding: 10px 20px; display: grid; gap: 12px; } .df { padding: 14px 20px 20px; display: flex; gap: 10px; justify-content: flex-end; }
@@ -62,8 +66,9 @@
   <div class="card" style="overflow-x:auto">
     <table>
       <thead><tr>
-        <th class="label">Restoran</th><th class="label">Kalit</th><th class="label">Holat</th>
-        <th class="label">To'langan</th><th class="label hide-m">Oylik</th><th class="label hide-m">Oxirgi aloqa</th><th></th>
+        <th class="label">Restoran</th><th class="label">Holat</th><th class="label">Aloqa</th>
+        <th class="label hide-m">Qurilmalar</th><th class="label hide-m">Ofitsantlar</th>
+        <th class="label">To'langan</th><th class="label hide-m">Oylik</th><th></th>
       </tr></thead>
       <tbody id="rows"></tbody>
     </table>
@@ -85,6 +90,19 @@
 <script>
 const $ = s => document.querySelector(s)
 const STATE = { active: 'Faol', warning: 'Tugayapti', grace: 'Muhlat', expired: "Muddati o'tgan", suspended: "To'xtatilgan" }
+const APP = { kassa: 'Kassa oynasi', terminal: 'Ofitsant terminali', web: 'Brauzer / telefon' }
+const sum = o => Object.values(o || {}).reduce((s, n) => s + (n || 0), 0)
+// Restoran qurilmalari: server (cloud yoki lokal) + kassalar; ekranlar — ulangan oynalar/telefonlar
+function devicesOf(c) {
+  const st = c.stats || {}
+  const nodes = st.nodes || []
+  const servers = 1 + nodes.length
+  const serversOn = (c.online ? 1 : 0) + nodes.filter(n => n.online).length
+  const screens = { kassa: 0, terminal: 0, web: 0 }
+  if (c.online) for (const [k, v] of Object.entries(st.devices || {})) screens[k] = (screens[k] || 0) + v
+  for (const n of nodes) if (n.online) for (const [k, v] of Object.entries(n.devices || {})) screens[k] = (screens[k] || 0) + v
+  return { servers, serversOn, screens, screenCount: sum(screens), nodes }
+}
 const money = n => (Math.round(n || 0)).toLocaleString('ru-RU').replace(/ /g, ' ')
 const date = s => s ? new Date(s).toLocaleDateString('ru-RU') : '—'
 const ago = s => {
@@ -113,22 +131,33 @@ function render() {
     .sort((a, b) => new Date(a.paidUntil) - new Date(b.paidUntil))
   const active = list.filter(c => ['active', 'warning', 'grace'].includes(c.state))
   const mrr = active.reduce((s, c) => s + (c.monthly || 0), 0)
-  const debt = list.filter(c => ['grace', 'expired'].includes(c.state)).length
-  $('#sub').textContent = `${list.length} ta mijoz`
+  const blocked = list.filter(c => ['expired', 'suspended'].includes(c.state)).length
+  const online = list.filter(c => c.online).length
+  const dev = list.map(devicesOf)
+  const serversOn = dev.reduce((s, d) => s + d.serversOn, 0), servers = dev.reduce((s, d) => s + d.servers, 0)
+  const screens = dev.reduce((s, d) => s + d.screenCount, 0)
+  const waiters = list.reduce((s, c) => s + (c.stats?.waiters || 0), 0)
+  const working = list.filter(c => c.online).reduce((s, c) => s + (c.stats?.waitersOnline || 0), 0)
+  $('#sub').textContent = `${list.length} ta mijoz · har 15 soniyada yangilanadi`
   $('#kpis').innerHTML = `
     <div class="card kpi hero"><div class="label" style="color:#8A8A90">Oylik daromad</div><b>${money(mrr)}</b><span class="muted">so'm · ${active.length} faol</span></div>
+    <div class="card kpi"><div class="label">Restoranlar</div><b>${list.length}</b><span class="muted"><span class="dot on"></span>${online} online · ${list.length - online} offline</span></div>
+    <div class="card kpi"><div class="label">Qurilmalar</div><b>${serversOn}<span class="muted" style="font-size:16px"> / ${servers}</span></b><span class="muted">server va kassa online · ${screens} ta ekran ulangan</span></div>
+    <div class="card kpi"><div class="label">Ofitsantlar</div><b>${waiters}</b><span class="muted">${working} tasi hozir ishlayapti</span></div>
     <div class="card kpi"><div class="label">5 kunda tugaydi</div><b>${list.filter(c => c.state === 'warning').length}</b></div>
-    <div class="card kpi"><div class="label">To'lamagan</div><b style="color:var(--accent-ink)">${debt}</b></div>
-    <div class="card kpi"><div class="label">To'xtatilgan</div><b>${list.filter(c => c.state === 'suspended').length}</b></div>`
+    <div class="card kpi"><div class="label">Bloklangan</div><b style="color:var(--accent-ink)">${blocked}</b><span class="muted">${list.filter(c => c.state === 'suspended').length} to'xtatilgan · ${list.filter(c => c.state === 'expired').length} to'lamagan</span></div>`
   $('#rows').innerHTML = shown.length ? shown.map(c => {
     const days = Math.ceil((new Date(c.paidUntil) - Date.now()) / 86400000)
+    const d = devicesOf(c), st = c.stats
     return `<tr>
-      <td><b>${esc(c.name)}</b><div class="muted">${esc([c.owner, c.phone].filter(Boolean).join(' · '))}</div></td>
-      <td><span class="key" title="Nusxa olish" onclick="copy('${c.key}')">${c.key}</span></td>
-      <td><span class="tag t-${c.state}">${STATE[c.state]}</span></td>
+      <td><b>${esc(c.name)}</b><div class="muted">${esc([c.owner, c.phone].filter(Boolean).join(' · '))}</div>
+        <span class="key" title="Nusxa olish" onclick="copy('${c.key}')">${c.key}</span></td>
+      <td><span class="tag t-${c.state}">${STATE[c.state]}</span><div class="muted">muhlat ${c.grace} kun</div></td>
+      <td style="white-space:nowrap"><span class="dot ${c.online ? 'on' : ''}"></span>${c.online ? 'Online' : 'Offline'}<div class="muted">${ago(c.lastSeen)}${c.version ? ' · v' + esc(c.version) : ''}</div></td>
+      <td class="hide-m"><span class="nums">${d.serversOn}/${d.servers}</span> <span class="muted">online</span><div class="muted">${d.screenCount} ekran</div></td>
+      <td class="hide-m">${st ? `<span class="nums">${st.waiters}</span><div class="muted">${c.online ? st.waitersOnline + ' ishda' : '—'}</div>` : '<span class="muted">—</span>'}</td>
       <td class="mono">${date(c.paidUntil)}<div class="muted">${days >= 0 ? days + ' kun qoldi' : -days + ' kun o\'tdi'}</div></td>
       <td class="mono hide-m">${money(c.monthly)}</td>
-      <td class="muted hide-m">${ago(c.lastSeen)}${c.version ? ' · v' + esc(c.version) : ''}</td>
       <td style="text-align:right;white-space:nowrap">
         <button class="dark" onclick="openPay('${c.id}')">To'lov</button>
         ${c.status === 'suspended'
@@ -136,7 +165,7 @@ function render() {
           : `<button class="danger" onclick="act('${c.id}','suspend')">To'xtatish</button>`}
         <button class="ghost" onclick="openEdit('${c.id}')">...</button>
       </td></tr>`
-  }).join('') : `<tr><td colspan="7" class="muted" style="text-align:center;padding:40px">Hali mijoz yo'q. «Yangi mijoz» tugmasini bosing.</td></tr>`
+  }).join('') : `<tr><td colspan="8" class="muted" style="text-align:center;padding:40px">Hali mijoz yo'q. «Yangi mijoz» tugmasini bosing.</td></tr>`
 }
 $('#q').oninput = render
 
@@ -175,11 +204,29 @@ function openEdit(id) {
     `<div class="grid2">${F('Egasi', 'owner', c.owner)}${F('Telefon', 'phone', c.phone)}</div>` +
     F('Manzil', 'address', c.address) +
     `<div class="grid2">${F("Oylik to'lov (so'm)", 'monthly', c.monthly, 'number')}${F("To'langan sana (qo'lda)", 'paidUntil', c.paidUntil.slice(0, 10), 'date')}</div>` +
+    `<label><div class="label" style="margin-bottom:6px">Muhlat (kun)</div><input name="graceDays" type="number" min="0" max="30" value="${Number.isInteger(c.graceDays) ? c.graceDays : ''}" placeholder="Umumiy: ${info.graceDays} kun">
+      <div class="muted" style="margin-top:4px">To'langan muddat tugagach necha kun ishlay oladi. 0 — muddat tugashi bilan bloklanadi (internetsiz kassa ham).</div></label>` +
     F('Izoh', 'note', c.note) +
     `<div><div class="label" style="margin:6px 0">To'lovlar tarixi</div>${pays}</div>` +
-    `<div><div class="label" style="margin:6px 0">Ulangan qurilmalar</div><div class="muted">${Object.entries(c.instances || {}).map(([k, v]) => `${esc(v.role || 'server')} · ${ago(v.lastSeen)}`).join('<br>') || '—'}</div></div>`,
+    `<div><div class="label" style="margin:6px 0">Qurilmalar</div>${devicesHtml(c)}</div>`,
     `<button value="del" class="danger" style="margin-right:auto" onclick="del('${c.id}')">O'chirish</button>` + FOOT('Saqlash'),
     async fd => api('PUT', '/customers/' + id, Object.fromEntries(fd)))
+}
+function devicesHtml(c) {
+  const st = c.stats
+  if (!st) return '<span class="muted">Hali ma\'lumot yo\'q (restoran serveri yangilangach paydo bo\'ladi)</span>'
+  const d = devicesOf(c)
+  const row = (name, on, sub) => `<span><span class="dot ${on ? 'on' : ''}"></span>${name}${sub ? ` <span class="muted">${sub}</span>` : ''}</span><span class="muted">${on ? 'online' : 'offline'}</span>`
+  const screens = Object.entries(d.screens).filter(([, n]) => n).map(([k, n]) => `<span>${APP[k] || esc(k)}</span><span class="nums">${n}</span>`).join('')
+  return `<div class="dev">
+      ${row('Server (cloud)', c.online, ago(c.lastSeen))}
+      ${d.nodes.map(n => row('Kassa ' + esc(n.id), n.online, `${ago(n.lastSeen)}${n.version ? ' · v' + esc(n.version) : ''}`)).join('')}
+    </div>
+    <div class="label" style="margin:10px 0 6px">Ulangan ekranlar</div>
+    <div class="dev">${screens || '<span class="muted">Hozir hech kim ulanmagan</span><span></span>'}</div>
+    <div class="label" style="margin:10px 0 6px">Xodimlar</div>
+    <div class="dev"><span>Ofitsantlar</span><span class="nums">${st.waiters}</span><span>Hozir ishlayapti</span><span class="nums">${c.online ? st.waitersOnline : '—'}</span><span>Adminlar</span><span class="nums">${st.admins}</span></div>
+    <div class="muted" style="margin-top:6px">Ma'lumot: ${ago(st.at)}</div>`
 }
 function openPay(id) {
   const c = list.find(x => x.id === id)
@@ -192,15 +239,23 @@ function openPay(id) {
 }
 async function act(id, what) {
   const c = list.find(x => x.id === id)
-  if (what === 'suspend' && !confirm(`${c.name} — obunani to'xtatasizmi?\nRestoran tizimi 1 soat ichida bloklanadi (ma'lumotlari o'chmaydi).`)) return
-  try { await api('POST', `/customers/${id}/${what}`); toast(what === 'suspend' ? "To'xtatildi" : 'Faollashtirildi'); load() } catch (e) { toast('Xato: ' + e.message) }
+  if (what === 'suspend' && !confirm(`${c.name} — obunani to'xtatasizmi?\nRestoran tizimi shu zahoti bloklanadi (ma'lumotlari o'chmaydi). Internetsiz kassa internetga ulanishi bilan bloklanadi.`)) return
+  try {
+    await api('POST', `/customers/${id}/${what}`)
+    toast(what === 'suspend'
+      ? (c.online ? "To'xtatildi — restoran bir necha soniyada bloklanadi" : "To'xtatildi — restoran offline, internetga ulanishi bilan bloklanadi")
+      : (c.online ? 'Faollashtirildi — restoran bir necha soniyada ochiladi' : 'Faollashtirildi — internetga ulanishi bilan ochiladi'))
+    load()
+  } catch (e) { toast('Xato: ' + e.message) }
 }
 async function del(id) {
   if (!confirm("Mijozni butunlay o'chirasizmi? Odatda «To'xtatish» yetarli.")) return
   await api('DELETE', '/customers/' + id); $('#dlg').close(); load()
 }
 
+let info = { graceDays: 3 }
 api('GET', '/info').then(i => {
+  info = i
   $('#vendorJson').textContent = JSON.stringify({ licenseUrl: location.origin, publicKey: i.publicKey, contact: i.contact }, null, 2)
   const u = i.updates || {}
   const line = (n, x) => x ? `${n}: <b class="mono">${esc(x.version)}</b> (${date(x.at)})` : `${n}: hali yuklanmagan`
@@ -208,7 +263,8 @@ api('GET', '/info').then(i => {
     + line('Kassa', u.kassa) + '<br>' + line('Ofitsant terminali', u.terminal)
 })
 load().catch(e => toast('Xato: ' + e.message))
-setInterval(load, 60000)
+// Dialog ochiq bo'lsa yangilamaymiz (kiritilayotgan ma'lumot o'chmasin)
+setInterval(() => { if (!$('#dlg').open) load().catch(() => {}) }, 15000)
 </script>
 </body>
 </html>

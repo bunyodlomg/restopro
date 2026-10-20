@@ -83,11 +83,15 @@ function addMonths(date, n) {
   if (d.getDate() < day) d.setDate(0)          // 31-yanvar + 1 oy → 28/29-fevral
   return d
 }
+// Muddat o'tgach necha kun ishlay oladi: mijozga alohida (graceDays) yoki .env dagi GRACE_DAYS.
+// 0 — muddat tugashi bilan bloklanadi (internetsiz kassa ham, saqlangan imzoli javob bo'yicha).
+const graceOf = c => (Number.isInteger(c.graceDays) ? c.graceDays : GRACE_DAYS)
+
 // Mijozning hozirgi holati (admin panel uchun)
 function stateOf(c) {
   if (c.status === 'suspended') return 'suspended'
   const left = new Date(c.paidUntil) - Date.now()
-  if (left < -GRACE_DAYS * DAY) return 'expired'
+  if (left < -graceOf(c) * DAY) return 'expired'
   if (left < 0) return 'grace'
   if (left < 5 * DAY) return 'warning'
   return 'active'
@@ -99,13 +103,54 @@ app.set('trust proxy', 'loopback')
 app.use(express.json({ limit: '32kb' }))
 
 // ── Ochiq API: restoranlar tekshiruvi ──────────────────────────
-const hits = new Map()   // oddiy IP cheklovi: daqiqasiga 30 so'rov
+const hits = new Map()   // oddiy IP cheklovi: daqiqasiga 120 so'rov (bir VPS'da bir nechta restoran: har biri ~4 ta)
 setInterval(() => hits.clear(), 60000).unref()
 function limit(req, res, next) {
   const n = (hits.get(req.ip) || 0) + 1
   hits.set(req.ip, n)
-  if (n > 30) return res.status(429).json({ message: 'Juda ko\'p so\'rov' })
+  if (n > 120) return res.status(429).json({ message: 'Juda ko\'p so\'rov' })
   next()
+}
+
+// ── Darhol bildirish: admin holatni o'zgartirsa (to'xtatish, faollashtirish, to'lov) ──
+// Restoran serveri /api/v1/wait da "kutib turadi" (long-poll); rev o'zgarishi bilan javob oladi
+// va darhol qayta tekshiradi — soatlab kutish yo'q.
+const waiting = new Map()   // customerId → Set<res>
+function bump(c) {
+  c.rev = (c.rev || 0) + 1
+  for (const res of waiting.get(c.id) || []) if (!res.headersSent) res.json({ rev: c.rev })
+  waiting.delete(c.id)
+}
+
+app.post('/api/v1/wait', limit, (req, res) => {
+  const c = findByKey(String(req.body?.key || '').trim().toUpperCase())
+  if (!c) return res.status(404).json({ code: 'UNKNOWN_KEY', message: 'Litsenziya kaliti topilmadi' })
+  const rev = c.rev || 0
+  // Mijoz hali joriy rev'ni bilmasa (birinchi so'rov) yoki eskisini bilsa — darhol javob
+  if (req.body?.rev == null || Number(req.body.rev) !== rev) return res.json({ rev })
+  const set = waiting.get(c.id) || new Set()
+  waiting.set(c.id, set.add(res))
+  const done = () => { clearTimeout(timer); set.delete(res) }
+  const timer = setTimeout(() => { done(); if (!res.headersSent) res.json({ rev: c.rev || 0 }) }, 25000)
+  res.on('close', done)
+})
+
+// Restoran serveri yuborgan holat (qurilmalar, ofitsantlar) — faqat raqamlar va qisqa matnlar saqlanadi
+const num = v => Math.max(0, Math.min(1e6, Math.round(Number(v) || 0)))
+function cleanStats(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const counts = o => Object.fromEntries(Object.entries(o && typeof o === 'object' ? o : {}).slice(0, 10).map(([k, v]) => [String(k).slice(0, 20), num(v)]))
+  return {
+    at: new Date().toISOString(),
+    waiters: num(raw.waiters), admins: num(raw.admins), waitersOnline: num(raw.waitersOnline),
+    devices: counts(raw.devices),
+    nodes: (Array.isArray(raw.nodes) ? raw.nodes : []).slice(0, 20).map(n => ({
+      id: String(n?.id || '').slice(0, 40),
+      version: String(n?.version || '').slice(0, 20),
+      lastSeen: n?.lastSeen && !isNaN(new Date(n.lastSeen)) ? new Date(n.lastSeen).toISOString() : null,
+      devices: counts(n?.devices),
+    })),
+  }
 }
 
 app.post('/api/v1/check', limit, (req, res) => {
@@ -121,6 +166,8 @@ app.post('/api/v1/check', limit, (req, res) => {
     c.instances = c.instances || {}
     c.instances[inst] = { lastSeen: c.lastSeen, ip: req.ip, role: String(req.body?.role || '').slice(0, 20) }
   }
+  const stats = cleanStats(req.body?.stats)
+  if (stats) c.stats = stats
   saveDb()
 
   const now = Date.now()
@@ -131,7 +178,7 @@ app.post('/api/v1/check', limit, (req, res) => {
       n: c.name,
       s: c.status === 'suspended' ? 'suspended' : 'active',
       pu: c.paidUntil,             // shu sanagacha to'langan
-      g: GRACE_DAYS,               // undan keyin necha kun ogohlantirish bilan ishlaydi
+      g: graceOf(c),               // undan keyin necha kun ogohlantirish bilan ishlaydi
       c: VENDOR_CONTACT,
       iat: now,
       exp: now + TOKEN_DAYS * DAY, // internetsiz ishlash chegarasi
@@ -251,11 +298,16 @@ const admin = express.Router()
 admin.use(adminAuth)
 admin.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')))
 
-const view = c => ({ ...c, state: stateOf(c) })
+const ONLINE_MS = 3 * 60000   // restoran serveri har daqiqada tekshiradi
+const isOnline = at => !!at && Date.now() - new Date(at) < ONLINE_MS
+const view = c => ({
+  ...c, state: stateOf(c), grace: graceOf(c), online: isOnline(c.lastSeen),
+  stats: c.stats && { ...c.stats, nodes: (c.stats.nodes || []).map(n => ({ ...n, online: isOnline(n.lastSeen) })) },
+})
 const str = (v, max) => String(v ?? '').trim().slice(0, max)
 const money = v => Math.max(0, Math.round(Number(v) || 0))
 
-admin.get('/api/info', (req, res) => res.json({ publicKey: PUBLIC_KEY_B64, graceDays: GRACE_DAYS, contact: VENDOR_CONTACT, updates: currentVersions(), uploadReady: UPLOAD_TOKEN.length >= 32 }))
+admin.get('/api/info', (req, res) => res.json({ publicKey: PUBLIC_KEY_B64, graceDays: GRACE_DAYS, onlineMs: ONLINE_MS, contact: VENDOR_CONTACT, updates: currentVersions(), uploadReady: UPLOAD_TOKEN.length >= 32 }))
 admin.get('/api/customers', (req, res) => res.json(db.customers.map(view)))
 
 admin.post('/api/customers', (req, res) => {
@@ -292,7 +344,12 @@ admin.put('/api/customers/:id', (req, res) => {
     if (isNaN(d)) return res.status(400).json({ message: 'Sana noto\'g\'ri' })
     c.paidUntil = d.toISOString()
   }
-  saveDb(); res.json(view(c))
+  // Muhlat: bo'sh — umumiy (GRACE_DAYS), 0 — muddat tugashi bilan blok
+  if (req.body.graceDays !== undefined) {
+    const g = String(req.body.graceDays).trim()
+    c.graceDays = g === '' ? undefined : Math.min(30, Math.max(0, parseInt(g, 10) || 0))
+  }
+  bump(c); saveDb(); res.json(view(c))
 })
 
 // To'lov: muddat tugagan bo'lsa bugundan, aks holda joriy muddatdan uzaytiriladi
@@ -310,24 +367,25 @@ admin.post('/api/customers/:id/pay', (req, res) => {
     until: c.paidUntil,
   })
   if (c.status === 'suspended' && req.body.activate !== false) c.status = 'active'
-  saveDb(); res.json(view(c))
+  bump(c); saveDb(); res.json(view(c))
 })
 
 admin.post('/api/customers/:id/suspend', (req, res) => {
   const c = findById(req.params.id)
   if (!c) return res.status(404).json({ message: 'Topilmadi' })
   c.status = 'suspended'; c.suspendedAt = new Date().toISOString()
-  saveDb(); res.json(view(c))
+  bump(c); saveDb(); res.json(view(c))
 })
 admin.post('/api/customers/:id/activate', (req, res) => {
   const c = findById(req.params.id)
   if (!c) return res.status(404).json({ message: 'Topilmadi' })
   c.status = 'active'
-  saveDb(); res.json(view(c))
+  bump(c); saveDb(); res.json(view(c))
 })
 admin.delete('/api/customers/:id', (req, res) => {
   const i = db.customers.findIndex(c => c.id === req.params.id)
   if (i < 0) return res.status(404).json({ message: 'Topilmadi' })
+  bump(db.customers[i])
   db.customers.splice(i, 1); saveDb()
   res.json({ ok: true })
 })

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { RefreshCw, Phone, CalendarClock, X } from 'lucide-react'
 import API from '../api/api.js'
+import { createSocket } from '../api/socket.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import AuthFrame from './auth/AuthFrame.jsx'
 
@@ -56,16 +57,29 @@ export default function LicenseGate({ children }) {
   const [lic, setLic] = useState(null)
   const [busy, setBusy] = useState(false)
   const [hidden, setHidden] = useState(false)
-  const { isAdmin } = useAuth()
+  const { isAdmin, user } = useAuth()
 
-  const load = () => API.get('/api/license/status').then(r => setLic(r.data)).catch(() => {})
+  // Blokdan chiqqanda sahifa qayta yuklanadi (bloklangan paytdagi xato holatlar qolmasin)
+  const apply = next => setLic(prev => {
+    if (prev?.blocked && next && !next.blocked) setTimeout(() => window.location.reload(), 300)
+    return next
+  })
+  const load = () => API.get('/api/license/status').then(r => apply(r.data)).catch(() => {})
   useEffect(() => {
     load()
-    const t = setInterval(load, 5 * 60000)
-    const onBlocked = e => e.detail && setLic(e.detail)
+    const t = setInterval(load, 30000)
+    const onBlocked = e => e.detail && apply(e.detail)
     window.addEventListener('rp-license', onBlocked)
     return () => { clearInterval(t); window.removeEventListener('rp-license', onBlocked) }
   }, [])
+
+  // Sotuvchi to'xtatsa / faollashtirsa — server socket orqali darhol xabar beradi
+  useEffect(() => {
+    if (!user) return
+    const s = createSocket()
+    s.on('license', apply)
+    return () => s.disconnect()
+  }, [user?._id])
 
   const retry = async () => {
     setBusy(true)

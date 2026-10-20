@@ -137,6 +137,7 @@ async function startServer() {
     SERVE_FRONTEND: WEB_DIR,
     ALLOW_LAN: 'true',
     NODE_ID: config.nodeId,
+    APP_VERSION: app.getVersion(),        // sotuvchi panelida kassa versiyasi ko'rinadi
     SYNC_URL: config.mode === 'sync' ? config.syncUrl : '',
     SYNC_KEY: config.mode === 'sync' ? config.syncKey : '',
     ADMIN_PASSWORD: config.mode === 'standalone' ? (config.adminPassword || '') : '',

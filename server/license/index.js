@@ -9,19 +9,29 @@
 //   muhlat ham o'tdi / to'xtatilgan     → API bloklanadi (ma'lumotlar o'chmaydi)
 //   14 kundan beri tekshirilmagan       → bloklanadi (internetga ulash kerak)
 //
+// Internetsiz ham saqlangan imzoli javob bo'yicha ishlaydi: to'langan muddat (+ muhlat) o'tsa
+// bloklanadi; internet qaytishi bilan joriy holat olinadi (to'langan bo'lsa — darhol ochiladi).
+//
+// Darhol: sotuvchi admin panelda to'xtatsa / faollashtirsa / to'lov kiritsa, litsenziya serveri
+// kutib turgan so'rovga (/api/v1/wait, long-poll) javob beradi → shu zahoti qayta tekshiriladi.
+// Kassa xuddi shunday cloud'ni kutadi (/api/sync/license/wait). Ochiq ekranlarga socket orqali.
+//
 // Kassa (SYNC_URL bor) javobni cloud orqali oladi: alohida kalit kerak emas.
 
 const crypto   = require('crypto')
 const mongoose = require('mongoose')
 const vendor   = require('./vendor.json')
-const VERSION  = require('../package.json').version
+const { EventEmitter } = require('events')
+// Kassa ilovasi o'z versiyasini beradi (desktop/main.js → APP_VERSION)
+const VERSION  = process.env.APP_VERSION || require('../package.json').version
 
 const PUBKEY      = process.env.LICENSE_PUBKEY || vendor.publicKey || ''
 const LICENSE_URL = (process.env.LICENSE_URL || vendor.licenseUrl || '').replace(/\/+$/, '')
 const LICENSE_KEY = (process.env.LICENSE_KEY || '').trim().toUpperCase()
 const SYNC_URL    = (process.env.SYNC_URL || '').replace(/\/+$/, '')
 const SYNC_KEY    = process.env.SYNC_KEY || ''
-const INTERVAL_MS = Math.max(60, parseInt(process.env.LICENSE_INTERVAL, 10) || 3600) * 1000
+// Davriy tekshiruv (holat statistikasi ham shu bilan boradi); o'zgarishlar long-poll bilan darhol keladi
+const INTERVAL_MS = Math.max(30, parseInt(process.env.LICENSE_INTERVAL, 10) || 60) * 1000
 // Ishlab chiqish/test uchun o'chirish (production'da ishlamaydi)
 const DEV_OFF = process.env.LICENSE_DEV === '1' && process.env.NODE_ENV !== 'production'
 
@@ -42,6 +52,13 @@ let saved = null          // { token, maxSeen, instance, lastCheckAt }
 let loaded = false
 let lastError = null
 let lastTry = 0
+const bus = new EventEmitter()   // 'token' — yangi javob saqlandi (kassalar kutib turadi)
+bus.setMaxListeners(0)
+
+// Litsenziya serveriga yuboriladigan holat (qurilmalar, ofitsantlar) — server.js beradi
+let statsProvider = null
+const setStatsProvider = fn => { statsProvider = fn }
+const collectStats = () => (statsProvider ? statsProvider().catch(() => null) : Promise.resolve(null))
 
 // Imzoni tekshirish → payload yoki null
 function verify(token) {
@@ -77,8 +94,16 @@ async function persist(patch) {
 }
 
 async function fetchToken() {
+  const stats = await collectStats()
   if (VIA_CLOUD) {
-    const r = await fetch(`${SYNC_URL}/api/sync/license`, { headers: { 'x-sync-key': SYNC_KEY }, signal: AbortSignal.timeout(20000) })
+    // Kassa o'zini cloud'ga tanitadi: cloud uni "online qurilmalar" ro'yxatida ko'rsatadi
+    const r = await fetch(`${SYNC_URL}/api/sync/license`, {
+      headers: {
+        'x-sync-key': SYNC_KEY, 'x-node': process.env.NODE_ID || 'kassa', 'x-version': VERSION,
+        ...(stats ? { 'x-stats': JSON.stringify(stats) } : {}),
+      },
+      signal: AbortSignal.timeout(20000),
+    })
     if (!r.ok) throw new Error(r.status === 404 ? 'Cloud serverda litsenziya hali yo\'q' : `Cloud javobi: ${r.status}`)
     return r.json()
   }
@@ -87,7 +112,7 @@ async function fetchToken() {
   const r = await fetch(`${LICENSE_URL}/api/v1/check`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ key: LICENSE_KEY, instance: saved?.instance, version: VERSION, role: ROLE }),
+    body: JSON.stringify({ key: LICENSE_KEY, instance: saved?.instance, version: VERSION, role: ROLE, stats }),
     signal: AbortSignal.timeout(20000),
   })
   const j = await r.json().catch(() => ({}))
@@ -105,12 +130,71 @@ async function check() {
     if (!p) throw new Error('Litsenziya javobi imzosi noto\'g\'ri')
     const cur = verify(saved?.token)
     // Eskiroq javob yangisini almashtira olmaydi
-    if (!cur || p.iat >= cur.iat) await persist({ token, lastCheckAt: Date.now(), ...(verifyUpdate(updateToken) ? { updateToken } : {}) })
+    if (!cur || p.iat >= cur.iat) {
+      await persist({ token, lastCheckAt: Date.now(), ...(verifyUpdate(updateToken) ? { updateToken } : {}) })
+      bus.emit('token')
+    }
     lastError = null
   } catch (err) {
     lastError = err.cause?.code ? `Ulanib bo'lmadi (${err.cause.code})` : err.message
   }
   await persist({ maxSeen: now() })
+  announce()
+}
+
+// ── Holat o'zgarsa — ochiq ekranlarga (server.js socket orqali yuboradi) ──
+const listeners = []
+const onChange = fn => listeners.push(fn)
+let lastKey = null
+function announce() {
+  const s = status()
+  const key = [s.state, s.blocked, s.paidUntil].join('|')
+  if (key === lastKey) return
+  const first = lastKey === null
+  lastKey = key
+  if (!first) for (const fn of listeners) { try { fn(s) } catch {} }
+}
+
+// ── Darhol: o'zgarishni kutib turish (long-poll) ───────────────
+const pause = ms => new Promise(r => setTimeout(r, ms).unref?.())
+async function watch() {
+  let rev = null
+  for (;;) {
+    try {
+      let r
+      if (VIA_CLOUD) {
+        const iat = verify(saved?.token)?.iat || 0
+        r = await fetch(`${SYNC_URL}/api/sync/license/wait?iat=${iat}`, { headers: { 'x-sync-key': SYNC_KEY }, signal: AbortSignal.timeout(40000) })
+        if (r.status === 404) return               // eski cloud — faqat davriy tekshiruv
+        if (!r.ok) throw new Error(String(r.status))
+        const j = await r.json()
+        if (j.iat && j.iat !== iat && Date.now() - lastTry > 2000) await check()
+      } else {
+        r = await fetch(`${LICENSE_URL}/api/v1/wait`, {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ key: LICENSE_KEY, rev }), signal: AbortSignal.timeout(40000),
+        })
+        if (r.status === 404 && !(await r.clone().json().catch(() => ({}))).code) return   // eski litsenziya serveri
+        if (!r.ok) throw new Error(String(r.status))
+        const j = await r.json()
+        if (rev !== null && j.rev !== rev) await check()   // sotuvchi holatni o'zgartirdi
+        rev = j.rev
+      }
+    } catch {
+      await pause(5000)   // internet yo'q — biroz kutib qayta
+    }
+  }
+}
+
+// Cloud tomoni: kassa kutib turadi, yangi javob saqlanishi bilan (yoki 25 s da) qaytadi
+function waitToken(iat, ms = 25000) {
+  const cur = () => verify(saved?.token)?.iat || 0
+  if (cur() !== iat) return Promise.resolve(cur())
+  return new Promise(resolve => {
+    const done = () => { clearTimeout(t); bus.off('token', done); resolve(cur()) }
+    const t = setTimeout(done, ms)
+    bus.on('token', done)
+  })
 }
 
 function status() {
@@ -157,6 +241,8 @@ async function start() {
   })
   setInterval(check, INTERVAL_MS).unref()
   setInterval(() => persist({ maxSeen: now() }), 10 * 60000).unref()
+  setInterval(announce, 30000).unref()   // muddat vaqt o'tishi bilan tugasa ham ekranlar bilsin
+  if (VIA_CLOUD || (LICENSE_URL && LICENSE_KEY)) watch()
 }
 
 // Bloklangan holatda ham ochiq qoladiganlar
@@ -189,4 +275,4 @@ router.get('/update-token', async (req, res) => {
   res.json({ url: `${LICENSE_URL}/updates`, token })
 })
 
-module.exports = { start, status, requireLicense, router, currentToken, currentUpdateToken, verify }
+module.exports = { start, status, requireLicense, router, currentToken, currentUpdateToken, verify, onChange, setStatsProvider, waitToken }

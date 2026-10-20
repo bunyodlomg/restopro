@@ -11,6 +11,7 @@ const mongoose = require('mongoose')
 const engine  = require('../sync/engine')
 const { notifyApplied } = require('../sync/notify')
 const { mergeDuplicateOrders } = require('../sync/merge')
+const { recordNode } = require('../license/stats')
 
 const { UPLOAD_DIR } = require('../config')
 const SAFE_FILE  = /^[\w-]+\.(png|jpe?g|webp|gif|mp3|wav|ogg|m4a)$/i
@@ -31,11 +32,24 @@ const sendEjson = (res, obj) => res.type('application/ejson').send(engine.encode
 router.get('/ping', syncAuth, (req, res) => res.json({ ok: true, node: engine.NODE_ID }))
 
 // GET /api/sync/license — kassa litsenziya holatini cloud orqali oladi (imzolangan)
+// Kassa har daqiqada so'raydi — shu bilan "online" deb belgilanadi (sotuvchi panelida ko'rinadi)
 router.get('/license', syncAuth, (req, res) => {
   const lic = require('../license')
+  recordNode(req.get('x-node'), { version: req.get('x-version'), stats: req.get('x-stats') }).catch(() => {})
   const token = lic.currentToken()
   if (!token) return res.status(404).json({ message: 'Litsenziya hali olinmagan' })
   res.json({ token, updateToken: lic.currentUpdateToken() })
+})
+
+// GET /api/sync/license/wait?iat=N — kassa kutib turadi: cloud yangi litsenziya javobini olishi bilan
+// (sotuvchi to'xtatdi / faollashtirdi / to'lov) darhol qaytadi → kassa ham shu zahoti bloklanadi/ochiladi
+router.get('/license/wait', syncAuth, async (req, res, next) => {
+  try {
+    let closed = false
+    req.on('close', () => { closed = true })
+    const iat = await require('../license').waitToken(Number(req.query.iat) || 0)
+    if (!closed) res.json({ iat })
+  } catch (err) { next(err) }
 })
 
 // GET /api/sync/wait?seq=N — "long-poll": cloud bazasida o'zgarish bo'lguncha (25 soniyagacha)
@@ -62,6 +76,7 @@ router.get('/pull', syncAuth, async (req, res, next) => {
     const since = Math.max(0, parseInt(req.query.since, 10) || 0)
     const node  = String(req.query.node || '')
     if (!node) return res.status(400).json({ message: 'node kerak' })
+    recordNode(node).catch(() => {})
     // since=0 — kassa noldan yuklayapti (baza tozalangan): o'zi yaratganlarini ham beramiz,
     // aks holda ular hech qachon qaytib kelmaydi. Takror kelgani applyChanges'da o'tkazib yuboriladi.
     sendEjson(res, await engine.collectChanges(since, since > 0 ? node : ''))
