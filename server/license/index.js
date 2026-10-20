@@ -18,7 +18,10 @@ const VERSION  = require('../package.json').version
 
 const PUBKEY      = process.env.LICENSE_PUBKEY || vendor.publicKey || ''
 const LICENSE_URL = (process.env.LICENSE_URL || vendor.licenseUrl || '').replace(/\/+$/, '')
-const LICENSE_KEY = (process.env.LICENSE_KEY || '').trim().toUpperCase()
+const ENV_KEY     = (process.env.LICENSE_KEY || '').trim().toUpperCase()
+const KEY_RE      = /^RP-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/
+// Kalit: .env (cloud server) yoki bloklash ekranida kiritilgan (kassa, bazada saqlanadi)
+const licenseKey  = () => ENV_KEY || saved?.key || ''
 const SYNC_URL    = (process.env.SYNC_URL || '').replace(/\/+$/, '')
 const SYNC_KEY    = process.env.SYNC_KEY || ''
 const INTERVAL_MS = Math.max(60, parseInt(process.env.LICENSE_INTERVAL, 10) || 3600) * 1000
@@ -52,7 +55,7 @@ function verify(token) {
     if (!crypto.verify(null, Buffer.from(body), publicKey, Buffer.from(sig, 'base64url'))) return null
     const p = JSON.parse(Buffer.from(body, 'base64url').toString())
     if (p.v !== 1 || !p.pu || !p.iat || !p.exp) return null
-    if (!VIA_CLOUD && LICENSE_KEY && p.k !== LICENSE_KEY) return null   // boshqa mijozning javobi
+    if (!VIA_CLOUD && licenseKey() && p.k !== licenseKey()) return null   // boshqa mijozning javobi
     return p
   } catch { return null }
 }
@@ -76,18 +79,18 @@ async function persist(patch) {
   await coll().updateOne({ _id: 'main' }, { $set: patch }, { upsert: true }).catch(() => {})
 }
 
-async function fetchToken() {
+async function fetchToken(key = licenseKey()) {
   if (VIA_CLOUD) {
     const r = await fetch(`${SYNC_URL}/api/sync/license`, { headers: { 'x-sync-key': SYNC_KEY }, signal: AbortSignal.timeout(20000) })
     if (!r.ok) throw new Error(r.status === 404 ? 'Cloud serverda litsenziya hali yo\'q' : `Cloud javobi: ${r.status}`)
     return r.json()
   }
   if (!LICENSE_URL) throw new Error('Litsenziya serveri manzili yo\'q (vendor.json)')
-  if (!LICENSE_KEY) throw new Error('LICENSE_KEY o\'rnatilmagan')
+  if (!key) throw new Error('Litsenziya kaliti kiritilmagan')
   const r = await fetch(`${LICENSE_URL}/api/v1/check`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ key: LICENSE_KEY, instance: saved?.instance, version: VERSION, role: ROLE }),
+    body: JSON.stringify({ key, instance: saved?.instance, version: VERSION, role: ROLE }),
     signal: AbortSignal.timeout(20000),
   })
   const j = await r.json().catch(() => ({}))
@@ -115,11 +118,11 @@ async function check() {
 
 function status() {
   if (!ENABLED) return { enabled: false, state: 'off', blocked: false }
-  const base = { enabled: true, role: ROLE, lastCheckAt: saved?.lastCheckAt || null, lastError, keyHint: LICENSE_KEY ? LICENSE_KEY.slice(-4) : null }
+  const base = { enabled: true, role: ROLE, lastCheckAt: saved?.lastCheckAt || null, lastError, keyHint: licenseKey() ? licenseKey().slice(-4) : null, canEnterKey: !VIA_CLOUD && !ENV_KEY }
   if (!loaded) return { ...base, state: 'checking', blocked: false }
   const p = verify(saved?.token)
   if (!p) {
-    const reason = !VIA_CLOUD && !LICENSE_KEY ? 'nokey' : 'missing'
+    const reason = !VIA_CLOUD && !licenseKey() ? 'nokey' : 'missing'
     return { ...base, state: reason, blocked: true, contact: vendor.contact || '' }
   }
   const t = now()
@@ -177,6 +180,31 @@ router.post('/refresh', async (req, res) => {
 
 // Cloud → kassa: oxirgi imzolangan javob (routes/sync.js dan, SYNC_KEY bilan)
 const currentToken = () => (verify(saved?.token) ? saved.token : null)
+// POST /api/license/key — kalitni bloklash ekranidan kiritish (kassa / restoran ichidan).
+// Avval litsenziya serverida tekshiriladi, faqat to'g'ri bo'lsa saqlanadi.
+router.post('/key', async (req, res) => {
+  const { isOnPremise } = require('../utils/onPremise')
+  if (!ENABLED) return res.status(400).json({ message: 'Litsenziya tekshiruvi o\'chiq' })
+  if (VIA_CLOUD) return res.status(400).json({ message: 'Bu kassa litsenziyani cloud serverdan oladi — kalit kerak emas' })
+  if (ENV_KEY) return res.status(400).json({ message: 'Kalit server sozlamalarida (.env) berilgan' })
+  if (!(await isOnPremise(req))) return res.status(403).json({ message: 'Kalitni faqat restoran ichidan kiritish mumkin' })
+  const key = String(req.body?.key || '').trim().toUpperCase()
+  if (!KEY_RE.test(key)) return res.status(400).json({ message: 'Kalit RP-XXXX-XXXX-XXXX ko\'rinishida bo\'lishi kerak' })
+  if (Date.now() - lastTry < 1500) return res.status(429).json({ message: 'Biroz kuting' })
+  lastTry = Date.now()
+  try {
+    const { token, updateToken } = await fetchToken(key)
+    const p = verify(token)
+    if (!p || p.k !== key) throw new Error('Litsenziya javobi imzosi noto\'g\'ri')
+    await persist({ key, token, lastCheckAt: Date.now(), ...(verifyUpdate(updateToken) ? { updateToken } : {}) })
+    lastError = null
+    console.log(`🔑 Litsenziya kaliti kiritildi: …${key.slice(-4)} — ${p.n}`)
+    res.json(status())
+  } catch (err) {
+    res.status(400).json({ message: err.cause?.code ? `Litsenziya serveriga ulanib bo'lmadi (${err.cause.code}). Internetni tekshiring.` : err.message })
+  }
+})
+
 const currentUpdateToken = () => (verifyUpdate(saved?.updateToken) ? saved.updateToken : null)
 
 // GET /api/license/update-token — kassa va ofitsant terminali ilovalari yangilanishni

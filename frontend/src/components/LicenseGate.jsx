@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { RefreshCw, Phone, CalendarClock, X } from 'lucide-react'
+import { RefreshCw, Phone, CalendarClock, X, KeyRound, AlertCircle } from 'lucide-react'
 import API from '../api/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import AuthFrame from './auth/AuthFrame.jsx'
@@ -11,11 +11,43 @@ const BLOCKED_TEXT = {
   expired:   ["Obuna muddati tugagan", "Oylik to'lov muddati va qo'shimcha muhlat o'tdi. Ma'lumotlaringiz saqlangan — to'lovdan keyin tizim avtomatik ochiladi."],
   stale:     ["Litsenziyani tekshirib bo'lmadi", "Tizim uzoq vaqt litsenziya serveri bilan bog'lanmadi. Internetga ulang va «Qayta tekshirish» tugmasini bosing."],
   missing:   ["Litsenziya faollashtirilmagan", "Litsenziya hali tekshirilmadi. Internetga ulanganini tekshiring va «Qayta tekshirish» tugmasini bosing."],
-  nokey:     ["Litsenziya kaliti kiritilmagan", "Sotuvchidan olingan litsenziya kalitini sozlamalarga kiriting (kassada: tray belgisi → Sozlamalar)."],
+  nokey:     ["Litsenziya kaliti kiritilmagan", "Sotuvchidan olingan litsenziya kalitini pastga kiriting va «Faollashtirish» tugmasini bosing."],
 }
 
-function Blocked({ lic, onRetry, busy }) {
+// Kalitni shu yerning o'zida kiritish (kassa / restoran serveri)
+function KeyForm({ onDone }) {
+  const [key, setKey] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  const fmtKey = v => {
+    const raw = v.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^RP/, '').slice(0, 12)
+    return raw ? 'RP-' + raw.match(/.{1,4}/g).join('-') : ''
+  }
+  const submit = async e => {
+    e.preventDefault()
+    setErr(''); setBusy(true)
+    try { onDone((await API.post('/api/license/key', { key })).data) }
+    catch (ex) { setErr(ex.response?.data?.message || 'Faollashtirib bo\'lmadi') }
+    finally { setBusy(false) }
+  }
+  return (
+    <form onSubmit={submit} className="col" style={{ gap: 12, marginBottom: 14 }}>
+      {err && <div className="alert"><AlertCircle size={20}/>{err}</div>}
+      <label className="field">
+        <span className="label">Litsenziya kaliti</span>
+        <input className="input mono" value={key} onChange={e => setKey(fmtKey(e.target.value))} placeholder="RP-XXXX-XXXX-XXXX"
+          autoFocus spellCheck={false} autoComplete="off" style={{ fontSize: 20, letterSpacing: '.06em', textAlign: 'center' }}/>
+      </label>
+      <button type="submit" className="btn btn-primary btn-xl btn-block" disabled={busy || key.length < 17}>
+        {busy ? <span className="spinner-sm"/> : <KeyRound size={20}/>} Faollashtirish
+      </button>
+    </form>
+  )
+}
+
+function Blocked({ lic, onRetry, busy, onKey }) {
   const [title, text] = BLOCKED_TEXT[lic.state] || BLOCKED_TEXT.missing
+  const askKey = lic.canEnterKey && (lic.state === 'nokey' || lic.state === 'missing')
   return (
     <AuthFrame>
       <span className="tag tag-soft" style={{ marginBottom: 14 }}>Tizim bloklangan</span>
@@ -25,9 +57,10 @@ function Blocked({ lic, onRetry, busy }) {
         {lic.customer && <div className="row" style={{ justifyContent: 'space-between' }}><span className="label">Mijoz</span><b>{lic.customer}</b></div>}
         {lic.paidUntil && <div className="row" style={{ justifyContent: 'space-between' }}><span className="label">To'langan sana</span><b className="mono">{fmt(lic.paidUntil)}</b></div>}
         {lic.contact && <div className="row" style={{ justifyContent: 'space-between' }}><span className="label">To'lov uchun</span><b className="mono">{lic.contact}</b></div>}
-        {lic.lastError && <div className="hint">{lic.lastError}</div>}
+        {lic.lastError && lic.state !== 'nokey' && <div className="hint">{lic.lastError}</div>}
       </div>
-      <button className="btn btn-primary btn-xl btn-block" onClick={onRetry} disabled={busy}>
+      {askKey && <KeyForm onDone={onKey}/>}
+      <button className={`btn btn-xl btn-block ${askKey ? 'btn-ghost' : 'btn-primary'}`} onClick={onRetry} disabled={busy}>
         {busy ? <span className="spinner-sm"/> : <RefreshCw size={20}/>} Qayta tekshirish
       </button>
     </AuthFrame>
@@ -77,7 +110,7 @@ export default function LicenseGate({ children }) {
     finally { setBusy(false) }
   }
 
-  if (lic?.blocked) return <Blocked lic={lic} onRetry={retry} busy={busy}/>
+  if (lic?.blocked) return <Blocked lic={lic} onRetry={retry} busy={busy} onKey={data => { setLic(data); if (!data.blocked) window.location.reload() }}/>
   const warn = isAdmin && !hidden && (lic?.state === 'warning' || lic?.state === 'grace')
   return <>{warn && <Banner lic={lic} onClose={() => setHidden(true)}/>}{children}</>
 }

@@ -194,6 +194,7 @@ Kassa va Ofitsant ilovalari yangi versiyani **o'zi tekshiradi** (har 3 soatda), 
 | QR kod ochilmayapti | Kassa kompyuterining IP manzili o'zgargan bo'lishi mumkin. Routerda doimiy IP biriktiring va QR kodlarni qayta chop eting. |
 | Ofitsant kira olmayapti | **Xodimlar** sahifasida umumiy kalit va uning shaxsiy «Kirish» kaliti yoqilganini tekshiring. |
 | Parol esdan chiqdi | Administrator **Xodimlar** bo'limida yangi parol o'rnatadi. Administrator parolini o'zgartirish uchun texnik yordamga murojaat qiling. |
+| «Litsenziya kaliti kiritilmagan» | Sotuvchidan olingan kalitni (RP-XXXX-XXXX-XXXX) shu ekrandagi maydonga kiriting va **Faollashtirish** ni bosing. Internet kerak. |
 | «Obuna muddati tugagan» | To'lovni amalga oshiring va **Qayta tekshirish** tugmasini bosing. Ma'lumotlar saqlangan. |
 | «Litsenziyani tekshirib bo'lmadi» | Kompyuter uzoq vaqt internetsiz ishlagan. Internetga ulang va **Qayta tekshirish** ni bosing. |
 
