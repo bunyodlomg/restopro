@@ -269,7 +269,9 @@ async function start() {
 }
 
 // Bloklangan holatda ham ochiq qoladiganlar
-const ALLOW = [/^\/api\/license\//, /^\/api\/settings\/public$/, /^\/api\/sync\//]
+// Sync: faqat litsenziya so'rovlari ochiq — bloklangan cloud kassalar bilan ma'lumot almashmaydi
+// (eski versiyadagi kassa bekor qilinganini tushunmasa ham, cloud bilan ishlay olmaydi).
+const ALLOW = [/^\/api\/license\//, /^\/api\/settings\/public$/, /^\/api\/sync\/(license|ping)/]
 function requireLicense(req, res, next) {
   if (!ENABLED || !req.path.startsWith('/api/') || ALLOW.some(r => r.test(req.path))) return next()
   const s = status()

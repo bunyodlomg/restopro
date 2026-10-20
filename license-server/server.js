@@ -20,7 +20,9 @@ const DATA_DIR       = path.resolve(process.env.DATA_DIR || path.join(__dirname,
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || ''
 const GRACE_DAYS     = Math.max(0, parseInt(process.env.GRACE_DAYS, 10) || 3)
 const VENDOR_CONTACT = (process.env.VENDOR_CONTACT || '').slice(0, 120)
-const TOKEN_DAYS     = 14     // restoran internetsiz qancha kun ishlay oladi (keyin qayta tekshirish shart)
+// Restoran internetsiz necha kun ishlay oladi (keyin litsenziya serveri bilan bog'lanish shart).
+// Qisqa bo'lsin: o'chirilgan / to'xtatilgan mijoz kassani internetdan uzib bepul ishlata olmasin.
+const OFFLINE_DAYS   = Math.min(30, Math.max(1, parseInt(process.env.OFFLINE_DAYS, 10) || 3))
 // Ilovalar yangilanishi: GitHub Actions shu tokenni ishlatib yangi .exe larni yuklaydi
 const UPLOAD_TOKEN   = process.env.UPDATE_UPLOAD_TOKEN || ''
 const UPDATE_DAYS    = 30     // yangilanish ruxsatnomasi muddati
@@ -86,6 +88,7 @@ function addMonths(date, n) {
 // Muddat o'tgach necha kun ishlay oladi: mijozga alohida (graceDays) yoki .env dagi GRACE_DAYS.
 // 0 — muddat tugashi bilan bloklanadi (internetsiz kassa ham, saqlangan imzoli javob bo'yicha).
 const graceOf = c => (Number.isInteger(c.graceDays) ? c.graceDays : GRACE_DAYS)
+const offlineOf = c => (Number.isInteger(c.offlineDays) ? c.offlineDays : OFFLINE_DAYS)
 
 // Mijozning hozirgi holati (admin panel uchun)
 function stateOf(c) {
@@ -212,7 +215,7 @@ app.post('/api/v1/check', limit, (req, res) => {
       g: graceOf(c),               // undan keyin necha kun ogohlantirish bilan ishlaydi
       c: VENDOR_CONTACT,
       iat: now,
-      exp: now + TOKEN_DAYS * DAY, // internetsiz ishlash chegarasi
+      exp: now + offlineOf(c) * DAY, // internetsiz ishlash chegarasi
     }),
     // Ilovalarni yangilash ruxsatnomasi (kalitsiz — ofitsant terminaliga ham berish xavfsiz)
     updateToken: signToken({ v: 1, t: 'upd', id: c.id, iat: now, exp: now + UPDATE_DAYS * DAY }),
@@ -333,13 +336,13 @@ admin.get('/', (req, res) => { res.set('Cache-Control', 'no-store'); res.sendFil
 const ONLINE_MS = 3 * 60000   // restoran serveri har daqiqada tekshiradi
 const isOnline = at => !!at && Date.now() - new Date(at) < ONLINE_MS
 const view = c => ({
-  ...c, state: stateOf(c), grace: graceOf(c), online: isOnline(c.lastSeen),
+  ...c, state: stateOf(c), grace: graceOf(c), offline: offlineOf(c), online: isOnline(c.lastSeen),
   stats: c.stats && { ...c.stats, nodes: (c.stats.nodes || []).map(n => ({ ...n, online: isOnline(n.lastSeen) })) },
 })
 const str = (v, max) => String(v ?? '').trim().slice(0, max)
 const money = v => Math.max(0, Math.round(Number(v) || 0))
 
-admin.get('/api/info', (req, res) => res.json({ publicKey: PUBLIC_KEY_B64, graceDays: GRACE_DAYS, onlineMs: ONLINE_MS, contact: VENDOR_CONTACT, updates: currentVersions(), uploadReady: UPLOAD_TOKEN.length >= 32 }))
+admin.get('/api/info', (req, res) => res.json({ publicKey: PUBLIC_KEY_B64, graceDays: GRACE_DAYS, offlineDays: OFFLINE_DAYS, onlineMs: ONLINE_MS, contact: VENDOR_CONTACT, updates: currentVersions(), uploadReady: UPLOAD_TOKEN.length >= 32 }))
 admin.get('/api/customers', (req, res) => res.json(db.customers.map(view)))
 
 // Ulanmagan serverlar: kaliti yo'q yoki eskirgan — sotuvchi mijozga biriktiradi (.env ga kirish shart emas)
@@ -411,6 +414,11 @@ admin.put('/api/customers/:id', (req, res) => {
   if (req.body.graceDays !== undefined) {
     const g = String(req.body.graceDays).trim()
     c.graceDays = g === '' ? undefined : Math.min(30, Math.max(0, parseInt(g, 10) || 0))
+  }
+  // Internetsiz ishlash: bo'sh — umumiy (OFFLINE_DAYS)
+  if (req.body.offlineDays !== undefined) {
+    const o = String(req.body.offlineDays).trim()
+    c.offlineDays = o === '' ? undefined : Math.min(30, Math.max(1, parseInt(o, 10) || 1))
   }
   bump(c); saveDb(); res.json(view(c))
 })

@@ -127,12 +127,15 @@ app.use('/uploads', express.static(UPLOAD_DIR, {
 // Cloud rejimi (SYNC_KEY bor, SYNC_URL yo'q): kassalar uchun /api/sync/*.
 app.use(syncClient.requireInitialized)
 app.get('/api/sync/status', (req, res) => res.json(syncClient.publicStatus()))
-if (process.env.SYNC_KEY && !process.env.SYNC_URL) app.use('/api/sync', require('./routes/sync'))
 
 // ── Litsenziya (oylik obuna) ───────────────────────────────────
 // To'lov muddati + muhlat o'tsa yoki sotuvchi to'xtatsa — API 402 qaytaradi
 app.use('/api/license', license.router)
 app.use(license.requireLicense)
+
+// Kassalar uchun /api/sync/* — litsenziya tekshiruvidan KEYIN: bloklangan cloud kassalar bilan
+// ma'lumot almashmaydi (faqat /api/sync/license va /ping ochiq — kassa holatni bilishi uchun)
+if (process.env.SYNC_KEY && !process.env.SYNC_URL) app.use('/api/sync', require('./routes/sync'))
 
 // ── Routes ─────────────────────────────────────────────────────
 app.use('/api/auth',        require('./routes/auth'))
