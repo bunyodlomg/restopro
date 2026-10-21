@@ -149,6 +149,24 @@ Restoran yangi kompyuterga ko'chdi yoki ruxsatsiz nusxa paydo bo'ldi. Bunday hol
 - server shu zahoti bloklanadi va «Ulanmagan serverlar» ro'yxatiga tushadi (kerak bo'lsa qayta biriktirasiz);
 - restoranning boshqa serverlari ishlashda davom etadi.
 
+## Litsenziya serverining o'zini yangilash (avtomatik)
+
+`license-server/` o'zgargan commit `main`ga push qilinsa, GitHub Actions («Litsenziya serveri» workflow) serverga «yangilan» buyrug'ini beradi. Shundan keyin server o'zi quyidagilarni bajaradi:
+1. `data/` zaxirasini oladi (`~/restopro-license-backups/`, oxirgi 30 tasi saqlanadi);
+2. `git pull` qiladi;
+3. kerak bo'lsa `npm ci` qiladi;
+4. qayta ishga tushadi va ishlayotganini tekshiradi.
+
+Yangi versiya ishga tushmasa, oldingi versiyaga **o'zi qaytadi**. Natija GitHub Actions'da va admin paneldagi «Litsenziya serveri» kartasida ko'rinadi. O'sha kartadagi **Yangilash** tugmasi bilan qo'lda ham yangilash mumkin.
+
+Yangi sir kerak emas: kassa yangilanishlari uchun qo'shilgan `LICENSE_SERVER_URL` va `UPDATE_UPLOAD_TOKEN` ishlatiladi.
+
+Server bu imkoniyat qo'shilgan versiyadan eskiroq bo'lsa, **bir marta** qo'lda yangilang. Keyin hammasi avtomatik bo'ladi:
+```bash
+cd /opt/restopro && git pull && pm2 restart restopro-license
+```
+Qo'lda yangilashning to'liq varianti (zaxira va ortga qaytarish bilan): `/opt/restopro/deploy/update-license.sh`.
+
 ## 6. Ilovalarni yangilash (avtomatik)
 
 Kassa va Ofitsant ilovalari yangi versiyani **sizning litsenziya serveringizdan** oladi.
