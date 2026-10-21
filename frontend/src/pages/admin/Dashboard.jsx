@@ -7,6 +7,7 @@ import API from '../../api/api.js'
 import { createSocket } from '../../api/socket.js'
 import DateRangeCalendar from '../../components/shared/DateRangeCalendar.jsx'
 import { Seg, Loading, money, initials, orderTotal, minutesSince, fmtDuration } from '../../components/ui.jsx'
+import { usePlace } from '../../utils/sections.js'
 
 // Date → "YYYY-MM-DD" (lokal vaqt)
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -79,6 +80,7 @@ const Mini = ({ icon: Icon, text }) => (
 )
 
 export default function Dashboard() {
+  const place = usePlace()
   const [stats, setStats] = useState(null)
   const [monthly, setMonthly] = useState([])
   const [chart, setChart] = useState([])      // bitta kun tanlansa — grafik oxirgi 14 kunni ko'rsatadi
@@ -219,7 +221,7 @@ export default function Dashboard() {
                   return (
                     <button key={o._id} className="lst-row" style={{ textAlign: 'left' }} onClick={() => navigate('/admin/orders')}>
                       <span className="lst-th mono" style={{ background: 'var(--sel)', color: 'var(--sel-ink)' }}>{String(o.tableNumber ?? '').padStart(2, '0')}</span>
-                      <span className="lst-name truncate">{o.category === 'soboy' ? 'Soboy' : 'Stol'} {o.tableNumber}
+                      <span className="lst-name truncate">{place(o)}
                         <small>{o.waiterName} · <span className={m > 60 ? 'late' : ''}>{fmtDuration(m)}</span></small>
                       </span>
                       <span className="lst-val">{money(orderTotal(o))}</span>

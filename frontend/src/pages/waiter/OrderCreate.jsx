@@ -145,7 +145,7 @@ export default function OrderCreate() {
 
     try {
       await API.post('/api/orders', payload)
-      toast.success(isSoboy ? 'Soboy buyurtma yuborildi' : `Stol ${table?.number} — oshxonaga yuborildi`)
+      toast.success(isSoboy ? 'Soboy buyurtma yuborildi' : `${sectionLabel(table?.category)} · Stol ${table?.number} — oshxonaga yuborildi`)
       done()
     } catch (err) {
       // So'rov serverga yetmadi — offline navbatga

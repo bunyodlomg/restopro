@@ -6,10 +6,12 @@ import { API_URL } from '../config.js'
 import { createSocket } from '../api/socket.js'
 import { getNewOrderSoundUrl } from '../utils/sound.js'
 import { money, minutesSince, fmtDuration } from './ui.jsx'
+import { usePlace } from '../utils/sections.js'
 
 // Mijozlar QR menyu orqali yuborgan, hali tasdiqlanmagan buyurtmalar.
 // Xodim "Qabul qilish" bossa — stol buyurtmasiga qo'shiladi.
 export default function GuestOrders() {
+  const place = usePlace()
   const [list, setList] = useState([])
   const [busy, setBusy] = useState(null)
 
@@ -20,7 +22,7 @@ export default function GuestOrders() {
     s.on('guestOrder', g => {
       setList(p => (p.some(x => x._id === g._id) ? p : [g, ...p]))
       try { new Audio(getNewOrderSoundUrl(API_URL)).play().catch(() => {}) } catch {}
-      toast(`Mijoz buyurtmasi — Stol ${g.tableNumber}`, { duration: 5000 })
+      toast(`Mijoz buyurtmasi — ${place(g)}`, { duration: 5000 })
     })
     s.on('guestOrderHandled', ({ _id }) => setList(p => p.filter(x => x._id !== _id)))
     s.on('syncApplied', ({ colls }) => { if (colls.includes('guestorders')) load() })
@@ -33,7 +35,7 @@ export default function GuestOrders() {
     try {
       await API.post(`/api/guest-orders/${g._id}/${what}`)
       setList(p => p.filter(x => x._id !== g._id))
-      toast.success(what === 'accept' ? `Stol ${g.tableNumber} — buyurtmaga qo'shildi` : 'Rad etildi')
+      toast.success(what === 'accept' ? `${place(g)} — buyurtmaga qo'shildi` : 'Rad etildi')
     } catch (err) {
       toast.error(err.response?.data?.message || 'Xatolik')
       load()
@@ -52,7 +54,7 @@ export default function GuestOrders() {
           return (
             <div key={g._id} className="card guest-card">
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <b style={{ fontSize: 18 }}>Stol {g.tableNumber}</b>
+                <b style={{ fontSize: 18 }}>{place(g)}</b>
                 <span className="label">{fmtDuration(minutesSince(g.createdAt))} oldin</span>
               </div>
               <div className="mono" style={{ fontSize: 14, margin: '8px 0' }}>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Bell, BellOff, Check, Printer, X, ClipboardList, Undo2, Minus, Plus } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useSections } from '../../utils/sections.js'
+import { useSections, usePlace } from '../../utils/sections.js'
 import API from '../../api/api.js'
 import { createSocket } from '../../api/socket.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
@@ -79,6 +79,7 @@ function OrderCard({ order, settings, onClose, onCancel, onReturn, busy }) {
 }
 
 export default function Orders() {
+  const place = usePlace()
   const { sections } = useSections()
   const CATS = [{ k: 'all', l: 'Barchasi' }, ...sections.map(x => ({ k: x.key, l: x.label })), { k: 'soboy', l: 'Soboy' }]
   const [orders, setOrders] = useState([])
@@ -109,7 +110,7 @@ export default function Orders() {
     try {
       await API.put(`/api/orders/${o._id}/close`)
       setOrders(p => p.filter(x => x._id !== o._id))
-      toast.success(`${o.category === 'soboy' ? 'Soboy' : 'Stol'} ${o.tableNumber} — yopildi`)
+      toast.success(`${place(o)} — yopildi`)
     } catch (err) { toast.error(err.response?.data?.message || 'Xatolik') }
     finally { setBusyId(null) }
   }
@@ -160,7 +161,7 @@ export default function Orders() {
           <button className="btn btn-danger btn-lg" onClick={cancel} disabled={busyId === cancelling?._id}>Ha, bekor qilish</button>
         </>}>
         {cancelling && <p style={{ margin: 0, fontSize: 16 }}>
-          {cancelling.category === 'soboy' ? 'Soboy' : 'Stol'} {cancelling.tableNumber} — {money(orderTotal(cancelling))} so'm.
+          {place(cancelling)} — {money(orderTotal(cancelling))} so'm.
           Buyurtma bekor qilinadi va stol bo'shatiladi.
         </p>}
       </Modal>
@@ -172,6 +173,7 @@ export default function Orders() {
 // Hisob kamayadi, qaytarilgan dona ombordan ayirilmaydi, buyurtmada «qaytarildi» deb ko'rinadi.
 const REASONS = ['Ortib qoldi', 'Mijoz voz kechdi', 'Xato kiritilgan', 'Sifati yoqmadi']
 function ReturnModal({ order, onClose, onDone }) {
+  const place = usePlace()
   const [qty, setQty] = useState({})
   const [reason, setReason] = useState('')
   const [saving, setSaving] = useState(false)
@@ -195,7 +197,7 @@ function ReturnModal({ order, onClose, onDone }) {
   }
 
   return (
-    <Modal open={!!order} onClose={onClose} title={`Qaytarish — ${order?.category === 'soboy' ? 'Soboy' : 'Stol'} ${order?.tableNumber ?? ''}`} maxWidth={560}
+    <Modal open={!!order} onClose={onClose} title={`Qaytarish — ${place(order)}`} maxWidth={560}
       footer={<>
         <button className="btn btn-ghost btn-lg" onClick={onClose}>Bekor qilish</button>
         <button className="btn btn-primary btn-lg" onClick={submit} disabled={!count || saving}>

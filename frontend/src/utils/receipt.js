@@ -6,6 +6,7 @@
 
 import { API_URL } from '../config.js'
 import API from '../api/api.js'
+import { placeLabel } from './sections.js'
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
@@ -70,7 +71,7 @@ export function buildReceiptHTML(order = {}, settings = {}) {
     <h2>${esc(settings.brandName || 'RestoPro')}</h2>
     ${r.headerText ? `<div class="sub">${esc(r.headerText)}</div>` : ''}
     <div class="sub">
-      ${isSoboy ? `Soboy #${esc(order.tableNumber)}` : `${esc(order.category || '')} — Stol ${esc(order.tableNumber)}`}
+      ${isSoboy ? `Soboy #${esc(order.tableNumber)}` : esc(placeLabel(order, settings))}
       ${r.showWaiter && order.waiterName ? `<br>Ofitsant: ${esc(order.waiterName)}` : ''}
       ${r.showDateTime ? `<br>${new Date().toLocaleString('uz-UZ')}` : ''}
     </div>

@@ -46,6 +46,7 @@ function Bill({ bill }) {
 
 export default function GuestMenu({ token }) {
   const [data, setData] = useState(null)
+  const tableName = data ? `${data.table.label ? data.table.label + ' · ' : ''}Stol ${data.table.number}` : ''
   const [error, setError] = useState(null)
   const [cat, setCat] = useState(ALL)
   const [cart, setCart] = useState({})
@@ -139,7 +140,7 @@ export default function GuestMenu({ token }) {
         {logo && (logo.startsWith('/') || logo.startsWith('http')) ? <img src={fileUrl(logo)} alt=""/> : (data.brand.name.replace(/[^A-Za-z]/g, '')[0] || 'R').toUpperCase()}
       </span>
       <b className="truncate" style={{ flex: 1 }}>{data.brand.name}</b>
-      <span className="g-table"><small>STOL</small>{String(data.table.number).padStart(2, '0')}</span>
+      <span className="g-table"><small>{data.table.label ? `${data.table.label.toUpperCase()} · STOL` : 'STOL'}</small>{String(data.table.number).padStart(2, '0')}</span>
     </header>
   )
 
@@ -225,7 +226,7 @@ export default function GuestMenu({ token }) {
         <div className="g-sheet-bg" onClick={e => e.target === e.currentTarget && setBillOpen(false)}>
           <div className="g-sheet rise">
             <div className="row" style={{ justifyContent: 'space-between', marginBottom: 10 }}>
-              <b style={{ fontSize: 20 }}>Stol {data.table.number} hisobi</b>
+              <b style={{ fontSize: 20 }}>{tableName} hisobi</b>
               <button className="btn btn-ghost btn-icon" onClick={() => setBillOpen(false)} aria-label="Yopish"><X size={22}/></button>
             </div>
             <div style={{ overflowY: 'auto' }}><Bill bill={bill}/></div>
@@ -271,7 +272,7 @@ export default function GuestMenu({ token }) {
                 <span className="label">Jami</span><b className="mono" style={{ fontSize: 26, letterSpacing: '-.04em' }}>{money(sum + fee)}</b>
               </div>
               <button className="send-btn" onClick={submit} disabled={sending || !count}>
-                <span><b>{sending ? 'Yuborilmoqda…' : 'Buyurtma berish'}</b><small>Stol {data.table.number} · ofitsant tasdiqlaydi</small></span>
+                <span><b>{sending ? 'Yuborilmoqda…' : 'Buyurtma berish'}</b><small>{tableName} · ofitsant tasdiqlaydi</small></span>
                 {sending ? <span className="spinner-sm"/> : <Check size={26}/>}
               </button>
             </div>

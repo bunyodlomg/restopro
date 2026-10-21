@@ -14,3 +14,18 @@ export function useSections() {
     || DEFAULT_SECTIONS.find(s => s.key === key)?.label || key || '')
   return { sections, label }
 }
+
+// Stolning to'liq nomi: «Zal · Stol 5», «2-etaj · Stol 3», soboy — «Soboy №12».
+// settings bilan (hook'siz joylar uchun: chek) yoki usePlace() orqali.
+export function placeLabel(order, settings) {
+  const n = order?.tableNumber ?? order?.number ?? ''
+  if (order?.category === 'soboy') return `Soboy №${n}`
+  const list = settings?.tableSections?.length ? settings.tableSections : DEFAULT_SECTIONS
+  const sec = list.find(s => s.key === order?.category)?.label || DEFAULT_SECTIONS.find(s => s.key === order?.category)?.label || ''
+  return sec ? `${sec} · Stol ${n}` : `Stol ${n}`
+}
+
+export function usePlace() {
+  const { settings } = useSettings()
+  return o => placeLabel(o, settings)
+}

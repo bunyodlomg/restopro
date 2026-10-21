@@ -7,6 +7,7 @@ import { createSocket } from '../../api/socket.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { getNewOrderSoundUrl } from '../../utils/sound.js'
 import { Seg, Loading, Empty, PageHead, money, orderTotal, itemCount, minutesSince, fmtDuration } from '../../components/ui.jsx'
+import { useSections } from '../../utils/sections.js'
 
 const PAGE_SIZE = 50
 const todayStr = () => {
@@ -17,9 +18,10 @@ const hhmm = d => new Date(d).toLocaleTimeString('uz-UZ', { hour: '2-digit', min
 
 export function OrderNum({ order }) {
   const soboy = order.category === 'soboy'
+  const { label } = useSections()
   return (
     <div className="ocard-num" style={soboy ? { background: 'var(--accent)', color: '#fff' } : undefined}>
-      <small>{soboy ? 'SOBOY' : 'STOL'}</small><b>{order.tableNumber ?? '—'}</b>
+      <small className="truncate" style={{ maxWidth: '100%' }} title={soboy ? 'Soboy' : `${label(order.category)} · Stol ${order.tableNumber}`}>{soboy ? 'SOBOY' : label(order.category) || 'STOL'}</small><b>{order.tableNumber ?? '—'}</b>
     </div>
   )
 }

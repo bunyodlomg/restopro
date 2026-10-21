@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, History, UtensilsCrossed, Package2,
@@ -12,6 +12,7 @@ import { getNewOrderSoundUrl } from '../utils/sound.js'
 import { BrandMark, initials } from '../components/ui.jsx'
 import SyncBadge from '../components/shared/SyncBadge.jsx'
 import ProfileModal from '../components/shared/ProfileModal.jsx'
+import { usePlace } from '../utils/sections.js'
 
 const NAV = [
   { to: '/admin',             label: 'Bosh',     Icon: LayoutDashboard, end: true },
@@ -41,6 +42,10 @@ function UserMenu() {
 }
 
 export default function AdminLayout() {
+  // Socket bir marta ulanadi — bo'lim nomlari o'zgarsa ham eng so'nggisi ishlatilsin
+  const place = usePlace()
+  const placeRef = useRef(place)
+  placeRef.current = place
   // Yangi buyurtma — admin qaysi sahifada bo'lsa ham ovoz + bildirishnoma
   useEffect(() => {
     const socket = createSocket({ transports: ['websocket'], reconnection: true })
@@ -49,7 +54,7 @@ export default function AdminLayout() {
       if (localStorage.getItem('rp_sound') !== 'false') {
         try { new Audio(getNewOrderSoundUrl(API_URL)).play().catch(() => {}) } catch {}
       }
-      toast(`Yangi buyurtma — ${o.category === 'soboy' ? `Soboy №${o.tableNumber}` : `Stol ${o.tableNumber}`}`, { duration: 4000 })
+      toast(`Yangi buyurtma — ${placeRef.current(o)}`, { duration: 4000 })
     })
     return () => socket.disconnect()
   }, [])
