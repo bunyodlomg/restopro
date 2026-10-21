@@ -56,13 +56,14 @@ async function until(fn, what, ms = 15000) {
 }
 
 let failed = 0
+let mongoose
 async function test(name, fn) {
   try { await fn(); console.log('  ✅', name) } catch (e) { failed++; console.log('  ❌', name, '\n     ', e.message) }
 }
 
 ;(async () => {
   // Toza bazalar
-  const mongoose = require('mongoose')
+  mongoose = require('mongoose')
   for (const r of ['cloud', 'kassa']) {
     const c = await mongoose.createConnection(`mongodb://127.0.0.1:27017/rp_lictest_${r}`).asPromise()
     await c.dropDatabase(); await c.close()
@@ -141,6 +142,28 @@ async function test(name, fn) {
     assert.strictEqual(r.status, 403)
     await admin('POST', `/customers/${customer.id}/node`, { node: 'kassa1', blocked: false })
     await until(async () => (await lic(KASSA)).state === 'active', 'kassa ochildi')
+  })
+
+  await test('bitta qurilmani (telefon/terminal) bloklash: faqat shu ekran to\'xtaydi', async () => {
+    // Qurilma cloud'ga ulangan deb yozamiz (odatda login / socket yozadi)
+    const db = await mongoose.createConnection(`mongodb://127.0.0.1:27017/rp_lictest_cloud`).asPromise()
+    await db.collection('devices').insertOne({ _id: 'dev-test-1', app: 'terminal', user: "G'ani", role: 'waiter', lastSeen: new Date() })
+    await db.close()
+    const listed = await until(async () => {
+      await admin('POST', `/customers/${customer.id}/message`, { text: '' })   // bump → cloud holatini yuboradi
+      await wait(1500)
+      const c = (await admin('GET', '/customers')).find(x => x.id === customer.id)
+      return c.stats?.deviceList?.find(d => d.i === 'dev-test-1')
+    }, 'qurilma panelda', 30000)
+    assert.strictEqual(listed.a, 'terminal')
+    const probe = (port, dev) => fetch(`http://127.0.0.1:${port}/api/orders`, { headers: { 'x-device': dev } }).then(r => r.status)
+    await admin('POST', `/customers/${customer.id}/device`, { device: 'dev-test-1', blocked: true, label: "Terminal · G'ani" })
+    for (const port of [CLOUD, KASSA]) {
+      await until(async () => (await probe(port, 'dev-test-1')) === 403, `bloklandi ${port}`)
+      assert.strictEqual(await probe(port, 'boshqa-qurilma'), 401, 'boshqa qurilma ishlashi kerak')
+    }
+    await admin('POST', `/customers/${customer.id}/device`, { device: 'dev-test-1', blocked: false })
+    for (const port of [CLOUD, KASSA]) await until(async () => (await probe(port, 'dev-test-1')) === 401, `ochildi ${port}`)
   })
 
   await test('cloud o\'chdi — kassa litsenziyani to\'g\'ridan-to\'g\'ri oladi', async () => {

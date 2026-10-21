@@ -28,7 +28,7 @@ async function localStats(io) {
     Session.countDocuments({ seenAt: { $gt: new Date(Date.now() - ACTIVE_MS) } }),
     devices(io),
   ])
-  return { waiters, admins, waitersOnline, devices: dev }
+  return { waiters, admins, waitersOnline, devices: dev, deviceList: await require('../utils/devices').list().catch(() => []) }
 }
 
 // Cloud: o'zi + unga ulangan kassalar (sync orqali tanilgan)
@@ -37,7 +37,7 @@ async function report(io) {
   const list = await nodes().find().sort({ lastSeen: -1 }).limit(20).toArray()
   return {
     ...own,
-    nodes: list.map(n => ({ id: n._id, version: n.version || '', lastSeen: n.lastSeen, devices: n.stats?.devices || {}, health: n.stats?.health })),
+    nodes: list.map(n => ({ id: n._id, version: n.version || '', lastSeen: n.lastSeen, devices: n.stats?.devices || {}, health: n.stats?.health, deviceList: n.stats?.deviceList || [] })),
   }
 }
 
@@ -52,6 +52,7 @@ async function recordNode(id, { version, stats } = {}) {
       set.stats = {
         devices: Object.fromEntries(Object.entries(s?.devices || {}).slice(0, 10).map(([k, v]) => [String(k).slice(0, 20), Math.max(0, +v || 0)])),
         health: cleanHealth(s?.health),
+        deviceList: cleanDeviceList(s?.deviceList),
       }
     } catch {}
   }
@@ -70,4 +71,12 @@ function cleanHealth(h) {
   }
 }
 
-module.exports = { localStats, report, recordNode, cleanHealth }
+// Qurilmalar ro'yxati (utils/devices.js → list) — qisqa matnlar
+function cleanDeviceList(list) {
+  return (Array.isArray(list) ? list : []).slice(0, 25).map(d => ({
+    i: short(d?.i, 64), a: short(d?.a, 10), u: short(d?.u, 40), r: short(d?.r, 20), d: short(d?.d, 40),
+    s: d?.s && !isNaN(new Date(d.s)) ? new Date(d.s).toISOString() : null,
+  })).filter(d => d.i)
+}
+
+module.exports = { localStats, report, recordNode, cleanHealth, cleanDeviceList }

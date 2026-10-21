@@ -6,8 +6,13 @@ import { appKind, deviceId } from '../utils/terminal.js'
 // auth funksiya ko'rinishida — har qayta ulanishda yangi token olinadi.
 // app/device — litsenziya statistikasi uchun (qaysi ilovadan, nechta qurilma ulangan).
 export function createSocket(opts = {}) {
-  return io(API_URL, {
+  const s = io(API_URL, {
     ...opts,
     auth: cb => cb({ token: localStorage.getItem('rp_token') || '', app: appKind() || 'web', device: deviceId() }),
   })
+  // Sotuvchi shu qurilmani bloklagan — LicenseGate bloklash ekranini ko'rsatadi
+  const blocked = () => window.dispatchEvent(new Event('rp-device-blocked'))
+  s.on('deviceBlocked', blocked)
+  s.on('connect_error', err => { if (err?.message === 'device_blocked') { blocked(); s.disconnect() } })
+  return s
 }

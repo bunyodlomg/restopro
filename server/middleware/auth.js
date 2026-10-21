@@ -10,6 +10,10 @@ const STAFF_OFF = 'Xodimlar uchun kirish admin tomonidan vaqtincha o\'chirilgan'
 const PASSWORD_CHANGE_ALLOWED = ['/api/auth/me', '/api/auth/change-password']
 
 module.exports = async function authMiddleware(req, res, next) {
+  // Sotuvchi bloklagan qurilma (frontend har so'rovda x-device yuboradi)
+  if (require('../license').deviceBlocked(req.get('x-device')))
+    return res.status(403).json({ message: 'Bu qurilma sotuvchi tomonidan bloklangan', code: 'DEVICE_BLOCKED' })
+
   const header = req.headers.authorization
   if (!header || !header.startsWith('Bearer '))
     return res.status(401).json({ message: 'Token topilmadi' })

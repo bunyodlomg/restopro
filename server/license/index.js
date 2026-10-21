@@ -197,6 +197,12 @@ async function runCommands(p) {
 }
 const lastCommand = () => saved?.lastCmd || null
 
+// Sotuvchi bloklagan qurilma (telefon / ofitsant terminali / kassa oynasi) — kira olmaydi
+const deviceBlocked = id => {
+  const p = verify(saved?.token)
+  return !!id && Array.isArray(p?.bd) && p.bd.includes(String(id))
+}
+
 // Cloud: sotuvchi bloklagan kassa sync qila olmaydi
 const nodeBlocked = node => {
   const p = verify(saved?.token)
@@ -209,7 +215,7 @@ const onChange = fn => listeners.push(fn)
 let lastKey = null
 function announce() {
   const s = status()
-  const key = [s.state, s.blocked, s.readonly, s.paidUntil, s.message?.id].join('|')
+  const key = [s.state, s.blocked, s.readonly, s.paidUntil, s.message?.id, (verify(saved?.token)?.bd || []).join(',')].join('|')
   if (key === lastKey) return
   const first = lastKey === null
   lastKey = key
@@ -378,4 +384,4 @@ router.get('/update-token', async (req, res) => {
   res.json({ url: `${LICENSE_URL}/updates`, token })
 })
 
-module.exports = { start, status, requireLicense, router, currentToken, currentUpdateToken, isRevoked, verify, onChange, setStatsProvider, waitToken, onCommand, lastCommand, nodeBlocked }
+module.exports = { start, status, requireLicense, router, currentToken, currentUpdateToken, isRevoked, verify, onChange, setStatsProvider, waitToken, onCommand, lastCommand, nodeBlocked, deviceBlocked }

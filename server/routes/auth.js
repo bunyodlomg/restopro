@@ -15,6 +15,8 @@ const pinHashOf = (salt, pin) => crypto.createHash('sha256').update(salt + ':' +
 
 // Qaysi ilovaga kim kiradi: Kassa (desktop) — faqat admin, Ofitsant terminali — faqat ofitsant.
 // Brauzer / telefon (app yo'q) — hamma. Sessiya ochilishidan OLDIN tekshiriladi.
+const DEVICE_BLOCKED = "Bu qurilma sotuvchi tomonidan bloklangan. Restoran egasiga yoki sotuvchiga murojaat qiling."
+
 const APP_ROLES = {
   kassa:    { ok: role => role === 'admin', message: 'Kassa dasturiga faqat admin kiradi. Ofitsant «RestoPro Ofitsant» ilovasi yoki telefon orqali kiradi.' },
   terminal: { ok: role => role !== 'admin', message: 'Bu terminalga faqat ofitsantlar kira oladi. Admin kassa yoki sayt orqali kiradi.' },
@@ -27,10 +29,16 @@ async function issue(req, res, user) {
   if (rule && !rule.ok(user.role))
     return res.status(403).json({ message: rule.message, code: 'WRONG_APP' })
 
+  if (require('../license').deviceBlocked(req.body?.deviceId))
+    return res.status(403).json({ message: DEVICE_BLOCKED, code: 'DEVICE_BLOCKED' })
+
   const session = await startSession(user, req.body?.deviceId)
   if (!session)
     return res.status(409).json({ message: SESSION_ACTIVE, code: 'SESSION_ACTIVE' })
   const { sid, closed = [] } = session
+  require('../utils/devices').touch(req.body?.deviceId, {
+    app: req.body?.app, user: user.name, role: user.role, ip: req.ip, ua: req.get('user-agent'),
+  }).catch(() => {})
   const token = jwt.sign({ _id: user._id, role: user.role, name: user.name, sid }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
   if (sid) kickStaleSessions(req.app.get('io'), [user._id, ...closed]).catch(err => console.error('Sessiya:', err.message))
   res.json({

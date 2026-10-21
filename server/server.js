@@ -68,7 +68,7 @@ app.set('io', io)
 io.use(async (socket, next) => {
   try {
     const payload = jwt.verify(socket.handshake.auth?.token || '', JWT_SECRET)
-    const user = await User.findById(payload._id).select('role isActive')
+    const user = await User.findById(payload._id).select('role isActive name')
     if (!user || !user.isActive) return next(new Error('unauthorized'))
     if (user.role !== 'admin' && (await require('./utils/settingsCache').get()).staffAccessEnabled === false)
       return next(new Error('unauthorized'))
@@ -83,6 +83,11 @@ io.use(async (socket, next) => {
     const { app: kind, device } = socket.handshake.auth || {}
     socket.data.app    = ['kassa', 'terminal'].includes(kind) ? kind : 'web'
     socket.data.device = String(device || '').slice(0, 64) || socket.id
+    // Sotuvchi shu qurilmani bloklagan
+    if (license.deviceBlocked(socket.data.device)) return next(new Error('device_blocked'))
+    require('./utils/devices').touch(device, {
+      app: socket.data.app, user: user.name, role: user.role, ip: socket.handshake.address, ua: socket.handshake.headers['user-agent'],
+    }).catch(() => {})
     socket.join(`user:${user._id}`)   // sessiya yopilsa — shu xona orqali chiqariladi
     next()
   } catch {
@@ -94,7 +99,13 @@ io.use(async (socket, next) => {
 sessions.startHeartbeat(io)
 
 // Litsenziya: holat o'zgarsa (sotuvchi to'xtatdi / faollashtirdi) — barcha ekranlar shu zahoti biladi
-license.onChange(s => io.emit('license', s))
+license.onChange(async s => {
+  io.emit('license', s)
+  // Sotuvchi bloklagan qurilmalar — ochiq ekranlari shu zahoti yopiladi
+  for (const sock of await io.fetchSockets()) {
+    if (license.deviceBlocked(sock.data.device)) { sock.emit('deviceBlocked'); sock.disconnect(true) }
+  }
+})
 // Sotuvchi panelida ko'rinadigan holat: cloud o'zi va kassalari haqida, kassa/lokal server — o'zi haqida
 {
   const stats = require('./license/stats')

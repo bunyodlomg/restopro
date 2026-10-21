@@ -5,6 +5,7 @@ import { createSocket } from '../api/socket.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import AuthFrame from './auth/AuthFrame.jsx'
 import SyncNotices from './shared/SyncNotices.jsx'
+import { deviceId } from '../utils/terminal.js'
 
 const fmt = s => (s ? new Date(s).toLocaleDateString('ru-RU') : '—')
 
@@ -14,6 +15,7 @@ const BLOCKED_TEXT = {
   revoked:   ["Litsenziya ulanmagan", "Bu server hech qaysi mijozga biriktirilmagan (yoki sotuvchi bekor qilgan). Ma'lumotlaringiz saqlangan — sotuvchiga quyidagi Server ID ni ayting: u biriktirishi bilan tizim o'zi ochiladi."],
   stale:     ["Litsenziyani tekshirib bo'lmadi", "Tizim uzoq vaqt litsenziya serveri bilan bog'lanmadi. Internetga ulang va «Qayta tekshirish» tugmasini bosing."],
   missing:   ["Litsenziya faollashtirilmagan", "Litsenziya hali tekshirilmadi. Internetga ulanganini tekshiring va «Qayta tekshirish» tugmasini bosing."],
+  devblocked: ["Bu qurilma bloklangan", "Sotuvchi shu telefon / terminalni alohida blokladi. Restoranning boshqa qurilmalari ishlayapti. Restoran egasiga yoki sotuvchiga quyidagi Qurilma ID ni ayting."],
   device:    ["Bu kassa bloklangan", "Sotuvchi shu kompyuterni alohida blokladi (restoranning boshqa qurilmalari ishlayapti). Ma'lumotlaringiz saqlangan — sotuvchiga murojaat qiling."],
   nokey:     ["Litsenziya ulanmagan","Sotuvchiga quyidagi Server ID ni ayting: u admin panelda shu serverni mijozga biriktirishi bilan tizim o'zi ochiladi."],
 }
@@ -26,6 +28,7 @@ function Blocked({ lic, onRetry, busy }) {
       <h1 style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-.03em', margin: '0 0 10px' }}>{title}</h1>
       <p className="muted" style={{ fontSize: 16, margin: '0 0 22px' }}>{text}</p>
       <div className="card card-pad col" style={{ gap: 10, marginBottom: 20 }}>
+        {lic.deviceId && <div className="row" style={{ justifyContent: 'space-between' }}><span className="label">Qurilma ID</span><b className="mono">{lic.deviceId}</b></div>}
         {lic.serverId && <div className="row" style={{ justifyContent: 'space-between' }}><span className="label">Server ID</span><b className="mono">{lic.serverId}</b></div>}
         {lic.customer && <div className="row" style={{ justifyContent: 'space-between' }}><span className="label">Mijoz</span><b>{lic.customer}</b></div>}
         {lic.paidUntil && <div className="row" style={{ justifyContent: 'space-between' }}><span className="label">To'langan sana</span><b className="mono">{fmt(lic.paidUntil)}</b></div>}
@@ -77,6 +80,12 @@ export default function LicenseGate({ children }) {
   const [busy, setBusy] = useState(false)
   const [hidden, setHidden] = useState(false)
   const [msgSeen, setMsgSeen] = useState(seenMessage)
+  const [devBlocked, setDevBlocked] = useState(false)
+  useEffect(() => {
+    const on = () => setDevBlocked(true)
+    window.addEventListener('rp-device-blocked', on)
+    return () => window.removeEventListener('rp-device-blocked', on)
+  }, [])
   const { isAdmin, user } = useAuth()
 
   // Blokdan chiqqanda sahifa qayta yuklanadi (bloklangan paytdagi xato holatlar qolmasin)
@@ -111,6 +120,7 @@ export default function LicenseGate({ children }) {
     finally { setBusy(false) }
   }
 
+  if (devBlocked) return <Blocked lic={{ state: 'devblocked', deviceId: deviceId().slice(0, 8).toUpperCase(), contact: lic?.contact }} onRetry={() => window.location.reload()} busy={false}/>
   if (lic?.blocked) return <Blocked lic={lic} onRetry={retry} busy={busy}/>
   // Yumshoq blok — hamma ko'radi (ofitsant ham yangi buyurtma nega o'tmayotganini bilsin)
   const warn = (lic?.readonly && !(isAdmin && hidden)) ||

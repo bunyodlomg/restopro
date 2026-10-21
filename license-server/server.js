@@ -190,7 +190,9 @@ function cleanStats(raw) {
       lastSeen: n?.lastSeen && !isNaN(new Date(n.lastSeen)) ? new Date(n.lastSeen).toISOString() : null,
       devices: counts(n?.devices),
       health: cleanHealth(n?.health),
+      deviceList: cleanDeviceList(n?.deviceList),
     })),
+    deviceList: cleanDeviceList(raw.deviceList),
   }
 }
 
@@ -208,12 +210,23 @@ function cleanHealth(h) {
   }
 }
 
+// Restoran qurilmalari (telefon, ofitsant terminali, kassa oynasi) — sotuvchi alohida bloklay oladi
+function cleanDeviceList(list) {
+  const s = (v, max) => String(v ?? '').slice(0, max)
+  return (Array.isArray(list) ? list : []).slice(0, 25).map(d => ({
+    i: s(d?.i, 64), a: ['kassa', 'terminal', 'web'].includes(d?.a) ? d.a : 'web', u: s(d?.u, 40), r: s(d?.r, 20), d: s(d?.d, 40),
+    s: isoOrNull(d?.s),
+  })).filter(d => d.i)
+}
+
 // Imzolangan javobga: alohida bloklangan kassalar, sotuvchi xabari, masofaviy buyruqlar (oxirgi 7 kun)
 const CMD_DAYS = 7
 function extrasFor(c) {
   const out = {}
   const bn = Object.keys(c.blockedNodes || {})
   if (bn.length) out.bn = bn
+  const bd = Object.keys(c.blockedDevices || {})
+  if (bd.length) out.bd = bd
   if (c.message?.text) out.msg = { i: c.message.id, t: c.message.text, l: c.message.level }
   const cmd = (c.commands || []).filter(x => Date.now() - new Date(x.at) < CMD_DAYS * DAY).map(x => ({ i: x.id, t: x.type, n: x.node }))
   if (cmd.length) out.cmd = cmd
@@ -498,6 +511,19 @@ admin.post('/api/customers/:id/node', (req, res) => {
   if (req.body.blocked) c.blockedNodes[node] = new Date().toISOString()
   else delete c.blockedNodes[node]
   logEvent(c, req.body.blocked ? 'nodeBlock' : 'nodeUnblock', node)
+  bump(c); saveDb(); res.json(view(c))
+})
+
+// Bitta qurilmani (telefon / ofitsant terminali / kassa oynasi) bloklash / ochish
+admin.post('/api/customers/:id/device', (req, res) => {
+  const c = findById(req.params.id)
+  const device = str(req.body?.device, 64)
+  if (!c || !device) return res.status(404).json({ message: 'Topilmadi' })
+  c.blockedDevices = c.blockedDevices || {}
+  const label = str(req.body?.label, 80)
+  if (req.body.blocked) c.blockedDevices[device] = { at: new Date().toISOString(), label }
+  else delete c.blockedDevices[device]
+  logEvent(c, req.body.blocked ? 'deviceBlock' : 'deviceUnblock', label || device.slice(0, 8))
   bump(c); saveDb(); res.json(view(c))
 })
 

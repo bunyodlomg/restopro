@@ -281,7 +281,7 @@ function connectHtml(c) {
       ${line('Sync kaliti', c.sync.key, '••••••••••••' + c.sync.key.slice(-4))}
       <span class="muted">Kassa sozlash oynasidagi «Ulanish kodi» maydoniga qo'ying — manzil va kalit o'zi to'ldiriladi.</span></div>`
 }
-const EVENT = { create: 'Yaratildi', pay: "To'lov", suspend: "To'xtatildi", activate: 'Faollashtirildi', paidUntil: "Sana qo'lda o'zgartirildi", blockMode: 'Bloklash turi', bind: 'Server biriktirildi', unbind: 'Server ajratildi', nodeBlock: 'Kassa bloklandi', nodeUnblock: 'Kassa ochildi', message: 'Xabar', command: 'Buyruq' }
+const EVENT = { create: 'Yaratildi', pay: "To'lov", suspend: "To'xtatildi", activate: 'Faollashtirildi', paidUntil: "Sana qo'lda o'zgartirildi", blockMode: 'Bloklash turi', bind: 'Server biriktirildi', unbind: 'Server ajratildi', nodeBlock: 'Kassa bloklandi', nodeUnblock: 'Kassa ochildi', deviceBlock: 'Qurilma bloklandi', deviceUnblock: 'Qurilma ochildi', message: 'Xabar', command: 'Buyruq' }
 
 // Kassa sog'ligi: sotuvchi e'tibor berishi kerak bo'lgan holatlar
 function healthIssues(n) {
@@ -330,6 +330,41 @@ function eventsHtml(c) {
   return `<div style="display:grid;gap:4px;max-height:220px;overflow:auto">${ev.map(e =>
     `<div class="row" style="gap:8px;font-size:13px"><span class="mono muted" style="min-width:128px">${new Date(e.at).toLocaleString('ru-RU').slice(0, 17)}</span><b>${EVENT[e.act] || esc(e.act)}</b><span class="muted">${esc(e.detail)}</span></div>`).join('')}</div>`
 }
+// Restoran ekranlari: cloud'ga va kassalarga ulangan telefon / terminal / kassa oynalari.
+// Bitta qurilmani bloklash — faqat shu ekran kira olmaydi (ochiq bo'lsa shu zahoti yopiladi).
+function screensOf(c) {
+  const all = new Map()
+  const add = (list, where) => (list || []).forEach(d => {
+    const cur = all.get(d.i)
+    if (!cur || new Date(d.s) > new Date(cur.s)) all.set(d.i, { ...d, where })
+  })
+  add(c.stats?.deviceList, 'cloud')
+  for (const n of c.stats?.nodes || []) add(n.deviceList, 'kassa ' + n.id)
+  // Bloklanganlar ro'yxatdan chiqib ketgan bo'lsa ham ko'rinsin (ochish uchun)
+  for (const [i, b] of Object.entries(c.blockedDevices || {})) if (!all.has(i)) all.set(i, { i, a: '', u: b.label || '', d: '', s: b.at, where: '' })
+  return [...all.values()].sort((a, b) => new Date(b.s) - new Date(a.s))
+}
+function screensHtml(c) {
+  const list = screensOf(c)
+  if (!list.length) return '<span class="muted">Hali ma\'lumot yo\'q (restoran serveri yangilangach paydo bo\'ladi)</span>'
+  return `<div style="display:grid;gap:6px">${list.map(d => {
+    const blocked = !!c.blockedDevices?.[d.i]
+    const label = screenLabel(d)
+    return `<div class="row" style="justify-content:space-between;gap:8px;font-size:14px">
+      <span>${esc(label)}${blocked ? ' <span class="tag t-suspended">bloklangan</span>' : ''}
+        <div class="muted" style="font-size:12.5px">${esc([d.d, d.where, ago(d.s), d.i.slice(0, 8).toUpperCase()].filter(Boolean).join(' · '))}</div></span>
+      ${blocked ? link('ochish', `deviceAct('${c.id}','${esc(d.i)}',false)`) : link('bloklash', `deviceAct('${c.id}','${esc(d.i)}',true)`, true)}
+    </div>`
+  }).join('')}</div>`
+}
+const screenLabel = d => [APP[d.a] || 'Qurilma', d.u].filter(Boolean).join(' · ')
+async function deviceAct(id, device, blocked) {
+  const d = screensOf(list.find(x => x.id === id)).find(x => x.i === device)
+  const label = d ? screenLabel(d) : device.slice(0, 8)
+  if (blocked && !confirm(`«${label}» qurilmasini bloklaysizmi?\nShu ekran kira olmaydi, ochiq bo'lsa shu zahoti yopiladi. Restoranning boshqa qurilmalari ishlayveradi.`)) return
+  try { await api('POST', `/customers/${id}/device`, { device, blocked, label }); $('#dlg').close(); toast(blocked ? 'Bloklandi' : 'Ochildi'); load() }
+  catch (e) { toast('Xato: ' + e.message) }
+}
 function devicesHtml(c) {
   const st = c.stats
   if (!st) return '<span class="muted">Hali ma\'lumot yo\'q (restoran serveri yangilangach paydo bo\'ladi)</span>'
@@ -357,7 +392,9 @@ function devicesHtml(c) {
             </div></div>`
       }).join('')}
     </div>
-    <div class="label" style="margin:10px 0 6px">Ulangan ekranlar</div>
+    <div class="label" style="margin:10px 0 6px">Ekranlar (oxirgi 30 kun)</div>
+    ${screensHtml(c)}
+    <div class="label" style="margin:10px 0 6px">Hozir ulangan</div>
     <div class="dev">${screens || '<span class="muted">Hozir hech kim ulanmagan</span><span></span>'}</div>
     <div class="label" style="margin:10px 0 6px">Xodimlar</div>
     <div class="dev"><span>Ofitsantlar</span><span class="nums">${st.waiters}</span><span>Hozir ishlayapti</span><span class="nums">${c.online ? st.waitersOnline : '—'}</span><span>Adminlar</span><span class="nums">${st.admins}</span></div>

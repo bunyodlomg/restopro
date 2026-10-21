@@ -139,6 +139,22 @@ Kassa ostidagi amallar:
 
 Buyruq restoran online bo'lsa bir necha soniyada, offline bo'lsa internetga ulanishi bilan bajariladi (7 kun ichida).
 
+### Telefon va ofitsant terminallarini boshqarish
+
+Mijoz oynasidagi **Ekranlar** ro'yxatida restoranga oxirgi 30 kunda ulangan barcha qurilmalar ko'rinadi: telefonlar, ofitsant terminallari va kassa oynalari. Har birida ilova turi, kim kirgani, brauzer yoki tizim, qaysi serverga ulangani va qachon ko'ringani bor.
+- **bloklash** — shu qurilma kira olmaydi, ochiq ekrani esa darhol yopiladi. Ekranda «Bu qurilma bloklangan» yozuvi va Qurilma ID chiqadi. Restoranning boshqa qurilmalari ishlayveradi.
+- **ochish** — qurilma qaytadan ishlaydi (ekrandagi «Qayta tekshirish» tugmasi bilan).
+
+Qurilma ID brauzerga bog'langan. Telefon brauzer ma'lumotlari tozalansa, yangi ID oladi va ro'yxatda yangi qurilma bo'lib chiqadi.
+
+### Sinxronlash ziddiyatlari
+
+Ba'zan kassa va cloud bir-biridan bexabar bir xil login yoki bir xil raqamli stol yaratadi. Bunday holatda tizim ziddiyatni o'zi hal qiladi:
+- avval yaratilgani o'zgarishsiz qoladi;
+- kassadagisi qayta nomlanadi: login `ali` bo'lsa `ali-2`, stol raqami bo'lsa shu bo'limdagi keyingi bo'sh raqam beriladi.
+
+Restoran adminining ekranida nima o'zgargani haqida xabar chiqadi. Bunda hech qanday yozuv yo'qolmaydi. Kassa yozib ololmagan yozuvlar saqlab qo'yiladi va keyingi sinxronlashda qayta uriniladi. Ularning soni kassa holatida «N ta yozuv sinxronlanmadi» deb ko'rinadi.
+
 ### Restoranga xabar
 
 Mijoz oynasidagi **Restoranga xabar** bo'limiga matn yozib, **Yuborish** tugmasini bosing. Xabar restoran adminlari ekranida banner bo'lib chiqadi. Masalan: «25-oktabr 02:00 da yangilanish», «To'lov eslatmasi». Xabarni olib tashlash uchun matnni o'chirib, yana yuboring.
