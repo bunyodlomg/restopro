@@ -192,7 +192,7 @@ restoranlarga ruxsat etiladi.
 ```
  main'ga push → GitHub Actions .exe yig'adi → litsenziya serveriga yuklaydi (/api/v1/updates)
                                                          │
- Kassa / Ofitsant ilovasi ← 3 soatda tekshiradi ← restoran serveri beradigan imzoli ruxsatnoma
+ Kassa / Ofitsant ilovasi ← 30 daqiqada tekshiradi ← restoran serveri beradigan imzoli ruxsatnoma
 ```
 
 **Bir martalik sozlash:**
@@ -207,6 +207,16 @@ Shundan keyin `main` ga har push'da yangi versiya (`1.0.N`) avtomatik yuklanadi.
 
 Restoranda: kassada adminga «Yangi versiya tayyor — Hozir yangilash» chiqadi (yoki dastur yopilganda o'zi
 o'rnatiladi); ofitsant monobloki PIN ekranida o'zi yangilanadi.
+
+**Darhol yangilash:** mijoz oynasidagi «Ekranlar» yonida **ilovalarni hozir yangilash** tugmasi bor (bitta restoran uchun). «Ilovalar yangilanishi» blokida esa **Hamma restoranlarda hozir tekshirish** tugmasi bor. Har bir ekranning versiyasi «Ekranlar» ro'yxatida ko'rinadi: eskirgan versiya ⚠ bilan belgilanadi, yangilanishda xato bo'lsa, sababi ham yoziladi.
+
+**Windows ruxsati so'ralmaydi.** Ilovalar foydalanuvchi papkasiga (`%LOCALAPPDATA%\Programs`) o'rnatiladi, shuning uchun yangilanishga administrator ruxsati kerak emas. Avval `Program Files`ga o'rnatilgan kompyuterlarda jarayon bunday:
+1. shu versiyaga yangilanish oxirgi marta ruxsat so'raydi;
+2. so'ng dastur «Yangilanishlarni ruxsatsiz qilish»ni taklif qiladi. **Hozir** bosilsa, dastur o'zi yangi papkaga ko'chadi. Eski nusxani o'chirish uchun bir marta ruxsat so'raydi; rad etilsa ham dastur ishlashda davom etadi. Ma'lumotlar o'chmaydi.
+
+Muammo bo'lsa, logga qarang: `%APPDATA%\RestoPro Kassa\migrate.log` (ofitsant ilovasida `RestoPro Ofitsant`).
+
+Kassa yangi kompyuterga o'rnatilganda telefonlar ulanishi uchun Firewall bir marta ruxsat so'raydi (5050-port).
 
 ### Repozitoriyni yopiq (private) qilish
 GitHub → repozitoriy → **Settings → General → Danger Zone → Change repository visibility → Make private**.
