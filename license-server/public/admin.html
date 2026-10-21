@@ -83,6 +83,14 @@
     <b>Ilovalar yangilanishi</b>
     <div class="muted" id="updInfo" style="margin-top:6px"></div>
   </div>
+  <div class="card" style="margin-top:12px;padding:14px 16px">
+    <div class="row" style="justify-content:space-between">
+      <div><b>Litsenziya serveri</b> <span class="muted" id="srvVer"></span></div>
+      <button class="dark" id="srvBtn" onclick="selfUpdate()">Yangilash</button>
+    </div>
+    <div class="muted" style="margin-top:6px">GitHub'ga push qilinganda o'zi yangilanadi. Bu tugma — qo'lda: zaxira oladi, oxirgi versiyani yuklaydi va qayta ishga tushadi; ishlamasa oldingi versiyaga qaytadi.</div>
+    <pre id="srvLog" class="pub" style="display:none;margin:10px 0 0;white-space:pre-wrap"></pre>
+  </div>
 </main>
 
 <dialog id="dlg"><form method="dialog" id="form"></form></dialog>
@@ -408,7 +416,34 @@ api('GET', '/info').then(i => {
   const line = (n, x) => x ? `${n}: <b class="mono">${esc(x.version)}</b> (${date(x.at)})` : `${n}: hali yuklanmagan`
   $('#updInfo').innerHTML = (i.uploadReady ? '' : '<span style="color:var(--accent-ink)">.env da UPDATE_UPLOAD_TOKEN yo\'q — GitHub yangi versiyalarni yuklay olmaydi.</span><br>')
     + line('Kassa', u.kassa) + '<br>' + line('Ofitsant terminali', u.terminal)
+  showServer(i.server)
 })
+
+// Litsenziya serverining o'z versiyasi va yangilanish jarayoni
+function showServer(s) {
+  if (!s) return
+  $('#srvVer').textContent = s.commit ? `· versiya ${s.commit}` : ''
+  $('#srvBtn').disabled = s.running
+  $('#srvBtn').textContent = s.running ? 'Yangilanmoqda…' : 'Yangilash'
+  $('#srvLog').style.display = s.log ? '' : 'none'
+  $('#srvLog').textContent = s.log || ''
+}
+async function selfUpdate() {
+  if (!confirm('Litsenziya serverini yangilaysizmi?\nBir necha soniya javob bermaydi — restoranlar bunga sezmaydi, o\'zlari qayta ulanadi.')) return
+  try { showServer(await api('POST', '/self-update')) } catch (e) { return toast('Xato: ' + e.message) }
+  // Server qayta ishga tushadi — tugaguncha holatni kuzatamiz
+  const end = Date.now() + 5 * 60000
+  const poll = async () => {
+    const s = await api('GET', '/self-update').catch(() => null)
+    if (s) showServer(s)
+    if (s && !s.running) {
+      if (/✅/.test(s.log)) { toast('Yangilandi'); setTimeout(() => location.reload(), 1500) }
+      return
+    }
+    if (Date.now() < end) setTimeout(poll, 2000)
+  }
+  setTimeout(poll, 2000)
+}
 load().catch(e => toast('Xato: ' + e.message))
 // Dialog ochiq bo'lsa yangilamaymiz (kiritilayotgan ma'lumot o'chmasin)
 setInterval(() => { if (!$('#dlg').open) load().catch(() => {}) }, 15000)

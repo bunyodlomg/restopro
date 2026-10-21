@@ -1,0 +1,65 @@
+# RestoPro — litsenziya serverini avtomatik yangilash
+#
+# main'ga push qilinganda license-server/ o'zgargan bo'lsa, litsenziya serveriga "yangilan" deydi.
+# Server o'zi deploy/update-license.sh ni ishga tushiradi: data/ zaxirasi → git pull →
+# pm2 restart → tekshiruv; ishlamasa oldingi versiyaga qaytadi. Bu yerda natija kutiladi.
+#
+# Yangi sir kerak emas — kassa yangilanishlari bilan bir xil:
+#   LICENSE_SERVER_URL, UPDATE_UPLOAD_TOKEN
+name: Litsenziya serveri
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['main']
+    paths: ['license-server/**', 'deploy/update-license.sh', '.github/workflows/license-server.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: license-server-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      LICENSE_SERVER_URL: ${{ secrets.LICENSE_SERVER_URL }}
+      UPDATE_UPLOAD_TOKEN: ${{ secrets.UPDATE_UPLOAD_TOKEN }}
+    steps:
+      - name: Yangilash
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$LICENSE_SERVER_URL" ] || [ -z "$UPDATE_UPLOAD_TOKEN" ]; then
+            echo "::warning::LICENSE_SERVER_URL / UPDATE_UPLOAD_TOKEN sirlari yo'q — litsenziya serveri yangilanmadi"
+            exit 0
+          fi
+          URL="$(printf '%s' "$LICENSE_SERVER_URL" | tr -d '[:space:]"'"'"'')"
+          URL="${URL%/}"
+          case "$URL" in http://*|https://*) ;; *) URL="https://$URL" ;; esac
+          AUTH="Authorization: Bearer $UPDATE_UPLOAD_TOKEN"
+
+          code="$(curl -sS -o resp.json -w '%{http_code}' --max-time 20 -X POST -H "$AUTH" "$URL/api/v1/self-update" || true)"
+          cat resp.json 2>/dev/null; echo
+          if [ "$code" = "404" ]; then
+            echo "::error::Litsenziya serveri hali eski versiyada (o'zini yangilashni bilmaydi). Bir marta qo'lda yangilang: cd /opt/restopro && git pull && pm2 restart restopro-license"
+            exit 1
+          fi
+          [ "$code" = "200" ] || { echo "::error::Yangilashni boshlab bo'lmadi (HTTP $code)"; exit 1; }
+
+          # Server qayta ishga tushadi (bir necha soniya javob bermaydi); natija update.log da (5 daqiqagacha)
+          for i in $(seq 1 60); do
+            sleep 5
+            v="$(curl -fsS --max-time 10 -H "$AUTH" "$URL/api/v1/version" 2>/dev/null || true)"
+            [ -n "$v" ] || { echo "[$i] server javob bermayapti (qayta ishga tushmoqda)"; continue; }
+            echo "[$i] server: $(jq -r '.commit[0:7]' <<<"$v") running=$(jq -r .running <<<"$v")"
+            [ "$(jq -r .running <<<"$v")" = "false" ] || continue
+            log="$(jq -r .log <<<"$v")"
+            printf '%s\n' "$log"
+            if grep -q '❌' <<<"$log"; then echo "::error::Yangilash muvaffaqiyatsiz — oldingi versiya ishlayapti"; exit 1; fi
+            if grep -q '✅' <<<"$log"; then echo "Litsenziya serveri yangilandi: $(jq -r '.commit[0:7]' <<<"$v")"; exit 0; fi
+          done
+          echo "::error::Yangilanish 5 daqiqada tugamadi — admin paneldagi «Litsenziya serveri» bo'limini tekshiring"
+          exit 1

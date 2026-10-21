@@ -304,11 +304,56 @@ app.get('/updates/:file', (req, res) => {
 
 // PUT /api/v1/updates/:file — GitHub Actions yuklaydi (Authorization: Bearer UPDATE_UPLOAD_TOKEN).
 // .exe/.blockmap avval, .yml oxirida — mijozlar yml'ni ko'rganda fayl allaqachon joyida bo'ladi.
-app.put('/api/v1/updates/:file', (req, res) => {
+function uploadAuth(req) {
   const given = Buffer.from((req.get('authorization') || '').replace(/^Bearer /, ''))
   const want = Buffer.from(UPLOAD_TOKEN)
-  if (UPLOAD_TOKEN.length < 32 || given.length !== want.length || !crypto.timingSafeEqual(given, want))
-    return res.status(401).json({ message: 'Ruxsat yo\'q' })
+  return UPLOAD_TOKEN.length >= 32 && given.length === want.length && crypto.timingSafeEqual(given, want)
+}
+
+// ── Litsenziya serverining o'zini yangilash ────────────────────
+// GitHub Actions (license-server/ o'zgarganda) yoki admin paneldagi «Yangilash» tugmasi
+// deploy/update-license.sh ni ishga tushiradi: zaxira → git pull → pm2 restart → tekshiruv,
+// ishlamasa oldingi versiyaga qaytadi. Skript server jarayonidan ajratib (setsid) ishga tushiriladi —
+// pm2 restart uni ham o'ldirmasligi uchun.
+const REPO_DIR      = path.resolve(__dirname, '..')
+const UPDATE_SCRIPT = path.join(REPO_DIR, 'deploy', 'update-license.sh')
+const UPDATE_LOG    = path.join(DATA_DIR, 'update.log')
+const COMMIT = (() => {
+  try { return require('child_process').execFileSync('git', ['-C', REPO_DIR, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim() }
+  catch { return '' }
+})()
+function selfUpdateState() {
+  const st = fs.existsSync(UPDATE_LOG) ? fs.statSync(UPDATE_LOG) : null
+  const lines = st ? fs.readFileSync(UPDATE_LOG, 'utf8').trim().split('\n') : []
+  const last = lines[lines.length - 1] || ''
+  // Oxirgi qatorda natija yo'q va log yaqinda yozilgan — hali ketyapti
+  const running = !!st && !/✅|❌/.test(last) && Date.now() - st.mtimeMs < 5 * 60000
+  return { commit: COMMIT.slice(0, 7), running, at: st ? st.mtime.toISOString() : null, log: lines.slice(-15).join('\n') }
+}
+function startSelfUpdate() {
+  if (process.platform === 'win32' || !fs.existsSync(UPDATE_SCRIPT)) throw Object.assign(new Error('Yangilash skripti topilmadi (deploy/update-license.sh)'), { status: 501 })
+  if (selfUpdateState().running) throw Object.assign(new Error('Yangilanish allaqachon ketyapti'), { status: 409 })
+  fs.writeFileSync(UPDATE_LOG, `[${new Date().toISOString().replace('T', ' ').slice(0, 19)}] Yangilanish boshlandi (${COMMIT.slice(0, 7)})\n`)
+  const q = s => `'${s.replace(/'/g, `'\\''`)}'`
+  require('child_process').spawn('bash', ['-c', `setsid bash ${q(UPDATE_SCRIPT)} >> ${q(UPDATE_LOG)} 2>&1 < /dev/null &`], {
+    detached: true, stdio: 'ignore', env: { ...process.env, PM2_NAME: process.env.PM2_NAME || process.env.name || 'restopro-license' },
+  }).unref()
+}
+
+// POST /api/v1/self-update — GitHub Actions (Authorization: Bearer UPDATE_UPLOAD_TOKEN)
+app.post('/api/v1/self-update', (req, res) => {
+  if (!uploadAuth(req)) return res.status(401).json({ message: 'Ruxsat yo\'q' })
+  try { startSelfUpdate(); res.json({ ok: true, from: COMMIT.slice(0, 7) }) }
+  catch (err) { res.status(err.status || 500).json({ message: err.message }) }
+})
+// GET /api/v1/version — CI yangilanish tugaganini shu orqali tekshiradi
+app.get('/api/v1/version', (req, res) => {
+  if (!uploadAuth(req)) return res.status(401).json({ message: 'Ruxsat yo\'q' })
+  res.json({ ...selfUpdateState(), commit: COMMIT })
+})
+
+app.put('/api/v1/updates/:file', (req, res) => {
+  if (!uploadAuth(req)) return res.status(401).json({ message: 'Ruxsat yo\'q' })
   const name = req.params.file
   if (!SAFE_UPD.test(name)) return res.status(400).json({ message: 'Fayl nomi noto\'g\'ri' })
   const dest = path.join(UPD_DIR, name)
@@ -392,7 +437,12 @@ const view = c => ({
 const str = (v, max) => String(v ?? '').trim().slice(0, max)
 const money = v => Math.max(0, Math.round(Number(v) || 0))
 
-admin.get('/api/info', (req, res) => res.json({ publicKey: PUBLIC_KEY_B64, graceDays: GRACE_DAYS, offlineDays: OFFLINE_DAYS, onlineMs: ONLINE_MS, contact: VENDOR_CONTACT, updates: currentVersions(), uploadReady: UPLOAD_TOKEN.length >= 32 }))
+admin.get('/api/info', (req, res) => res.json({ publicKey: PUBLIC_KEY_B64, graceDays: GRACE_DAYS, offlineDays: OFFLINE_DAYS, onlineMs: ONLINE_MS, contact: VENDOR_CONTACT, updates: currentVersions(), uploadReady: UPLOAD_TOKEN.length >= 32, server: selfUpdateState() }))
+admin.get('/api/self-update', (req, res) => res.json(selfUpdateState()))
+admin.post('/api/self-update', (req, res) => {
+  try { startSelfUpdate(); res.json(selfUpdateState()) }
+  catch (err) { res.status(err.status || 500).json({ message: err.message }) }
+})
 admin.get('/api/customers', (req, res) => res.json(db.customers.map(view)))
 
 // Ulanmagan serverlar: kaliti yo'q yoki eskirgan — sotuvchi mijozga biriktiradi (.env ga kirish shart emas)
