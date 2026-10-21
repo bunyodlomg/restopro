@@ -1,6 +1,7 @@
 import React from 'react'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { BrandMark } from '../ui.jsx'
+import { appKind } from '../../utils/terminal.js'
 
 // Kirish va parol sahifalari uchun umumiy ramka: chapda qora brend paneli, o'ngda forma
 export default function AuthFrame({ children }) {
@@ -14,7 +15,7 @@ export default function AuthFrame({ children }) {
           <BrandMark size={52}/>
           <div>
             <div style={{ fontWeight: 700, fontSize: 20 }}>{name}</div>
-            <div className="label" style={{ color: '#8A8A90' }}>Kassa tizimi</div>
+            <div className="label" style={{ color: '#8A8A90' }}>{appKind() === 'terminal' ? 'Ofitsant terminali' : 'Kassa tizimi'}</div>
           </div>
         </div>
         <div className="auth-big">Har bir buyurtma —<br/><em>aniq</em> va tez.</div>

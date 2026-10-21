@@ -40,6 +40,7 @@ function PinPad({ onSubmit, busy }) {
 export default function Login() {
   const [mode, setMode] = useState(isTerminal() ? 'pin' : 'pass')
   const [pinAvailable, setPinAvailable] = useState(false)
+  const [pinOff, setPinOff] = useState(null)   // terminalda PIN ishlamasa — sababi (IP)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
@@ -55,7 +56,7 @@ export default function Login() {
   useEffect(() => {
     API.get('/api/auth/pin-available').then(r => {
       setPinAvailable(!!r.data.available)
-      if (!r.data.available) setMode('pass')
+      if (!r.data.available) { setMode('pass'); if (isTerminal()) setPinOff({ ip: r.data.ip }) }
     }).catch(() => setMode('pass'))
   }, [])
 
@@ -93,6 +94,14 @@ export default function Login() {
       {pinAvailable && (
         <Seg value={mode} onChange={m => { setMode(m); setError('') }} style={{ marginBottom: 20 }}
           items={[{ k: 'pin', l: 'PIN kod' }, { k: 'pass', l: 'Login va parol' }]}/>
+      )}
+
+      {pinOff && (
+        <div className="hint" style={{ marginBottom: 16 }}>
+          PIN bilan kirish faqat restoran tarmog'idan ishlaydi. Terminalni kassa kompyuteriga ulang
+          (manzil: <b className="mono">http://&lt;kassa-IP&gt;:5050</b>) yoki admin <b>Sozlamalar → Restoran Wi-Fi manzillari</b> ga
+          {pinOff.ip ? <> shu IP'ni qo'shsin: <b className="mono">{pinOff.ip}</b></> : " shu tarmoq IP manzilini qo'shsin"}.
+        </div>
       )}
 
       {error && <div className="alert" style={{ marginBottom: 16 }}><AlertCircle size={20}/>{error}</div>}

@@ -7,7 +7,7 @@ const limiter = require('../middleware/loginLimiter')
 const crypto  = require('crypto')
 const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config')
 const settingsCache = require('../utils/settingsCache')
-const { isOnPremise } = require('../utils/onPremise')
+const { isOnPremise, normIp } = require('../utils/onPremise')
 const { STAFF_OFF } = require('../middleware/auth')
 const { startSession, endSession, kickStaleSessions, SESSION_ACTIVE } = require('../utils/sessions')
 
@@ -85,7 +85,8 @@ router.post('/login', limiter.check, async (req, res) => {
 
 // GET /api/auth/pin-available — PIN bilan kirish shu qurilmadan mumkinmi (restoran tarmog'i)
 router.get('/pin-available', async (req, res) => {
-  try { res.json({ available: await isOnPremise(req) }) }
+  // ip — terminal "PIN ishlamayapti" deganda adminga qaysi IP'ni qo'shish kerakligini ko'rsatadi
+  try { res.json({ available: await isOnPremise(req), ip: normIp(req.ip) }) }
   catch { res.json({ available: false }) }
 })
 
