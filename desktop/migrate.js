@@ -26,6 +26,9 @@ const OLD_UNINSTALLER = path.join(OLD_DIR, `Uninstall ${NAME}.exe`)
 const ASKED_FILE = () => path.join(app.getPath('userData'), 'migrate-asked.txt')
 // Faqat avtomatik sinov uchun (GitHub Actions, Windows): dialogsiz, berilgan yangilanish manzilidan
 const TEST = process.env.RP_MIGRATE_TEST_FEED || ''
+// Ko'chish jarayoni logi (muammo bo'lsa: %APPDATA%/<ilova>/migrate.log)
+const LOG = () => path.join(app.getPath('userData'), 'migrate.log')
+const log = msg => { try { fs.appendFileSync(LOG(), `[${new Date().toISOString()}] ${msg}\n`) } catch {} }
 
 const same = (a, b) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase()
 const runningFromOld = () => same(path.dirname(process.execPath), OLD_DIR)
@@ -63,6 +66,7 @@ async function downloadInstaller(feed, channel) {
 async function offerMigration({ parent, feed, channel, extra = [], beforeQuit = async () => {} } = {}) {
   if (!active()) return
   const fromOld = runningFromOld()
+  log(`tekshiruv: exe=${process.execPath} eski=${fromOld} yangi bor=${fs.existsSync(NEW_EXE)} eski uninstaller=${fs.existsSync(OLD_UNINSTALLER)}`)
   if (fromOld ? fs.existsSync(NEW_EXE) : !fs.existsSync(OLD_UNINSTALLER)) return
   // Ko'chirish — kuniga bir marta so'raladi; faqat eski nusxani tozalash (ixtiyoriy) — haftasiga
   const every = (fromOld ? 1 : 7) * 24 * 3600 * 1000
@@ -82,7 +86,8 @@ async function offerMigration({ parent, feed, channel, extra = [], beforeQuit = 
 
   let installer = null
   if (fromOld) {
-    try { installer = await downloadInstaller(feed, channel) } catch (err) {
+    try { installer = await downloadInstaller(feed, channel); log(`yuklandi: ${installer}`) } catch (err) {
+      log(`yuklab bo'lmadi: ${err.message}`)
       dialog.showMessageBox(parent, { type: 'warning', title: NAME, message: 'Ko\'chirib bo\'lmadi', detail: `${err.message}\n\nErtaga yana urinib ko'riladi.` })
       return
     }
@@ -95,10 +100,12 @@ async function offerMigration({ parent, feed, channel, extra = [], beforeQuit = 
   const q = s => `'${String(s).replace(/'/g, "''")}'`
   const ps = path.join(dir, 'migrate.ps1')
   fs.writeFileSync(ps, [
+    `Start-Transcript -Path ${q(LOG() + '.ps.txt')} -Append | Out-Null`,
     installer ? `Start-Process -FilePath ${q(installer)} -ArgumentList '/S','/currentuser' -Wait` : '',
     `try { Start-Process -FilePath ${q(cmd)} -Verb RunAs -Wait -WindowStyle Hidden } catch {}`,
     `if (Test-Path ${q(NEW_EXE)}) { Start-Process -FilePath ${q(NEW_EXE)} } else { Start-Process -FilePath ${q(process.execPath)} }`,
   ].join('\r\n'))
+  log(`ko'chish boshlandi: ${ps}`)
   await beforeQuit()
   spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', ps], { detached: true, stdio: 'ignore' }).unref()
   app.exit(0)
