@@ -39,5 +39,5 @@ ecosystem.config.local.js
 !desktop/build/
 !terminal/build/
 
-# deploy/update.sh: restoranlarga oxirgi o'Tnatilgan commit
+# deploy/update.sh: restoranlarga oxirgi o'rnatilgan commit
 .deployed-commit
