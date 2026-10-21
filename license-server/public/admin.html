@@ -237,7 +237,7 @@ function openNew(instance) {
     F('Restoran nomi', 'name', '', 'text', 'required') +
     `<div class="grid2">${F('Egasi', 'owner')}${F('Telefon', 'phone')}</div>` +
     F('Manzil', 'address') +
-    F('Cloud domeni (ixtiyoriy)', 'domain', '', 'text', 'placeholder="itop.example.uz"') +
+    F('Cloud domeni (ixtiyoriy)', 'domain', '', 'text', 'placeholder="cafe.itoppos.uz"') +
     `<div class="grid2">${F("Oylik to'lov (so'm)", 'monthly', 350000, 'number')}${F("O'rnatish (so'm)", 'setupFee', 2500000, 'number')}</div>` +
     F('Bepul sinov (kun)', 'trialDays', 14, 'number', 'min="0" max="60"'),
     FOOT('Yaratish'),
@@ -256,7 +256,7 @@ function openEdit(id) {
     F('Restoran nomi', 'name', c.name) +
     `<div class="grid2">${F('Egasi', 'owner', c.owner)}${F('Telefon', 'phone', c.phone)}</div>` +
     F('Manzil', 'address', c.address) +
-    F('Cloud domeni', 'domain', c.domain || '', 'text', 'placeholder="itop.example.uz"') +
+    F('Cloud domeni', 'domain', c.domain || '', 'text', 'placeholder="cafe.itoppos.uz"') +
     `<div class="grid2">${F("Oylik to'lov (so'm)", 'monthly', c.monthly, 'number')}${F("To'langan sana (qo'lda)", 'paidUntil', c.paidUntil.slice(0, 10), 'date')}</div>` +
     `<label><div class="label" style="margin-bottom:6px">Muhlat (kun)</div><input name="graceDays" type="number" min="0" max="30" value="${Number.isInteger(c.graceDays) ? c.graceDays : ''}" placeholder="Umumiy: ${info.graceDays} kun">
       <div class="muted" style="margin-top:4px">To'langan muddat tugagach necha kun ishlay oladi. 0 — muddat tugashi bilan bloklanadi (internetsiz kassa ham).</div></label>` +

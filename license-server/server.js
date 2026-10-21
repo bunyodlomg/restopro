@@ -662,7 +662,7 @@ admin.put('/api/customers/:id', (req, res) => {
     if (req.body[k] !== undefined) c[k] = str(req.body[k], max)
   if (req.body.domain !== undefined) {
     const d = cleanDomain(req.body.domain)
-    if (d && !isDomain(d)) return res.status(400).json({ message: "Domen noto'g'ri (masalan: itop.example.uz)" })
+    if (d && !isDomain(d)) return res.status(400).json({ message: "Domen noto'g'ri (masalan: cafe.itoppos.uz)" })
     const owner = d !== c.domain && domainOwner(d, c.id)   // o'zgarmagan bo'lsa boshqa tahrirlar to'silmasin
     if (owner) return res.status(400).json({ message: `${d} — «${owner.name}» restoranining domeni. Har restoranga alohida subdomen kerak.` })
     c.domain = d
