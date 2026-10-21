@@ -42,9 +42,13 @@ async function migrate() {
 }
 
 // since dan keyingi o'zgarishlar (exceptOrigin tugunida qilinganlaridan tashqari)
-async function collectChanges(since, exceptOrigin) {
+// exceptOrigin — shu tugunnikini bermaslik (cloud → kassa: kassaning o'zinikini qaytarmaydi)
+// onlyOrigin — faqat shu tugunniki (kassa → cloud: faqat kassada yozilgani; cloud'dan kelganini
+// qaytarib yubormaydi — aks holda ikki va undan ko'p kassada hujjatlar cheksiz aylanib qoladi)
+async function collectChanges(since, exceptOrigin, onlyOrigin) {
   const filter = { _seq: { $gt: since } }
-  if (exceptOrigin) filter._origin = { $ne: exceptOrigin }
+  if (onlyOrigin) filter._origin = onlyOrigin
+  else if (exceptOrigin) filter._origin = { $ne: exceptOrigin }
 
   const items = []
   for (const M of models()) {
@@ -72,6 +76,8 @@ async function collectChanges(since, exceptOrigin) {
 // base yo'q (eski kassa versiyasi / juda eski hujjat) — avvalgidek yangirog'i yutadi.
 function decide(coll, cur, doc, { base, edge }) {
   if (!cur) return { write: doc }
+  // Aynan shu versiya allaqachon bor (qaytib kelgan nusxa) — qayta yozilmaydi, yangi _seq olmaydi
+  if (sameVersion(cur, doc)) return null
   if (edge) {
     const unpushed = cur._origin === NODE_ID && cur._seq > edge.pushed
     if (!unpushed) return { write: doc }

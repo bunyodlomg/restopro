@@ -13,7 +13,6 @@ const { setClockOffset } = require('./plugin')
 
 const SYNC_URL    = (process.env.SYNC_URL || '').replace(/\/+$/, '')
 const SYNC_KEY    = process.env.SYNC_KEY || ''
-const REMOTE_ID   = process.env.SYNC_REMOTE_ID || 'cloud'
 const INTERVAL_MS = Math.max(5, parseInt(process.env.SYNC_INTERVAL, 10) || 15) * 1000
 const { UPLOAD_DIR } = require('../config')
 const TIMEOUT_MS  = 20000
@@ -146,7 +145,7 @@ async function push() {
   let { pushed } = await getState()
   let retry = await pushRetries()
   for (;;) {
-    const { items: fresh, cursor, more } = await engine.collectChanges(pushed, REMOTE_ID)
+    const { items: fresh, cursor, more } = await engine.collectChanges(pushed, null, engine.NODE_ID)
     const same = (a, b) => a.coll === b.coll && String(a.doc?._id) === String(b.doc?._id)
     const items = [...fresh, ...retry.filter(r => !fresh.some(f => same(f, r)))]
     retry = []
@@ -229,9 +228,9 @@ async function countPending() {
   const { pushed } = await getState()
   let n = 0
   for (const name of engine.MODELS) {
-    n += await mongoose.model(name).collection.countDocuments({ _seq: { $gt: pushed }, _origin: { $ne: REMOTE_ID } })
+    n += await mongoose.model(name).collection.countDocuments({ _seq: { $gt: pushed }, _origin: engine.NODE_ID })
   }
-  n += await mongoose.connection.collection('sync_tombstones').countDocuments({ _seq: { $gt: pushed }, _origin: { $ne: REMOTE_ID } })
+  n += await mongoose.connection.collection('sync_tombstones').countDocuments({ _seq: { $gt: pushed }, _origin: engine.NODE_ID })
   return n
 }
 

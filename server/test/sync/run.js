@@ -1,4 +1,4 @@
-// Ikki tugun: cloud (5191) va kassa (5192). Kassa tick qo'lda — "internet uzilgan" holatni boshqaramiz.
+// Tugunlar: cloud (5191), kassa (5192) va ikkinchi kassa (5193). Kassa tick qo'lda — "internet uzilgan" holatni boshqaramiz.
 const { spawn } = require('child_process')
 const path = require('path')
 const assert = require('assert')
@@ -6,6 +6,7 @@ const node = path.join(__dirname, 'node.js')
 const procs = [
   spawn(process.execPath, [node, 'cloud', '5191'], { stdio: 'inherit' }),
   spawn(process.execPath, [node, 'kassa', '5192', '5191'], { stdio: 'inherit' }),
+  spawn(process.execPath, [node, 'kassa2', '5193', '5191'], { stdio: 'inherit' }),
 ]
 const call = async (port, action, body = {}) => {
   const r = await fetch(`http://127.0.0.1:${port}/t/${action}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
@@ -13,7 +14,7 @@ const call = async (port, action, body = {}) => {
   if (!r.ok) throw new Error(`${action}: ${j.error}`)
   return j
 }
-const C = (a, b) => call(5191, a, b), K = (a, b) => call(5192, a, b)
+const C = (a, b) => call(5191, a, b), K = (a, b) => call(5192, a, b), K2 = (a, b) => call(5193, a, b)
 const wait = ms => new Promise(r => setTimeout(r, ms))
 const qty = (o, id) => o.items.filter(i => i.productId === id).reduce((s, i) => s + i.quantity, 0)
 let failed = 0
@@ -22,7 +23,7 @@ async function test(name, fn) {
 }
 
 ;(async () => {
-  for (let i = 0; i < 50; i++) { try { await C('reset'); await K('reset'); break } catch { await wait(300) } }
+  for (let i = 0; i < 50; i++) { try { await C('reset'); await K('reset'); await K2('reset'); break } catch { await wait(300) } }
   const ids = await C('seed')
   await K('tick')                                   // kassa hammasini oladi
   const order = await C('order', { ...ids, items: [{ productId: ids.p1, quantity: 1 }] })
@@ -132,6 +133,21 @@ async function test(name, fn) {
     assert.strictEqual(await K('get', { model: 'Product', id: ids.p2 }), null, "o'chirilgan mahsulot kassada qoldi")
     assert.ok(await K('get', { model: 'Product', id: ids.p1 }), "boshqa mahsulot ham o'chdi")
     assert.strictEqual((await K('count', { model: 'Order' })).n, (await C('count', { model: 'Order' })).n)
+  })
+
+  await test("ikki kassa bitta cloud'da — hujjatlar aylanib qolmaydi, yuborilmagan navbat bo'shaydi", async () => {
+    await K2('tick')
+    await K('table', { number: 50 })   // kassa1 da o'zgarish
+    for (let i = 0; i < 3; i++) { await K('tick'); await K2('tick') }
+    const before = [(await C('seq')).v, (await K('seq')).v, (await K2('seq')).v]
+    let st1, st2
+    for (let i = 0; i < 4; i++) { st1 = await K('tick'); st2 = await K2('tick') }
+    const after = [(await C('seq')).v, (await K('seq')).v, (await K2('seq')).v]
+    assert.deepStrictEqual(after, before, `yozuvlar aylanyapti: ${before} → ${after}`)
+    assert.strictEqual(st1.pending, 0, 'kassa1 pending ' + st1.pending)
+    assert.strictEqual(st2.pending, 0, 'kassa2 pending ' + st2.pending)
+    const k2 = await K2('find', { model: 'Table', q: { number: 50 } })
+    assert.strictEqual(k2.length, 1, "kassa1 o'zgarishi kassa2 ga yetmadi")
   })
 
   console.log(failed ? `\n${failed} ta test yiqildi` : '\nHammasi o\'tdi')

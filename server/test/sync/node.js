@@ -1,10 +1,10 @@
-// Sync testi uchun tugun (run.js ishga tushiradi): node node.js cloud|kassa <port> [cloudPort]
+// Sync testi uchun tugun (run.js ishga tushiradi): node node.js cloud|kassa|kassa2 <port> [cloudPort]
 const ROLE = process.argv[2], PORT = +process.argv[3]
 const S = require('path').resolve(__dirname, '../..')
 process.env.JWT_SECRET = 'x'.repeat(40)
-process.env.NODE_ID = ROLE === 'cloud' ? 'cloud' : 'kassa1'
+process.env.NODE_ID = ROLE === 'cloud' ? 'cloud' : ROLE === 'kassa2' ? 'kassa2' : 'kassa1'
 process.env.SYNC_KEY = 'k'.repeat(40)
-if (ROLE === 'kassa') process.env.SYNC_URL = 'http://127.0.0.1:' + process.argv[4]
+if (ROLE !== 'cloud') process.env.SYNC_URL = 'http://127.0.0.1:' + process.argv[4]
 require(S + '/sync/plugin')
 const mongoose = require(S + '/node_modules/mongoose')
 const express = require(S + '/node_modules/express')
@@ -56,6 +56,7 @@ t('user', async b => M('User').create({ name: b.name, username: b.username, pass
 t('table', async b => M('Table').create({ number: b.number, category: 'zal' }))
 t('find', async b => M(b.model).find(b.q || {}).lean())
 t('tick', async () => { await client.tick(io); return client.publicStatus() })
+t('seq', async () => ({ v: (await mongoose.connection.collection('sync_counters').findOne({ _id: 'seq' }))?.v || 0 }))
 t('clock', async b => { require(S + '/sync/plugin').setClockOffset(b.ms); return {} })
 
 mongoose.connect('mongodb://127.0.0.1:27017/rp_synctest_' + ROLE).then(async () => {

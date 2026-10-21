@@ -94,6 +94,9 @@ export default function QrCodes() {
 
   if (!data) return <div className="page"><Loading/></div>
   const cats = [...new Set(data.tables.map(t => t.category))]
+  // Saqlangan manzil lokal IP, lekin kassaning hozirgi IP'larida yo'q — router boshqa IP bergan
+  const lanNow = data.urls.filter(u => u.startsWith('http://'))
+  const staleIp = /^http:\/\/(10|192\.168|172\.(1[6-9]|2\d|3[01]))\./.test(cleanBase) && lanNow.length > 0 && !lanNow.includes(cleanBase)
   const designChanged = JSON.stringify({ theme: d.theme, title: d.title, subtitle: d.subtitle }) !==
     JSON.stringify({ theme: settings.qrDesign?.theme || 'light', title: settings.qrDesign?.title || '', subtitle: settings.qrDesign?.subtitle || '' })
 
@@ -118,6 +121,15 @@ export default function QrCodes() {
                 <datalist id="qr-urls">{data.urls.map(u => <option key={u} value={u}/>)}</datalist>
                 <button className="btn btn-dark btn-lg" onClick={saveBase} disabled={!urlOk}>Saqlash</button>
               </div>
+              {staleIp && (
+                <div className="alert" style={{ marginTop: 10, alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                  <span style={{ flex: 1, minWidth: 220 }}>
+                    QR ichidagi <b className="mono">{cleanBase}</b> — bu kompyuterning hozirgi manzili emas (IP o'zgargan).
+                    Shu QR'lar ishlamaydi.
+                  </span>
+                  <button className="btn btn-dark btn-sm" onClick={() => setBase(lanNow[0])}>{lanNow[0]} ga almashtirish</button>
+                </div>
+              )}
               <div className="hint" style={{ marginTop: 8 }}>
                 Kassa kompyuterida ishlasa — kassaning Wi-Fi manzili ({data.urls.filter(u => u.startsWith('http://')).join(', ') || 'topilmadi'}).
                 Routerda kassa kompyuteriga doimiy IP biriktiring, aks holda manzil o'zgarib QR ishlamay qolishi mumkin.
