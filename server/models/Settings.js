@@ -43,6 +43,13 @@ const SettingsSchema = new Schema({
 
   brandName:   { type: String, default: 'RestoPro' },
   brandLogo:   { type: String, default: '' },        // yuklangan rasm yo'li (/uploads/...) yoki bo'sh
+  // Kassa / ofitsant ilovalari ikonkasi: '' — standart, 'logo' — restoran logotipi, '/uploads/...' — alohida rasm
+  appIcon:     { type: String, default: '' },
+
+  // Stol bo'limlari: zal, xona, ko'cha + restoranning o'zi qo'shganlari (2-etaj, lux ...). Bo'sh — standart uchtasi
+  tableSections: { type: [{ _id: false, key: String, label: String }], default: undefined },
+  // QR kartochka dizayni: light / dark / brand, sarlavha va pastki yozuv
+  qrDesign: { theme: { type: String, default: 'light' }, title: { type: String, default: '' }, subtitle: { type: String, default: '' } },
 
   // Xizmat haqi (service fee) — soboy kategoriyasiga qo'llanilmaydi
   serviceFeeEnabled: { type: Boolean, default: false },

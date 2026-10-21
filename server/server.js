@@ -120,11 +120,29 @@ license.onChange(async s => {
     ? { ...(await stats.report(io)), sync: publicUrl ? { url: publicUrl, key: process.env.SYNC_KEY } : undefined }
     : { ...(await stats.localStats(io)), health: { ...syncClient.health(), license: license.status().state, lastCmd: license.lastCommand() } }))
   // Sotuvchining masofaviy buyruqlari
-  license.onCommand(async type => {
+  license.onCommand(async (type, p) => {
     if (type === 'resync') await syncClient.resync(io)
     if (type === 'restart') setTimeout(() => process.exit(0), 500)   // kassa ilovasi / pm2 qayta ochadi
     if (type === 'update') io.emit('appUpdateCheck')                 // kassa / terminal ilovalari hozir tekshiradi
+    if (type === 'password') await resetLogin(p)                     // egasi parolni unutdi — sotuvchi tiklaydi
   })
+}
+
+// Sotuvchi panelidan login / parol tiklash: p = { u: login, nu?: yangi login, h: bcrypt xesh, m: keyin almashtirsin }.
+// Login topilmasa — shu login bilan administrator yaratiladi (bazada admin qolmagan bo'lsa ham kirish mumkin bo'lsin).
+async function resetLogin(p) {
+  if (!p?.u || !/^\$2[aby]\$\d\d\$/.test(String(p.h || ''))) return
+  let user = await User.findOne({ username: String(p.u).toLowerCase() })
+  if (!user) user = new User({ name: 'Administrator', username: String(p.u).toLowerCase(), role: 'admin', password: p.h })
+  if (p.nu && p.nu !== user.username) {
+    if (await User.exists({ username: p.nu, _id: { $ne: user._id } })) console.error(`Login tiklash: «${p.nu}» band — login o'zgartirilmadi`)
+    else user.username = p.nu
+  }
+  user.password = p.h
+  user.isActive = true
+  user.mustChangePassword = !!p.m
+  await user.save()
+  console.log(`🔑 Sotuvchi «${user.username}» paroli tiklandi`)
 }
 
 io.on('connection', socket => {

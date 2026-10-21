@@ -3,6 +3,8 @@ const path     = require('path')
 const fs       = require('fs')
 const mongoose = require('mongoose')
 const Settings = require('../models/Settings')
+const Table    = require('../models/Table')
+const { sectionsOf } = require('../utils/sections')
 const auth     = require('../middleware/auth')
 const { adminOnly } = require('../middleware/auth')
 const multer   = require('multer')
@@ -16,7 +18,7 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename:    (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase()
-    cb(null, `logo_${Date.now()}${ext}`)
+    cb(null, `${file.fieldname === 'appIcon' ? 'appicon' : 'logo'}_${Date.now()}${ext}`)
   },
 })
 const upload = multer({ storage, limits: { fileSize: 2 * 1024 * 1024 }, fileFilter: imageFilter })
@@ -45,7 +47,7 @@ async function getOrCreate() {
 router.get('/public', async (req, res) => {
   try {
     const s = await getOrCreate()
-    res.json({ brandName: s.brandName, brandLogo: s.brandLogo })
+    res.json({ brandName: s.brandName, brandLogo: s.brandLogo, appIcon: s.appIcon })
   } catch (err) { res.status(500).json({ message: err.message }) }
 })
 
@@ -54,12 +56,12 @@ router.get('/my-ip', auth, adminOnly, (req, res) => res.json({ ip: require('../u
 
 // GET /api/settings
 router.get('/', auth, async (req, res) => {
-  try { res.json(await getOrCreate()) }
+  try { const st = await getOrCreate(); res.json({ ...st.toObject(), tableSections: sectionsOf(st) }) }
   catch (err) { res.status(500).json({ message: err.message }) }
 })
 
 // PUT /api/settings
-router.put('/', auth, adminOnly, upload.single('logo'), async (req, res) => {
+router.put('/', auth, adminOnly, upload.fields([{ name: 'logo', maxCount: 1 }, { name: 'appIcon', maxCount: 1 }]), async (req, res) => {
   try {
     const { brandName, brandLogo, serviceFeeEnabled, serviceFeePercent } = req.body
     const update = { updatedBy: req.user._id }
@@ -67,7 +69,14 @@ router.put('/', auth, adminOnly, upload.single('logo'), async (req, res) => {
     if (brandLogo         !== undefined) update.brandLogo         = brandLogo
     if (serviceFeeEnabled !== undefined) update.serviceFeeEnabled = serviceFeeEnabled === 'true' || serviceFeeEnabled === true
     if (serviceFeePercent !== undefined) update.serviceFeePercent = +serviceFeePercent
-    if (req.file)                        update.brandLogo         = `/uploads/${req.file.filename}`
+    const logoFile = req.files?.logo?.[0], iconFile = req.files?.appIcon?.[0]
+    if (logoFile)                        update.brandLogo         = `/uploads/${logoFile.filename}`
+    if (req.body.appIcon !== undefined) {
+      const v = String(req.body.appIcon)
+      if (v && v !== 'logo' && !/^\/uploads\/[\w.-]+$/.test(v)) return res.status(400).json({ message: "Ikonka noto'g'ri" })
+      update.appIcon = v
+    }
+    if (iconFile)                        update.appIcon           = `/uploads/${iconFile.filename}`
     if (req.body.staffAccessEnabled !== undefined) update.staffAccessEnabled = String(req.body.staffAccessEnabled) === 'true'
     if (req.body.qrMenuEnabled      !== undefined) update.qrMenuEnabled      = String(req.body.qrMenuEnabled) === 'true'
     if (req.body.qrBaseUrl !== undefined) {
@@ -81,6 +90,39 @@ router.put('/', auth, adminOnly, upload.single('logo'), async (req, res) => {
       ips = [...new Set((Array.isArray(ips) ? ips : []).map(x => String(x).trim()).filter(Boolean))].slice(0, 10)
       if (ips.some(ip => !/^[\d.]{7,15}$|^[0-9a-f:]{2,39}$/i.test(ip))) return res.status(400).json({ message: 'IP manzil noto\'g\'ri' })
       update.wifiIps = ips
+    }
+
+    // Stol bo'limlari — JSON: [{ key?, label }]. Yangi bo'limga kalit beriladi; stoli bor bo'lim o'chirilmaydi
+    if (req.body.tableSections !== undefined) {
+      let list
+      try { list = typeof req.body.tableSections === 'string' ? JSON.parse(req.body.tableSections) : req.body.tableSections } catch { list = null }
+      if (!Array.isArray(list) || !list.length || list.length > 30) return res.status(400).json({ message: "Kamida bitta bo'lim bo'lishi kerak" })
+      const current = sectionsOf(await getOrCreate())
+      const seen = new Set(), out = []
+      for (const x of list) {
+        const label = String(x?.label || '').trim().replace(/\s+/g, ' ').slice(0, 30)
+        if (!label) return res.status(400).json({ message: "Bo'lim nomini yozing" })
+        if (label.toLowerCase() === 'soboy' || seen.has(label.toLowerCase())) return res.status(400).json({ message: `«${label}» nomi takrorlangan yoki band` })
+        seen.add(label.toLowerCase())
+        const known = current.find(c => c.key === x?.key)
+        out.push({ key: known ? known.key : 's_' + require('crypto').randomBytes(4).toString('hex'), label })
+      }
+      for (const c of current) {
+        if (out.some(o => o.key === c.key)) continue
+        const n = await Table.countDocuments({ category: c.key })
+        if (n) return res.status(400).json({ message: `«${c.label}» bo'limida ${n} ta stol bor — avval stollarni o'chiring yoki boshqa bo'limga o'tkazing` })
+      }
+      update.tableSections = out
+    }
+
+    if (req.body.qrDesign !== undefined) {
+      let d
+      try { d = typeof req.body.qrDesign === 'string' ? JSON.parse(req.body.qrDesign) : req.body.qrDesign } catch { d = {} }
+      update.qrDesign = {
+        theme: ['light', 'dark', 'brand'].includes(d?.theme) ? d.theme : 'light',
+        title: String(d?.title ?? '').slice(0, 60),
+        subtitle: String(d?.subtitle ?? '').slice(0, 80),
+      }
     }
 
     // Chek dizayni — FormData orqali JSON satr ko'rinishida keladi

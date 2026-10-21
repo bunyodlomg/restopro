@@ -41,7 +41,7 @@ router.get('/t/:token', guestGate, async (req, res, next) => {
     const products = await Product.find({ isActive: true }).select('name price category image').sort({ category: 1, name: 1 })
     const s = req.settings
     res.json({
-      table: { number: req.table.number, category: req.table.category },
+      table: { number: req.table.number, category: req.table.category, label: require('../utils/sections').labelOf(s, req.table.category) },
       brand: { name: s.brandName || 'RestoPro', logo: s.brandLogo || '' },
       serviceFeePercent: s.serviceFeeEnabled ? s.serviceFeePercent : 0,
       products,

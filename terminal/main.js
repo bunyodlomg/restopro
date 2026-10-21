@@ -7,7 +7,8 @@
 //  Chiqish: tray → Chiqish yoki Ctrl+Shift+Q.
 // ============================================================
 const updater = require('./updater')
-const { app, BrowserWindow, Tray, Menu, ipcMain, dialog, shell, globalShortcut, nativeImage } = require('electron')
+const appIcon = require('./appicon')
+const { app, BrowserWindow, Tray, Menu, ipcMain, dialog, shell, globalShortcut } = require('electron')
 const path = require('path')
 const fs   = require('fs')
 
@@ -52,7 +53,7 @@ function createSetupWindow() {
   if (setupWin) { setupWin.focus(); return }
   setupWin = new BrowserWindow({
     width: 560, height: 560, resizable: false, title: 'RestoPro Ofitsant — sozlash',
-    autoHideMenuBar: true, backgroundColor: '#0B0B0C', icon: ICON,
+    autoHideMenuBar: true, backgroundColor: '#0B0B0C', icon: appIcon.current(),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
   })
   setupWin.loadFile(path.join(__dirname, 'setup.html'))
@@ -62,7 +63,7 @@ function createSetupWindow() {
 function createMainWindow() {
   if (!mainWin) {
     mainWin = new BrowserWindow({
-      fullscreen: true, autoHideMenuBar: true, backgroundColor: '#0B0B0C', icon: ICON,
+      fullscreen: true, autoHideMenuBar: true, backgroundColor: '#0B0B0C', icon: appIcon.current(),
       title: 'RestoPro Ofitsant', show: false,
       webPreferences: { preload: path.join(__dirname, 'preload-app.js'), contextIsolation: true, nodeIntegration: false },
     })
@@ -106,7 +107,7 @@ async function confirmQuit() {
 }
 
 function createTray() {
-  tray = new Tray(nativeImage.createFromPath(ICON).resize({ width: 16, height: 16 }))
+  tray = new Tray(appIcon.current().resize({ width: 16, height: 16 }))
   tray.setToolTip('RestoPro Ofitsant')
   refreshTrayMenu()
 }
@@ -149,6 +150,7 @@ app.on('will-quit', () => globalShortcut.unregisterAll())
 
 app.whenReady().then(() => {
   config = loadConfig()
+  appIcon.setup({ icon: ICON, onImage: img => tray?.setImage(img.resize({ width: 16, height: 16 })) })
   // Windows bilan birga ochilish — har safar joriy nusxa yo'li bilan (ko'chishdan keyin eski yo'l qolmasin)
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: config.autostart !== false })
   createTray()
@@ -156,7 +158,7 @@ app.whenReady().then(() => {
   if (config.url) createMainWindow()
   else createSetupWindow()
   const feed = async () => config.url ? (await fetch(`${config.url}/api/license/update-token`, { signal: AbortSignal.timeout(10000) })).json() : null
-  updater.setup({ channel: 'terminal', feed, onBeforeInstall: async () => { quitting = true }, onChange: () => refreshTrayMenu() })
+  updater.setup({ channel: 'terminal', feed, onBeforeInstall: async () => { quitting = true; globalShortcut.unregisterAll(); tray?.destroy(); tray = null }, onChange: () => refreshTrayMenu() })
   // Bir martalik: Program Files'dan foydalanuvchi papkasiga ko'chish — yangilanishlar ruxsatsiz bo'lishi uchun
   setTimeout(() => migrate.offerMigration({ parent: mainWin || undefined, feed, channel: 'terminal', beforeQuit: async () => { quitting = true } }), 15000)
 })

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { Grid3X3, ClipboardList, LogOut, Sun, Moon, LayoutDashboard } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -6,6 +6,7 @@ import { useSettings } from '../context/SettingsContext.jsx'
 import { useTheme } from '../context/ThemeContext.jsx'
 import { BrandMark, initials } from '../components/ui.jsx'
 import SyncBadge from '../components/shared/SyncBadge.jsx'
+import ProfileModal from '../components/shared/ProfileModal.jsx'
 import { createSocket } from '../api/socket.js'
 
 const NAV = [
@@ -20,6 +21,7 @@ export function TopBar({ children }) {
   const { settings } = useSettings()
   const { isDark, toggle } = useTheme()
   const navigate = useNavigate()
+  const [profile, setProfile] = useState(false)
   return (
     <header className="topbar">
       <div className="brand">
@@ -31,8 +33,11 @@ export function TopBar({ children }) {
         <SyncBadge/>
         {isAdmin && <button className="bar-btn hide-mobile" title="Admin panel" onClick={() => navigate('/admin')}><LayoutDashboard size={21}/></button>}
         <button className="bar-btn" onClick={toggle} title={isDark ? "Yorug' rejim" : "Qorong'u rejim"}>{isDark ? <Sun size={21}/> : <Moon size={21}/>}</button>
-        <span className="avatar hide-mobile" style={{ width: 40, height: 40 }}>{initials(user?.name)}</span>
-        <span className="hide-mobile" style={{ fontWeight: 600 }}>{user?.name?.split(' ')[0]}</span>
+        <button className="bar-btn row" style={{ gap: 10, width: 'auto', padding: '0 8px' }} title="Profil" onClick={() => setProfile(true)}>
+          <span className="avatar" style={{ width: 40, height: 40 }}>{initials(user?.name)}</span>
+          <span className="hide-mobile" style={{ fontWeight: 600 }}>{user?.name?.split(' ')[0]}</span>
+        </button>
+        <ProfileModal open={profile} onClose={() => setProfile(false)}/>
         <button className="bar-btn" title="Chiqish" onClick={() => { logout(); navigate('/login') }}><LogOut size={21}/></button>
       </div>
     </header>

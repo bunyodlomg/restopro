@@ -1,50 +1,101 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import QRCode from 'qrcode'
-import { ArrowLeft, Printer, RotateCcw, Wifi, QrCode } from 'lucide-react'
+import { ArrowLeft, Printer, RotateCcw, Wifi, QrCode, Download, Archive } from 'lucide-react'
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
-import { PageHead, Loading, Empty, Switch, BrandMark } from '../../components/ui.jsx'
+import { useSections } from '../../utils/sections.js'
+import { PageHead, Loading, Empty, Switch, Seg, Field, fileUrl } from '../../components/ui.jsx'
+import { drawQrCard, loadImage, canvasBlob, downloadBlob, makeZip, QR_THEMES } from '../../utils/qrCard.js'
 
-const CAT = { zal: 'Zal', xona: 'Xona', "ko'cha": "Ko'cha" }
-
-function QrImg({ url }) {
-  const [src, setSrc] = useState('')
-  useEffect(() => { QRCode.toDataURL(url, { margin: 1, width: 360, errorCorrectionLevel: 'M' }).then(setSrc).catch(() => setSrc('')) }, [url])
-  return src ? <img src={src} alt="" className="qr-img"/> : <div className="qr-img"/>
-}
+const DEFAULT_TITLE = 'Menyu va buyurtma'
+const DEFAULT_SUB = "Kamerani QR kodga qarating · Restoran Wi-Fi'iga ulaning"
+const fileName = (label, t) => `QR-${label}-${String(t.number).padStart(2, '0')}.png`.replace(/[\\/:*?"<>|\s]+/g, '-')
 
 export default function QrCodes() {
   const { settings, refresh } = useSettings()
+  const { label: sectionLabel } = useSections()
   const [data, setData] = useState(null)
   const [base, setBase] = useState('')
   const [cat, setCat] = useState('all')
+  const [design, setDesign] = useState(null)
+  const [images, setImages] = useState({})   // stol id → rasm (dataURL)
+  const [busy, setBusy] = useState(false)
+  const logoRef = useRef(null)
 
   const load = () => API.get('/api/tables/qr').then(r => {
     setData(r.data)
     setBase(b => b || settings.qrBaseUrl || r.data.urls[0] || (/localhost|127\.0\.0\.1/.test(window.location.origin) ? '' : window.location.origin))
   }).catch(() => toast.error("Yuklab bo'lmadi"))
   useEffect(() => { load() }, [])
+  useEffect(() => { if (!design && settings.qrDesign) setDesign({ theme: 'light', title: '', subtitle: '', ...settings.qrDesign }) }, [settings.qrDesign])
 
   const saveSetting = async (k, v) => {
     const fd = new FormData(); fd.append(k, v)
-    try { await API.put('/api/settings', fd); await refresh() }
-    catch (err) { toast.error(err.response?.data?.message || 'Saqlab bo\'lmadi') }
+    try { await API.put('/api/settings', fd); await refresh(); return true }
+    catch (err) { toast.error(err.response?.data?.message || 'Saqlab bo\'lmadi'); return false }
   }
   const saveBase = async () => {
     const u = base.trim().replace(/\/+$/, '')
-    setBase(u); await saveSetting('qrBaseUrl', u); toast.success('Manzil saqlandi')
+    setBase(u); if (await saveSetting('qrBaseUrl', u)) toast.success('Manzil saqlandi')
   }
+  const saveDesign = async () => { if (await saveSetting('qrDesign', JSON.stringify(d))) toast.success('Dizayn saqlandi') }
   const reset = async t => {
-    if (!confirm(`${CAT[t.category]} ${t.number} — QR kod yangilansinmi? Eski QR ishlamay qoladi.`)) return
+    if (!confirm(`${sectionLabel(t.category)} ${t.number} — QR kod yangilansinmi? Eski QR ishlamay qoladi.`)) return
     await API.post(`/api/tables/${t._id}/qr-reset`); load()
   }
 
+  const d = design || { theme: 'light', title: '', subtitle: '' }
+  const cleanBase = base.trim().replace(/\/+$/, '')
+  const urlOk = /^https?:\/\/[^\s/]+$/i.test(cleanBase)
+  const tables = (data?.tables || []).filter(t => cat === 'all' || t.category === cat)
+  const cardOpts = async t => {
+    if (logoRef.current === null) logoRef.current = /^(\/|http)/.test(settings.brandLogo || '') ? await loadImage(fileUrl(settings.brandLogo)) : false
+    return {
+      url: `${cleanBase}/m/${t.qrToken}`, brand: settings.brandName, logo: logoRef.current || null,
+      section: sectionLabel(t.category), number: t.number, theme: d.theme,
+      title: d.title || DEFAULT_TITLE, subtitle: d.subtitle || DEFAULT_SUB,
+    }
+  }
+
+  // Ko'rinish: har stol kartochkasi bir xil chizgichda (yuklab olinadigan rasm bilan aynan bir xil)
+  const key = [cleanBase, d.theme, d.title, d.subtitle, settings.brandName, settings.brandLogo, cat, tables.map(t => t.qrToken).join()].join('|')
+  useEffect(() => {
+    if (!urlOk || !tables.length) return
+    let stop = false
+    logoRef.current = null
+    ;(async () => {
+      const out = {}
+      for (const t of tables) {
+        if (stop) return
+        const c = await drawQrCard(await cardOpts(t))
+        out[t._id] = c.toDataURL('image/png')
+      }
+      if (!stop) setImages(out)
+    })()
+    return () => { stop = true }
+  }, [key])
+
+  const downloadOne = async t => {
+    const blob = await canvasBlob(await drawQrCard(await cardOpts(t)))
+    downloadBlob(blob, fileName(sectionLabel(t.category), t))
+  }
+  const downloadAll = async () => {
+    setBusy(true)
+    const id = toast.loading(`${tables.length} ta QR tayyorlanmoqda…`)
+    try {
+      const files = []
+      for (const t of tables) files.push({ name: fileName(sectionLabel(t.category), t), blob: await canvasBlob(await drawQrCard(await cardOpts(t))) })
+      downloadBlob(await makeZip(files), `QR-kodlar-${(settings.brandName || 'RestoPro').replace(/[^\w-]+/g, '-')}.zip`)
+      toast.success('Yuklandi', { id })
+    } catch (e) { toast.error("Tayyorlab bo'lmadi: " + e.message, { id }) }
+    finally { setBusy(false) }
+  }
+
   if (!data) return <div className="page"><Loading/></div>
-  const tables = data.tables.filter(t => cat === 'all' || t.category === cat)
-  const urlOk = /^https?:\/\/[^\s/]+$/i.test(base.trim().replace(/\/+$/, ''))
   const cats = [...new Set(data.tables.map(t => t.category))]
+  const designChanged = JSON.stringify({ theme: d.theme, title: d.title, subtitle: d.subtitle }) !==
+    JSON.stringify({ theme: settings.qrDesign?.theme || 'light', title: settings.qrDesign?.title || '', subtitle: settings.qrDesign?.subtitle || '' })
 
   return (
     <div className="page">
@@ -52,6 +103,7 @@ export default function QrCodes() {
         <PageHead title="QR menyu" sub="Mijoz stoldagi QR kodni skanerlab menyuni ko'radi va buyurtma beradi"
           actions={<>
             <Link to="/admin/tables" className="btn btn-ghost btn-lg"><ArrowLeft size={20}/> Stollar</Link>
+            <button className="btn btn-soft btn-lg" onClick={downloadAll} disabled={!urlOk || !tables.length || busy}><Archive size={20}/> Hammasini yuklash</button>
             <button className="btn btn-primary btn-lg" onClick={() => window.print()} disabled={!urlOk || !tables.length}><Printer size={20}/> Chop etish</button>
           </>}/>
 
@@ -72,22 +124,26 @@ export default function QrCodes() {
               </div>
             </div>
           </div>
-          <div className="card card-pad">
-            <div className="row" style={{ gap: 10, marginBottom: 8 }}><Wifi size={20}/><b>Faqat restoran Wi-Fi'idan</b></div>
-            <p className="muted" style={{ margin: 0, fontSize: 14.5 }}>
-              Buyurtma faqat restoran tarmog'iga ulangan telefondan qabul qilinadi. Mijoz buyurtmasi darhol oshxonaga ketmaydi —
-              ofitsant yoki admin «Qabul qilish» tugmasini bosgandan keyin stol buyurtmasiga qo'shiladi.
-            </p>
-            <p className="muted" style={{ margin: '10px 0 0', fontSize: 14.5 }}>
-              Cloud serverda ishlatsangiz: <b>Sozlama → QR menyu</b> bo'limida restoran Wi-Fi'ining tashqi IP manzilini qo'shing.
-            </p>
+          <div className="card card-pad col" style={{ gap: 12 }}>
+            <div className="card-head" style={{ margin: 0 }}><span className="card-title">Dizayn</span><span className="label">A6 · 300 DPI</span></div>
+            <Seg value={d.theme} onChange={theme => setDesign({ ...d, theme })} items={QR_THEMES.map(t => ({ k: t.id, l: t.label }))}/>
+            <Field label="Sarlavha">
+              <input className="input" value={d.title} maxLength={60} placeholder={DEFAULT_TITLE} onChange={e => setDesign({ ...d, title: e.target.value })}/>
+            </Field>
+            <Field label="Pastki yozuv">
+              <input className="input" value={d.subtitle} maxLength={80} placeholder={DEFAULT_SUB} onChange={e => setDesign({ ...d, subtitle: e.target.value })}/>
+            </Field>
+            <button className="btn btn-dark btn-lg" onClick={saveDesign} disabled={!designChanged}>Dizaynni saqlash</button>
           </div>
         </div>
 
-        <div className="seg" style={{ marginBottom: 18 }}>
-          {[['all', 'Barchasi'], ...cats.map(c => [c, CAT[c] || c])].map(([k, l]) => (
-            <button key={k} className={`seg-item ${cat === k ? 'cur' : ''}`} onClick={() => setCat(k)}>{l}</button>
-          ))}
+        <div className="row" style={{ gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
+          <div className="seg">
+            {[['all', 'Barchasi'], ...cats.map(c => [c, sectionLabel(c)])].map(([k, l]) => (
+              <button key={k} className={`seg-item ${cat === k ? 'cur' : ''}`} onClick={() => setCat(k)}>{l}</button>
+            ))}
+          </div>
+          <div className="row muted" style={{ gap: 8, fontSize: 14 }}><Wifi size={18}/> Buyurtma faqat restoran Wi-Fi'idan qabul qilinadi va ofitsant tasdiqlagach oshxonaga ketadi</div>
         </div>
       </div>
 
@@ -95,20 +151,15 @@ export default function QrCodes() {
         : !urlOk ? <Empty icon={QrCode} title="Manzilni kiriting" text="QR kod ichiga yoziladigan manzilni yuqorida kiriting va saqlang."/>
         : (
           <div className="qr-sheet">
-            {tables.map(t => {
-              const url = `${base.trim().replace(/\/+$/, '')}/m/${t.qrToken}`
-              return (
-                <div key={t._id} className="qr-card">
-                  <div className="row" style={{ gap: 10 }}>
-                    <BrandMark size={34}/><b style={{ fontSize: 16 }} className="truncate">{settings.brandName}</b>
-                  </div>
-                  <QrImg url={url}/>
-                  <div className="qr-table"><small>{CAT[t.category] || t.category}</small>{String(t.number).padStart(2, '0')}</div>
-                  <div className="qr-hint">Menyu va buyurtma<br/>Restoran Wi-Fi'iga ulaning</div>
-                  <button className="btn btn-ghost btn-sm no-print" onClick={() => reset(t)} title="QR kodni yangilash"><RotateCcw size={15}/> Yangilash</button>
+            {tables.map(t => (
+              <div key={t._id} className="qr-item">
+                {images[t._id] ? <img src={images[t._id]} alt={`${sectionLabel(t.category)} ${t.number}`} className="qr-png"/> : <div className="qr-png qr-ph"><span className="spinner-sm"/></div>}
+                <div className="row no-print" style={{ gap: 6, justifyContent: 'center' }}>
+                  <button className="btn btn-soft btn-sm" onClick={() => downloadOne(t)}><Download size={15}/> PNG</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => reset(t)} title="QR kodni yangilash (eskisi ishlamay qoladi)"><RotateCcw size={15}/> Yangilash</button>
                 </div>
-              )
-            })}
+              </div>
+            ))}
           </div>
         )}
     </div>

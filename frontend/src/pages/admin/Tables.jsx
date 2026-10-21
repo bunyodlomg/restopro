@@ -1,48 +1,46 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Trash2, Grid3X3, QrCode } from 'lucide-react'
+import { Plus, Trash2, Grid3X3, QrCode, Layers } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import { createSocket } from '../../api/socket.js'
 import Modal from '../../components/shared/Modal.jsx'
-import { Loading, Empty, PageHead, Seg } from '../../components/ui.jsx'
+import { Loading, Empty, PageHead, Seg, Field } from '../../components/ui.jsx'
+import { useSections } from '../../utils/sections.js'
+import SectionsModal from './SectionsModal.jsx'
 
-const CATS = [
-  { k: 'zal', l: 'Zal' },
-  { k: 'xona', l: 'Xona' },
-  { k: "ko'cha", l: "Ko'cha" },
-  { k: 'soboy', l: 'Soboy' },
-]
 const pad = n => String(n).padStart(2, '0')
 
 export default function Tables() {
+  const { sections, label: sectionLabel } = useSections()
   const [tables, setTables] = useState([])
   const [cat, setCat] = useState('zal')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [deleting, setDeleting] = useState(null)
-
-  useEffect(() => {
-    const s = createSocket()
-    s.on('tableCreated', t => setTables(p => (p.some(x => x._id === t._id) ? p : [...p, t])))
-    s.on('tableDeleted', id => setTables(p => p.filter(t => t._id !== id)))
-    s.on('tableUpdated', t => t && setTables(p => p.map(x => (x._id === t._id ? t : x))))
-    return () => s.disconnect()
-  }, [])
+  const [editing, setEditing] = useState(null)
+  const [sectionsOpen, setSectionsOpen] = useState(false)
 
   const fetchTables = async () => {
-    setLoading(true)
-    try { const { data } = await API.get(`/api/tables?category=${cat}`); setTables(data) }
+    try { const { data } = await API.get('/api/tables'); setTables(data) }
     catch { toast.error("Yuklab bo'lmadi") }
     finally { setLoading(false) }
   }
   useEffect(() => {
     fetchTables()
     const s = createSocket()
+    s.on('tableCreated', t => setTables(p => (p.some(x => x._id === t._id) ? p : [...p, t])))
+    s.on('tableDeleted', id => setTables(p => p.filter(t => t._id !== id)))
+    s.on('tableUpdated', t => t && setTables(p => p.map(x => (x._id === t._id ? t : x))))
     s.on('syncApplied', ({ colls }) => { if (colls.includes('tables')) fetchTables() })
     return () => s.disconnect()
-  }, [cat])
+  }, [])
 
+  // Tanlangan bo'lim o'chirilgan bo'lsa — birinchisiga
+  const tabs = [...sections.map(s => ({ k: s.key, l: s.label })), { k: 'soboy', l: 'Soboy' }]
+  useEffect(() => { if (!tabs.some(t => t.k === cat)) setCat(tabs[0].k) }, [sections])
+
+  const counts = tables.reduce((m, t) => ({ ...m, [t.category]: (m[t.category] || 0) + 1 }), {})
   const list = tables.filter(t => t.category === cat).sort((a, b) => a.number - b.number)
 
   // Tezkor qo'shish — keyingi raqamli stol darhol yaratiladi
@@ -67,20 +65,32 @@ export default function Tables() {
     } catch (err) { toast.error(err.response?.data?.message || 'Xatolik') }
   }
 
+  const saveEdit = async () => {
+    const { _id, number, category, description } = editing
+    if (!(+number >= 1)) return toast.error("Stol raqamini yozing")
+    try {
+      const { data } = await API.put(`/api/tables/${_id}`, { number: +number, description, ...(category !== cat ? { category } : {}) })
+      setTables(p => p.map(x => (x._id === data._id ? data : x)))
+      toast.success(category !== cat ? `${sectionLabel(category)} bo'limiga o'tkazildi` : 'Saqlandi')
+      setEditing(null)
+    } catch (err) { toast.error(err.response?.data?.message || 'Xatolik') }
+  }
+
   const busy = list.filter(t => t.status === 'busy').length
-  const label = CATS.find(c => c.k === cat)?.l
+  const label = sectionLabel(cat)
 
   return (
     <div className="page">
       <PageHead title="Stollar" sub={`${label} · ${list.length} ta stol · ${busy} ta band`}
         actions={<>
+          <button className="btn btn-soft btn-lg" onClick={() => setSectionsOpen(true)}><Layers size={20}/> Bo'limlar</button>
           <Link to="/admin/tables/qr" className="btn btn-soft btn-lg"><QrCode size={20}/> QR kodlar</Link>
           <button className="btn btn-primary btn-lg" onClick={addTable} disabled={adding}>
             <Plus size={20}/>{adding ? "Qo'shilmoqda" : "Stol qo'shish"}
           </button>
         </>}/>
 
-      <Seg value={cat} onChange={setCat} items={CATS} style={{ marginBottom: 18 }}/>
+      <Seg value={cat} onChange={setCat} items={tabs.map(t => ({ ...t, n: counts[t.k] || 0 }))} style={{ marginBottom: 18 }}/>
 
       {loading ? <Loading/> : list.length === 0 ? (
         <Empty icon={Grid3X3} title="Bu bo'limda stol yo'q" text="«Stol qo'shish» tugmasi keyingi raqamli stolni darhol yaratadi."
@@ -90,12 +100,14 @@ export default function Tables() {
           {list.map(t => {
             const isBusy = t.status === 'busy'
             return (
-              <div key={t._id} className={`tcard ${isBusy ? 'busy' : ''}`}>
+              <div key={t._id} className={`tcard ${isBusy ? 'busy' : ''}`} role="button" tabIndex={0} style={{ cursor: 'pointer' }}
+                title="Tahrirlash / boshqa bo'limga o'tkazish"
+                onClick={() => setEditing({ _id: t._id, number: t.number, category: t.category, description: t.description || '' })}>
                 <span className="tcard-st"><i className="dot"/>{isBusy ? 'Band' : "Bo'sh"}</span>
                 <span className="tcard-n">{pad(t.number)}</span>
                 <span className="tcard-foot" style={isBusy ? { color: 'inherit', opacity: .7 } : undefined}>{t.description || label}</span>
                 <button className="btn btn-icon btn-sm corner" title={isBusy ? "Band stolni o'chirib bo'lmaydi" : "O'chirish"}
-                  disabled={isBusy} onClick={() => setDeleting(t)}
+                  disabled={isBusy} onClick={e => { e.stopPropagation(); setDeleting(t) }}
                   style={{ background: isBusy ? 'rgba(255,255,255,.2)' : 'var(--thumb)', color: isBusy ? 'inherit' : 'var(--accent-ink)', boxShadow: 'none' }}>
                   <Trash2 size={17}/>
                 </button>
@@ -109,6 +121,26 @@ export default function Tables() {
         </div>
       )}
 
+      <Modal open={!!editing} onClose={() => setEditing(null)} title={`${label}, ${editing?.number}-stol`} maxWidth={460}
+        footer={<>
+          <button className="btn btn-ghost btn-lg" onClick={() => setEditing(null)}>Bekor qilish</button>
+          <button className="btn btn-primary btn-lg" onClick={saveEdit}>Saqlash</button>
+        </>}>
+        {editing && <div className="col" style={{ gap: 14 }}>
+          <Field label="Bo'lim">
+            <select className="input" value={editing.category} onChange={e => setEditing(x => ({ ...x, category: e.target.value }))}>
+              {(cat === 'soboy' ? tabs : sections.map(s => ({ k: s.key, l: s.label }))).map(t => <option key={t.k} value={t.k}>{t.l}</option>)}
+            </select>
+          </Field>
+          <Field label="Stol raqami">
+            <input className="input" type="number" min="1" value={editing.number} onChange={e => setEditing(x => ({ ...x, number: e.target.value }))}/>
+          </Field>
+          <Field label="Izoh" hint="Masalan: deraza oldida, 8 kishilik">
+            <input className="input" value={editing.description} maxLength={200} onChange={e => setEditing(x => ({ ...x, description: e.target.value }))}/>
+          </Field>
+        </div>}
+      </Modal>
+
       <Modal open={!!deleting} onClose={() => setDeleting(null)} title="Stolni o'chirish" maxWidth={440}
         footer={<>
           <button className="btn btn-ghost btn-lg" onClick={() => setDeleting(null)}>Yo'q</button>
@@ -116,6 +148,8 @@ export default function Tables() {
         </>}>
         <p style={{ margin: 0, fontSize: 16 }}>{label}, {deleting?.number}-stol o'chiriladi.</p>
       </Modal>
+
+      <SectionsModal open={sectionsOpen} onClose={() => setSectionsOpen(false)} counts={counts}/>
     </div>
   )
 }

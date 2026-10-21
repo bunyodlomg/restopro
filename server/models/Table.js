@@ -2,7 +2,7 @@ const { Schema, model } = require('mongoose')
 
 const TableSchema = new Schema({
   number:      { type: Number, required: true },
-  category:    { type: String, required: true, enum: ["zal", "xona", "ko'cha", "soboy"] },
+  category:    { type: String, required: true },   // bo'lim kaliti (Settings.tableSections) yoki "soboy"
   status:      { type: String, default: 'free', enum: ['free', 'busy'] },
   description: { type: String, default: '' },
   currentOrder:{ type: Schema.Types.ObjectId, ref: 'Order', default: null },

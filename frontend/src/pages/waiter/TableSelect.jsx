@@ -5,17 +5,15 @@ import GuestOrders from '../../components/GuestOrders.jsx'
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import { createSocket } from '../../api/socket.js'
+import { useSections } from '../../utils/sections.js'
 import { money, initials, minutesSince, fmtDuration, Seg, Loading, Empty, orderTotal, itemCount, usePosBase, hhmm } from '../../components/ui.jsx'
 
-const CATS = [
-  { k: 'zal',    l: 'Zal' },
-  { k: 'xona',   l: 'Xona' },
-  { k: "ko'cha", l: "Ko'cha" },
-]
 
 const pad = n => String(n).padStart(2, '0')
 
 export default function TableSelect() {
+  const { sections } = useSections()
+  const CATS = sections.map(s => ({ k: s.key, l: s.label }))
   const [tables, setTables] = useState([])
   const [orders, setOrders] = useState([])
   const [cat, setCat] = useState(() => localStorage.getItem('rp_table_cat') || 'zal')
@@ -70,6 +68,9 @@ export default function TableSelect() {
     }
     return m
   }, [reservations])
+
+  // Saqlangan bo'lim o'chirilgan bo'lsa — birinchisiga
+  useEffect(() => { if (!CATS.some(c => c.k === cat)) setCat(CATS[0].k) }, [sections])
 
   const list = tables.filter(t => t.category === cat).sort((a, b) => a.number - b.number)
   const counts = Object.fromEntries(CATS.map(c => [c.k, tables.filter(t => t.category === c.k).length]))

@@ -273,7 +273,8 @@ select.input {
 .rail-link.active svg { color: var(--accent); }
 .rail-link:active { background: var(--bar-2); }
 .rail-spacer { flex: 1; min-height: 8px; }
-.user-pop { position: fixed; top: auto; right: auto; left: 106px; bottom: 14px; width: 260px; padding: 10px; }
+/* Profil (avatar) — panel scroll bo'lsa ham pastda doim ko'rinadi */
+.rail-user { position: sticky; bottom: 0; padding-top: 6px; background: var(--bar); flex-shrink: 0; display: flex; justify-content: center; width: 100%; }
 @media (max-height: 820px) {
   .rail { padding: 10px 8px; gap: 2px; }
   .rail-link { min-height: 54px; gap: 3px; }
@@ -441,20 +442,19 @@ select.input {
 .form-2 { display: grid; gap: 14px; grid-template-columns: 1fr 1fr; }
 .form-3 { display: grid; gap: 14px; grid-template-columns: 1.2fr 1fr 1fr; }
 
-/* QR kodlar varag'i */
-.qr-sheet { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
-.qr-card { background: #fff; color: #0B0B0C; border-radius: 22px; box-shadow: var(--shadow); padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; break-inside: avoid; }
-.qr-card .row { align-self: stretch; justify-content: center; }
-.qr-img { width: 100%; max-width: 200px; aspect-ratio: 1; image-rendering: pixelated; }
-.qr-table { font: 700 46px/1 var(--mono); letter-spacing: -.04em; }
-.qr-table small { display: block; font: 700 11px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: #8A8A90; margin-bottom: 4px; }
-.qr-hint { font-size: 13px; color: #55555B; line-height: 1.35; }
+/* QR kodlar varag'i — kartochkalar rasm (A6, 300 DPI): ekranda ham, chop etishda ham bir xil */
+.qr-sheet { display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.qr-item { display: flex; flex-direction: column; gap: 10px; break-inside: avoid; }
+.qr-png { width: 100%; aspect-ratio: 1240 / 1748; border-radius: 16px; box-shadow: var(--shadow); background: var(--thumb); display: block; }
+.qr-ph { display: grid; place-items: center; }
 @media print {
+  @page { size: A4; margin: 8mm; }
   .no-print, .rail, .lic-banner { display: none !important; }
   .shell, .shell-main { display: block; height: auto; overflow: visible; }
   body, .page { background: #fff !important; padding: 0 !important; }
-  .qr-sheet { grid-template-columns: repeat(3, 1fr); gap: 8mm; }
-  .qr-card { box-shadow: none; border: 1px solid #ddd; }
+  .qr-sheet { grid-template-columns: repeat(2, 1fr); gap: 6mm; }
+  .qr-item { gap: 0; }
+  .qr-png { width: 92mm; height: auto; margin: 0 auto; border-radius: 0; box-shadow: none; outline: .2mm dashed #bbb; }
 }
 
 /* Mijoz QR menyusi (telefon) */
@@ -537,6 +537,7 @@ select.input {
   .shell-main { overflow: visible; }
   .rail { width: 100%; flex-direction: row; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); position: sticky; bottom: 0; z-index: 40; overflow-x: auto; }
   .rail .rail-spacer, .rail .logo-mark { display: none; }
+  .rail-user { position: static; margin: 0; padding: 0; width: auto; }
   .rail-link { width: 76px; min-height: 56px; }
   .pos { grid-template-columns: 1fr; height: auto; min-height: 100vh; overflow: visible; }
   .pos-tabs { padding: 10px 12px; }

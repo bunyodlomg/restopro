@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Search, Plus, Minus, Trash2, Send, X, MessageSquareText, Eraser, UtensilsCrossed } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useSections } from '../../utils/sections.js'
 import API from '../../api/api.js'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
@@ -12,7 +13,6 @@ import { enqueueOrder, genClientId } from '../../utils/offlineQueue.js'
 import { BrandMark, usePosBase, money, initials, fileUrl, minutesSince, fmtDuration, Loading, Empty } from '../../components/ui.jsx'
 
 const ALL = 'Barchasi'
-const CAT_LABEL = { zal: 'Zal', xona: 'Xona', "ko'cha": "Ko'cha", soboy: 'Soboy' }
 
 function Photo({ src, name }) {
   const [err, setErr] = useState(false)
@@ -21,6 +21,7 @@ function Photo({ src, name }) {
 }
 
 export default function OrderCreate() {
+  const { label: sectionLabel } = useSections()
   const { tableId } = useParams()
   const { state } = useLocation()
   const navigate = useNavigate()
@@ -156,7 +157,7 @@ export default function OrderCreate() {
 
   const title = isSoboy ? 'Soboy' : `Stol ${table?.number ?? ''}`
   const sub = [
-    isSoboy ? 'Olib ketish' : CAT_LABEL[table?.category],
+    isSoboy ? 'Olib ketish' : sectionLabel(table?.category),
     current && fmtDuration(minutesSince(current.createdAt)),
     user?.name?.split(' ')[0],
   ].filter(Boolean).join(' · ')

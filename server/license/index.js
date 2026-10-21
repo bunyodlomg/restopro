@@ -199,7 +199,7 @@ async function runCommands(p) {
   await persist({ doneCmds: [...done, ...mine.map(c => c.i)].slice(-50), lastCmd: mine[mine.length - 1].i })
   for (const c of mine) {
     console.log(`📡 Sotuvchi buyrug'i: ${c.t}`)
-    for (const fn of commandHandlers) { try { await fn(c.t) } catch (err) { console.error('Buyruq:', err.message) } }
+    for (const fn of commandHandlers) { try { await fn(c.t, c.p) } catch (err) { console.error('Buyruq:', err.message) } }
   }
 }
 const lastCommand = () => saved?.lastCmd || null
@@ -352,6 +352,7 @@ const READONLY_ALLOW = [
   ['POST', /^\/api\/auth\/(login|pin|logout)$/],
   ['PUT', /^\/api\/auth\/change-password$/],
   ['PUT', /^\/api\/orders\/[^/]+\/close$/],
+  ['POST', /^\/api\/orders\/[^/]+\/return$/],   // hisobni yopishdan oldin qaytarilganini ayirish
   ['DELETE', /^\/api\/orders\/[^/]+$/],
   ['POST', /^\/api\/print\/receipt\/[^/]+$/],
   ['*', /^\/api\/sync\//],

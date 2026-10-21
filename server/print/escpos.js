@@ -81,8 +81,8 @@ class Doc {
 }
 
 const when = d => new Date(d || Date.now()).toLocaleString('uz-UZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-const CAT = { zal: 'Zal', xona: 'Xona', "ko'cha": "Ko'cha", soboy: 'Soboy' }
-const place = o => (o.category === 'soboy' ? `Soboy #${o.tableNumber ?? ''}` : `${CAT[o.category] || ''} - Stol ${o.tableNumber ?? ''}`.trim())
+const { labelOf } = require('../utils/sections')
+const place = (o, s) => (o.category === 'soboy' ? `Soboy #${o.tableNumber ?? ''}` : `${labelOf(s, o.category)} - Stol ${o.tableNumber ?? ''}`.trim())
 
 // Mijoz cheki (to'lov uchun)
 function receipt(order, settings = {}, paperWidth) {
@@ -90,7 +90,7 @@ function receipt(order, settings = {}, paperWidth) {
   const d = new Doc(paperWidth)
   if (r.showLogo !== false) d.big(settings.brandName || 'RestoPro')
   if (r.headerText) d.center(r.headerText)
-  d.feed(1).center(place(order))
+  d.feed(1).center(place(order, settings))
   if (r.showWaiter !== false && order.waiterName) d.center(`Ofitsant: ${order.waiterName}`)
   if (r.showDateTime !== false) d.center(when())
   d.rule()
@@ -106,9 +106,9 @@ function receipt(order, settings = {}, paperWidth) {
 }
 
 // Oshxona / shashlikchi taloni: faqat shu printerga tegishli taomlar, narxsiz
-function ticket(order, items, { station, added } = {}, paperWidth) {
+function ticket(order, items, { station, added, settings } = {}, paperWidth) {
   const d = new Doc(paperWidth)
-  d.big(place(order))
+  d.big(place(order, settings))
   if (added) d.align('center').bold(true).line("*** QO'SHIMCHA ***").bold(false).align('left')
   d.center(`${station ? station + ' | ' : ''}${order.waiterName || ''}`)
   d.center(when())

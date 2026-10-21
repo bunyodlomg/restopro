@@ -28,7 +28,9 @@ async function localStats(io) {
     Session.countDocuments({ seenAt: { $gt: new Date(Date.now() - ACTIVE_MS) } }),
     devices(io),
   ])
-  return { waiters, admins, waitersOnline, devices: dev, deviceList: await require('../utils/devices').list().catch(() => []) }
+  // Adminlarning loginlari — sotuvchi panelida parol tiklashda tanlash uchun (parol emas)
+  const logins = (await User.find({ role: 'admin' }, 'username').limit(10).lean()).map(u => u.username)
+  return { waiters, admins, waitersOnline, logins, devices: dev, deviceList: await require('../utils/devices').list().catch(() => []) }
 }
 
 // Cloud: o'zi + unga ulangan kassalar (sync orqali tanilgan)

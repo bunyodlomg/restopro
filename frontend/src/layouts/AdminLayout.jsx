@@ -1,17 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
+import { Outlet, NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, History, UtensilsCrossed, Package2,
-  Grid3X3, Users, Wallet, Settings, LogOut, Sun, Moon, KeyRound, ShoppingBag, CalendarClock,
+  Grid3X3, Users, Wallet, Settings, ShoppingBag, CalendarClock,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext.jsx'
-import { useTheme } from '../context/ThemeContext.jsx'
 import { API_URL } from '../config.js'
 import { createSocket } from '../api/socket.js'
 import { getNewOrderSoundUrl } from '../utils/sound.js'
 import { BrandMark, initials } from '../components/ui.jsx'
 import SyncBadge from '../components/shared/SyncBadge.jsx'
+import ProfileModal from '../components/shared/ProfileModal.jsx'
 
 const NAV = [
   { to: '/admin',             label: 'Bosh',     Icon: LayoutDashboard, end: true },
@@ -28,42 +28,15 @@ const NAV = [
 ]
 
 function UserMenu() {
-  const { user, logout } = useAuth()
-  const { isDark, toggle } = useTheme()
-  const navigate = useNavigate()
+  const { user } = useAuth()
   const [open, setOpen] = useState(false)
-  const ref = useRef()
-
-  useEffect(() => {
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('pointerdown', h)
-    return () => document.removeEventListener('pointerdown', h)
-  }, [])
-
-  const item = (Icon, label, fn, danger) => (
-    <button className={`btn btn-ghost btn-block ${danger ? 'btn-danger' : ''}`} style={{ justifyContent: 'flex-start' }}
-      onClick={() => { setOpen(false); fn() }}>
-      <Icon size={19}/> {label}
-    </button>
-  )
-
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button className="rail-link" onClick={() => setOpen(o => !o)} aria-label="Profil">
+    <>
+      <button className="rail-link" onClick={() => setOpen(true)} aria-label="Profil" title="Profil">
         <span className="avatar" style={{ width: 40, height: 40 }}>{initials(user?.name)}</span>
       </button>
-      {open && (
-        <div className="popover user-pop">
-          <div style={{ padding: '6px 10px 10px' }}>
-            <div style={{ fontWeight: 700 }}>{user?.name}</div>
-            <div className="label">{user?.role === 'admin' ? 'Administrator' : 'Ofitsant'}</div>
-          </div>
-          {item(isDark ? Sun : Moon, isDark ? "Yorug' rejim" : "Qorong'u rejim", toggle)}
-          {item(KeyRound, "Parolni o'zgartirish", () => navigate('/change-password'))}
-          {item(LogOut, 'Chiqish', () => { logout(); navigate('/login') }, true)}
-        </div>
-      )}
-    </div>
+      <ProfileModal open={open} onClose={() => setOpen(false)}/>
+    </>
   )
 }
 
@@ -92,7 +65,7 @@ export default function AdminLayout() {
         ))}
         <div className="rail-spacer"/>
         <div className="hide-mobile" style={{ padding: '6px 0' }}><SyncBadge compact/></div>
-        <UserMenu/>
+        <div className="rail-user"><UserMenu/></div>
       </nav>
       <main className="shell-main"><Outlet/></main>
     </div>

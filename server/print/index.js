@@ -53,7 +53,7 @@ async function queueOrderTickets(order, items, { added = false } = {}) {
     list.push({
       kind: 'order', printerId: String(p._id), printer: snapshot(p),
       title: `${placeLabel(order)} — ${p.name}`,
-      data: escpos.ticket(order, mine, { station: p.name, added }, p.paperWidth),
+      data: escpos.ticket(order, mine, { station: p.name, added, settings: s }, p.paperWidth),
     })
   }
   return createJobs(list)

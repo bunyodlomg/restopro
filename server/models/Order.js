@@ -16,6 +16,18 @@ const OrderSchema = new Schema({
     quantity:  { type: Number, default: 1 },
   }],
 
+  // Mijoz stolidan qaytarilgan taomlar (masalan 4 nondan 1 tasi ortib qoldi). items dan ayirilgan —
+  // hisobga, hisobotlarga va omborga kirmaydi; bu yerda kim, qachon, nima uchun qaytargani qoladi.
+  returns: [{
+    productId: { type: Schema.Types.ObjectId, ref: 'Product' },
+    name:      { type: String },
+    price:     { type: Number },
+    quantity:  { type: Number },
+    reason:    { type: String, default: '' },
+    by:        { type: String, default: '' },
+    at:        { type: Date, default: Date.now },
+  }],
+
   // Qo'shimcha to'lovlar (xizmat haqi, yetkazib berish va h.k.)
   extras: [{
     extraFee: { type: Number, default: 0 },

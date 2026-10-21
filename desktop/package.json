@@ -30,7 +30,8 @@
       "setup.html",
       "assets/**",
       "updater.js",
-      "migrate.js"
+      "migrate.js",
+      "appicon.js"
     ],
     "extraResources": [
       {
@@ -49,7 +50,7 @@
     "win": {
       "target": "nsis",
       "icon": "assets/icon.png",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": true
     },
     "nsis": {
       "oneClick": false,

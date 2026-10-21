@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { CalendarClock, Plus, Phone, Users, ChevronLeft, ChevronRight, Check, X, Pencil, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useSections } from '../../utils/sections.js'
 import API from '../../api/api.js'
 import { createSocket } from '../../api/socket.js'
 import Modal from '../../components/shared/Modal.jsx'
 import { PageHead, Field, Loading, Empty, money, hhmm } from '../../components/ui.jsx'
 
-const CAT = { zal: 'Zal', xona: 'Xona', "ko'cha": "Ko'cha" }
 const STATUS = {
   booked:    ['Kutilmoqda', 'tag-yel'],
   arrived:   ['Keldi', 'tag-ok'],
@@ -28,6 +28,7 @@ const dayTitle = s => {
 const EMPTY = { tableId: '', date: '', time: '19:00', duration: 120, guests: 4, name: '', phone: '+998 ', deposit: '', note: '' }
 
 export default function Reservations() {
+  const { label: CAT } = useSections()
   const [day, setDay] = useState(() => iso(new Date()))
   const [list, setList] = useState([])
   const [tables, setTables] = useState([])
@@ -112,7 +113,7 @@ export default function Reservations() {
             return (
               <div key={r._id} className="res-row" style={{ opacity: ['cancelled', 'noshow'].includes(r.status) ? .55 : 1 }}>
                 <div className="res-time mono">{hhmm(r.startAt)}<small>{r.duration} daq</small></div>
-                <div className="res-table"><small>{CAT[r.category] || r.category}</small><b>{String(r.tableNumber).padStart(2, '0')}</b></div>
+                <div className="res-table"><small>{CAT(r.category)}</small><b>{String(r.tableNumber).padStart(2, '0')}</b></div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="row" style={{ gap: 8 }}>
                     <b style={{ fontSize: 17 }} className="truncate">{r.name}</b>
@@ -154,8 +155,8 @@ export default function Reservations() {
           <Field label="Stol / xona" required>
             <select className="input" value={form.tableId} onChange={e => set('tableId', e.target.value)}>
               {Object.entries(groups).map(([cat, ts]) => (
-                <optgroup key={cat} label={CAT[cat] || cat}>
-                  {ts.map(t => <option key={t._id} value={t._id}>{CAT[cat] || cat} {t.number}{t.description ? ` — ${t.description}` : ''}</option>)}
+                <optgroup key={cat} label={CAT(cat)}>
+                  {ts.map(t => <option key={t._id} value={t._id}>{CAT(cat)} {t.number}{t.description ? ` — ${t.description}` : ''}</option>)}
                 </optgroup>
               ))}
             </select>
@@ -182,7 +183,7 @@ export default function Reservations() {
           <button className="btn btn-ghost btn-lg" onClick={() => setRemoving(null)}>Yo'q</button>
           <button className="btn btn-danger btn-lg" onClick={remove}>Ha, o'chirish</button>
         </>}>
-        {removing && <p style={{ margin: 0, fontSize: 16 }}>{removing.name} — {hhmm(removing.startAt)}, {CAT[removing.category]} {removing.tableNumber}</p>}
+        {removing && <p style={{ margin: 0, fontSize: 16 }}>{removing.name} — {hhmm(removing.startAt)}, {CAT(removing.category)} {removing.tableNumber}</p>}
       </Modal>
     </div>
   )

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Bell, BellOff, Check, Printer, X, ClipboardList } from 'lucide-react'
+import { Bell, BellOff, Check, Printer, X, ClipboardList, Undo2, Minus, Plus } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useSections } from '../../utils/sections.js'
 import API from '../../api/api.js'
 import { createSocket } from '../../api/socket.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
@@ -10,13 +11,6 @@ import { OrderNum } from '../waiter/MyOrders.jsx'
 import GuestOrders from '../../components/GuestOrders.jsx'
 import { Seg, Loading, Empty, PageHead, money, orderTotal, itemCount, minutesSince, fmtDuration } from '../../components/ui.jsx'
 
-const CATS = [
-  { k: 'all', l: 'Barchasi' },
-  { k: 'zal', l: 'Zal' },
-  { k: 'xona', l: 'Xona' },
-  { k: "ko'cha", l: "Ko'cha" },
-  { k: 'soboy', l: 'Soboy' },
-]
 
 export async function printReceipt(order, settings) {
   const id = toast.loading('Chek chiqarilmoqda…')
@@ -26,7 +20,7 @@ export async function printReceipt(order, settings) {
   else toast.success('Chek chiqdi', { id })
 }
 
-function OrderCard({ order, settings, onClose, onCancel, busy }) {
+function OrderCard({ order, settings, onClose, onCancel, onReturn, busy }) {
   const mins = minutesSince(order.createdAt)
   const extras = order.extras || []
   return (
@@ -41,6 +35,7 @@ function OrderCard({ order, settings, onClose, onCancel, busy }) {
             {' · '}{itemCount(order)} ta
           </div>
         </div>
+        <button className="btn btn-soft btn-icon" title="Qaytarilgan taom (masalan ortib qolgan non)" onClick={() => onReturn(order)} disabled={busy}><Undo2 size={20}/></button>
         <button className="btn btn-soft btn-icon" title="Chek chiqarish" onClick={() => printReceipt(order, settings)}><Printer size={20}/></button>
       </div>
 
@@ -49,6 +44,11 @@ function OrderCard({ order, settings, onClose, onCancel, busy }) {
           <div key={i} className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
             <span className="truncate"><span className="muted">{it.quantity}×</span> {it.name}</span>
             <span>{money(it.price * it.quantity)}</span>
+          </div>
+        ))}
+        {(order.returns || []).map((r, i) => (
+          <div key={'r' + i} className="row muted" style={{ justifyContent: 'space-between', gap: 10 }} title={[r.reason, r.by].filter(Boolean).join(' · ')}>
+            <span className="truncate"><s>{r.quantity}× {r.name}</s> qaytarildi</span><span>−{money(r.price * r.quantity)}</span>
           </div>
         ))}
         {extras.map((e, i) => (
@@ -79,11 +79,14 @@ function OrderCard({ order, settings, onClose, onCancel, busy }) {
 }
 
 export default function Orders() {
+  const { sections } = useSections()
+  const CATS = [{ k: 'all', l: 'Barchasi' }, ...sections.map(x => ({ k: x.key, l: x.label })), { k: 'soboy', l: 'Soboy' }]
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [cat, setCat] = useState('all')
   const [busyId, setBusyId] = useState(null)
   const [cancelling, setCancelling] = useState(null)
+  const [returning, setReturning] = useState(null)
   const [sound, setSound] = useState(() => localStorage.getItem('rp_sound') !== 'false')
   const { settings } = useSettings()
 
@@ -143,10 +146,13 @@ export default function Orders() {
       ) : (
         <div className="ogrid">
           {list.map(o => (
-            <OrderCard key={o._id} order={o} settings={settings} busy={busyId === o._id} onClose={close} onCancel={setCancelling}/>
+            <OrderCard key={o._id} order={o} settings={settings} busy={busyId === o._id} onClose={close} onCancel={setCancelling} onReturn={setReturning}/>
           ))}
         </div>
       )}
+
+      <ReturnModal order={returning} onClose={() => setReturning(null)}
+        onDone={o => { setOrders(p => p.map(x => (x._id === o._id ? o : x))); setReturning(null) }}/>
 
       <Modal open={!!cancelling} onClose={() => setCancelling(null)} title="Buyurtmani bekor qilish" maxWidth={440}
         footer={<>
@@ -159,5 +165,63 @@ export default function Orders() {
         </p>}
       </Modal>
     </div>
+  )
+}
+
+// Mijoz stolidan qaytarilgan taomlar: har taomdan nechta qaytgani tanlanadi (masalan 4 nondan 1 tasi).
+// Hisob kamayadi, qaytarilgan dona ombordan ayirilmaydi, buyurtmada «qaytarildi» deb ko'rinadi.
+const REASONS = ['Ortib qoldi', 'Mijoz voz kechdi', 'Xato kiritilgan', 'Sifati yoqmadi']
+function ReturnModal({ order, onClose, onDone }) {
+  const [qty, setQty] = useState({})
+  const [reason, setReason] = useState('')
+  const [saving, setSaving] = useState(false)
+  useEffect(() => { setQty({}); setReason('') }, [order?._id])
+
+  const items = order?.items || []
+  const step = (it, d) => setQty(q => ({ ...q, [it._id]: Math.max(0, Math.min(it.quantity, (q[it._id] || 0) + d)) }))
+  const count = Object.values(qty).reduce((s, n) => s + n, 0)
+  const sum = items.reduce((s, it) => s + (qty[it._id] || 0) * it.price, 0)
+
+  const submit = async () => {
+    setSaving(true)
+    try {
+      const { data } = await API.post(`/api/orders/${order._id}/return`, {
+        items: Object.entries(qty).filter(([, n]) => n > 0).map(([itemId, quantity]) => ({ itemId, quantity })), reason,
+      })
+      toast.success(`${count} ta taom qaytarildi — hisobdan ${money(sum)} so'm ayirildi`)
+      onDone(data)
+    } catch (err) { toast.error(err.response?.data?.message || 'Xatolik') }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <Modal open={!!order} onClose={onClose} title={`Qaytarish — ${order?.category === 'soboy' ? 'Soboy' : 'Stol'} ${order?.tableNumber ?? ''}`} maxWidth={560}
+      footer={<>
+        <button className="btn btn-ghost btn-lg" onClick={onClose}>Bekor qilish</button>
+        <button className="btn btn-primary btn-lg" onClick={submit} disabled={!count || saving}>
+          {saving ? <><span className="spinner-sm"/> Saqlanmoqda</> : count ? `${count} ta qaytarish · −${money(sum)}` : 'Taomni tanlang'}
+        </button>
+      </>}>
+      <p className="muted" style={{ margin: '0 0 12px', fontSize: 14.5 }}>Mijozga berilmagan yoki qaytarilgan taomlar hisobdan ayiriladi.</p>
+      <div className="col" style={{ gap: 6 }}>
+        {items.map(it => {
+          const n = qty[it._id] || 0
+          return (
+            <div key={it._id} className="row" style={{ gap: 10, padding: '8px 10px', borderRadius: 12, background: n ? 'var(--hl, var(--thumb))' : 'var(--thumb)' }}>
+              <span style={{ flex: 1, minWidth: 0 }} className="truncate"><span className="muted">{it.quantity}×</span> <b>{it.name}</b></span>
+              <span className="muted mono" style={{ fontSize: 13 }}>{money(it.price)}</span>
+              <button className="btn btn-soft btn-icon" onClick={() => step(it, -1)} disabled={!n} aria-label="Kamaytirish"><Minus size={18}/></button>
+              <b className="mono" style={{ minWidth: 28, textAlign: 'center', fontSize: 18 }}>{n}</b>
+              <button className="btn btn-soft btn-icon" onClick={() => step(it, 1)} disabled={n >= it.quantity} aria-label="Ko'paytirish"><Plus size={18}/></button>
+            </div>
+          )
+        })}
+      </div>
+      <div className="label" style={{ margin: '14px 0 8px' }}>Sabab (ixtiyoriy)</div>
+      <div className="row wrap" style={{ gap: 8, marginBottom: 8 }}>
+        {REASONS.map(r => <button key={r} className={`btn btn-sm ${reason === r ? 'btn-dark' : 'btn-soft'}`} onClick={() => setReason(reason === r ? '' : r)}>{r}</button>)}
+      </div>
+      <input className="input" value={reason} onChange={e => setReason(e.target.value)} maxLength={200} placeholder="Yoki o'zingiz yozing" style={{ marginBottom: 14 }}/>
+    </Modal>
   )
 }

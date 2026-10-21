@@ -97,7 +97,6 @@ async function offerMigration({ parent, feed, channel, extra = [], beforeQuit = 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rp-migrate-'))
   const cmd = path.join(dir, 'cleanup.cmd')
   fs.writeFileSync(cmd, ['@echo off', `"${OLD_UNINSTALLER}" /S /allusers`, 'timeout /t 3 /nobreak >nul', ...extra, ''].join('\r\n'))
-  const q = s => `'${String(s).replace(/'/g, "''")}'`
   const ps = path.join(dir, 'migrate.ps1')
   fs.writeFileSync(ps, [
     `Start-Transcript -Path ${q(LOG() + '.ps.txt')} -Append | Out-Null`,
@@ -108,23 +107,43 @@ async function offerMigration({ parent, feed, channel, extra = [], beforeQuit = 
     `if (Test-Path ${q(NEW_EXE)}) { Start-Process -FilePath ${q(NEW_EXE)} } else { Start-Process -FilePath ${q(process.execPath)} }`,
   ].join('\r\n'))
   log(`ko'chish boshlandi: ${ps}`)
-  // Ilova ochgan jarayonlar ilova yopilganda Windows tomonidan birga yopiladi (sinovda aniqlangan),
-  // shuning uchun skriptni WMI orqali ishga tushiramiz — u ilovaga bog'liq bo'lmaydi.
-  // Yordamchi qisqa jarayon tugaguncha kutamiz; boshlanmasa ilova ishlashda davom etadi.
-  const pwsh = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
-  const line = `"${pwsh}" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${ps}"`
-  const launcher = `$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${q(line)} }; ` +
-                   `if ($r.ReturnValue -ne 0) { exit 1 }; Write-Output $r.ProcessId`
-  const started = await new Promise(resolve => {
-    let out = ''
-    const child = spawn(pwsh, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', launcher], { windowsHide: true })
-    child.stdout.on('data', d => { out += d })
-    child.once('error', err => { log(`powershell ishga tushmadi: ${err.message}`); resolve(false) })
-    child.once('exit', code => { log(`ko'chish skripti: kod=${code} pid=${out.trim()}`); resolve(code === 0) })
-  })
-  if (!started) return
+  if (!(await launchDetached(ps))) return
   await beforeQuit()
   app.exit(0)
 }
 
-module.exports = { redirectToNew, offerMigration, runningFromOld }
+// Ilova ochgan jarayonlar ilova yopilganda Windows tomonidan birga yopiladi (sinovda aniqlangan),
+// shuning uchun skriptni WMI orqali ishga tushiramiz — u ilovaga bog'liq bo'lmaydi.
+// Yordamchi qisqa jarayon tugaguncha kutamiz; boshlanmasa — false (ilova ishlashda davom etadi).
+const q = s => `'${String(s).replace(/'/g, "''")}'`
+const PWSH = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+function launchDetached(ps) {
+  const line = `"${PWSH}" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${ps}"`
+  const launcher = `$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${q(line)} }; ` +
+                   `if ($r.ReturnValue -ne 0) { exit 1 }; Write-Output $r.ProcessId`
+  return new Promise(resolve => {
+    let out = ''
+    const child = spawn(PWSH, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', launcher], { windowsHide: true })
+    child.stdout.on('data', d => { out += d })
+    child.once('error', err => { log(`powershell ishga tushmadi: ${err.message}`); resolve(false) })
+    child.once('exit', code => { log(`yordamchi skript: kod=${code} pid=${out.trim()}`); resolve(code === 0) })
+  })
+}
+
+// To'liq qayta o'rnatish (yangilanish o'rnatilmay qolsa): oxirgi o'rnatuvchi yuklanadi, ilova yopilgach
+// jim o'rnatiladi va qayta ochiladi — ko'chishdagi sinalgan yo'l. true — ilova endi yopilishi kerak.
+async function reinstall({ feed, channel }) {
+  const installer = await downloadInstaller(feed, channel)
+  log(`qayta o'rnatish: ${installer}`)
+  const ps = path.join(path.dirname(installer), 'reinstall.ps1')
+  fs.writeFileSync(ps, [
+    `Start-Transcript -Path ${q(LOG() + '.ps.txt')} -Append | Out-Null`,
+    `Wait-Process -Id ${process.pid} -Timeout 90 -ErrorAction SilentlyContinue`,
+    `Get-Process -Name ${q(NAME)} -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue`,
+    `Start-Process -FilePath ${q(installer)} -ArgumentList '/S','/currentuser' -Wait`,
+    `if (Test-Path ${q(NEW_EXE)}) { Start-Process -FilePath ${q(NEW_EXE)} } else { Start-Process -FilePath ${q(process.execPath)} }`,
+  ].join('\r\n'))
+  return launchDetached(ps)
+}
+
+module.exports = { redirectToNew, offerMigration, runningFromOld, reinstall, log }

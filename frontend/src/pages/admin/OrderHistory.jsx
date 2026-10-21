@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, History, Calendar, Printer } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useSections } from '../../utils/sections.js'
 import API from '../../api/api.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import DateRangeCalendar from '../../components/shared/DateRangeCalendar.jsx'
@@ -9,7 +10,6 @@ import { printReceipt } from './Orders.jsx'
 import { PageHead, Loading, Empty, money, orderTotal, itemCount } from '../../components/ui.jsx'
 
 const LIMIT = 50
-const CAT_LABEL = { zal: 'Zal', xona: 'Xona', "ko'cha": "Ko'cha", soboy: 'Soboy' }
 // Date → "YYYY-MM-DD" (lokal vaqt)
 const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 // "15 May" — uz-UZ locale oy nomini to'g'ri bermaydi
@@ -22,6 +22,7 @@ const fmtDate = s => {
 const hhmm = d => new Date(d).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })
 
 export default function OrderHistory() {
+  const { label: sectionLabel } = useSections()
   const today = iso(new Date())
   const [orders, setOrders] = useState([])
   const [total, setTotal] = useState(0)
@@ -123,7 +124,7 @@ export default function OrderHistory() {
                   <OrderNum order={o}/>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 16 }} className="truncate">
-                      {CAT_LABEL[o.category] || o.category}{o.waiterName ? ` · ${o.waiterName}` : ''}
+                      {sectionLabel(o.category)}{o.waiterName ? ` · ${o.waiterName}` : ''}
                     </div>
                     <div className="label">{fmtDate(iso(new Date(when)))} · {hhmm(o.createdAt)}–{hhmm(when)} · {itemCount(o)} ta</div>
                   </div>
@@ -137,6 +138,12 @@ export default function OrderHistory() {
                         <div key={j} className="row" style={{ justifyContent: 'space-between', gap: 10 }}>
                           <span className="truncate"><span className="muted">{it.quantity}×</span> {it.name}</span>
                           <span>{money(it.price * it.quantity)}</span>
+                        </div>
+                      ))}
+                      {(o.returns || []).map((r, j) => (
+                        <div key={'r' + j} className="row muted" style={{ justifyContent: 'space-between', gap: 10 }}>
+                          <span className="truncate"><s>{r.quantity}× {r.name}</s> qaytarildi{r.reason ? ` — ${r.reason}` : ''}{r.by ? ` (${r.by})` : ''}</span>
+                          <span>−{money(r.price * r.quantity)}</span>
                         </div>
                       ))}
                       {(o.extras || []).map((e, j) => (

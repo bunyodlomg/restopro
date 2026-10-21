@@ -409,6 +409,40 @@ router.put('/:id', auth, adminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }) }
 })
 
+// ─── POST /api/orders/:id/return ────────────────────────────────
+// Mijoz stolidan qaytarilgan taomlar: { items: [{ itemId, quantity }], reason }.
+// Miqdor buyurtmadan ayiriladi (hisob, xizmat haqi qayta hisoblanadi), qaytarilgani tarixda qoladi.
+// Qaytarilgan dona ombordan ayirilmaydi — yopishda faqat qolgan items hisoblanadi.
+router.post('/:id/return', auth, adminOnly, async (req, res) => {
+  try {
+    const list = Array.isArray(req.body.items) ? req.body.items : []
+    const reason = String(req.body.reason || '').trim().slice(0, 200)
+    const order = await Order.findOne({ _id: req.params.id, status: { $in: OPEN_STATUSES } })
+    if (!order) return notOpen(req, res)
+
+    let returned = 0
+    for (const r of list) {
+      const qty = Number(r?.quantity)
+      const item = order.items.id(r?.itemId)
+      if (!item || !Number.isInteger(qty) || qty < 1) continue
+      if (qty > item.quantity) return res.status(400).json({ message: `«${item.name}» — ${item.quantity} tadan ko'p qaytarib bo'lmaydi` })
+      order.returns.push({ productId: item.productId, name: item.name, price: item.price, quantity: qty, reason, by: req.user.name || '' })
+      item.quantity -= qty
+      if (item.quantity === 0) item.deleteOne()
+      returned += qty
+    }
+    if (!returned) return res.status(400).json({ message: 'Qaytariladigan taomni tanlang' })
+
+    // Jami va xizmat haqi — qolgan taomlar bo'yicha (foiz buyurtma ochilgandagidek saqlanadi)
+    const before = order.totalPrice
+    order.totalPrice = order.items.reduce((s, i) => s + i.price * i.quantity, 0)
+    order.serviceFee = before > 0 ? Math.round(order.serviceFee * order.totalPrice / before) : 0
+    await order.save()
+    req.app.get('io').emit('orderUpdated', order)
+    res.json(order)
+  } catch (err) { res.status(500).json({ message: err.message }) }
+})
+
 // ─── POST /api/orders/:id/extras ────────────────────────────────
 router.post('/:id/extras', auth, adminOnly, async (req, res) => {
   try {

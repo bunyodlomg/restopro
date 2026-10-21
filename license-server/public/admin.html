@@ -267,6 +267,7 @@ function openEdit(id) {
     `<div><div class="label" style="margin:6px 0">To'lovlar tarixi</div>${pays}</div>` +
     `<details><summary class="label" style="cursor:pointer;margin:6px 0">Amallar tarixi (${(c.events || []).length})</summary>${eventsHtml(c)}</details>` +
     `<div><div class="label" style="margin:6px 0">Restoranga xabar</div>${messageHtml(c)}</div>` +
+    `<div><div class="label" style="margin:6px 0">Login va parol</div>${passwordHtml(c)}</div>` +
     `<div><div class="label" style="margin:6px 0">Kassani ulash</div>${connectHtml(c)}</div>` +
     `<div><div class="label" style="margin:6px 0">Qurilmalar</div>${devicesHtml(c)}</div>`,
     `<button value="del" class="danger" style="margin-right:auto" onclick="del('${c.id}')">O'chirish</button>` + FOOT('Saqlash'),
@@ -313,7 +314,7 @@ async function syncAct(id, what) {
   try { await api('POST', `/customers/${id}/${what}`); $('#dlg').close(); await load(); openEdit(id); toast(what === 'sync-key' ? 'Yangi kalit yaratildi' : 'Ruxsat berildi (1 soat)') }
   catch (e) { toast('Xato: ' + e.message) }
 }
-const EVENT = { create: 'Yaratildi', pay: "To'lov", suspend: "To'xtatildi", activate: 'Faollashtirildi', paidUntil: "Sana qo'lda o'zgartirildi", blockMode: 'Bloklash turi', bind: 'Server biriktirildi', unbind: 'Server ajratildi', nodeBlock: 'Kassa bloklandi', nodeUnblock: 'Kassa ochildi', deviceBlock: 'Qurilma bloklandi', deviceUnblock: 'Qurilma ochildi', message: 'Xabar', command: 'Buyruq', syncKey: 'Sync kaliti almashtirildi', reinstall: "Cloud qayta o'rnatildi" }
+const EVENT = { create: 'Yaratildi', pay: "To'lov", suspend: "To'xtatildi", activate: 'Faollashtirildi', paidUntil: "Sana qo'lda o'zgartirildi", blockMode: 'Bloklash turi', bind: 'Server biriktirildi', unbind: 'Server ajratildi', nodeBlock: 'Kassa bloklandi', nodeUnblock: 'Kassa ochildi', deviceBlock: 'Qurilma bloklandi', deviceUnblock: 'Qurilma ochildi', message: 'Xabar', command: 'Buyruq', syncKey: 'Sync kaliti almashtirildi', password: 'Parol tiklandi', reinstall: "Cloud qayta o'rnatildi" }
 
 // Kassa sog'ligi: sotuvchi e'tibor berishi kerak bo'lgan holatlar
 function healthIssues(n) {
@@ -415,6 +416,38 @@ function messageHtml(c) {
     <div class="muted" style="margin-top:6px">${c.message
       ? `Hozirgi: ${date(c.message.at)}${c.message.until ? (msgActive(c) ? ` · ${date(c.message.until)} gacha` : ' · muddati tugagan') : ''}. Olib tashlash uchun matnni o'chirib yuboring.`
       : 'Restoran adminlari ekranida banner bo\'lib chiqadi.'}</div>`
+}
+// Restoran egasi parolni unutsa: login tanlanadi, yangi parol (va kerak bo'lsa yangi login) beriladi
+function passwordHtml(c) {
+  const logins = c.stats?.logins || []
+  const last = (c.events || []).filter(e => e.act === 'password').pop()
+  return `<datalist id="pwLogins">${logins.map(l => `<option value="${esc(l)}">`).join('')}</datalist>
+    <div class="grid2">
+      <input id="pwLogin" list="pwLogins" value="${esc(logins[0] || 'admin')}" placeholder="Hozirgi login" autocomplete="off">
+      <input id="pwNewLogin" placeholder="Yangi login (ixtiyoriy)" autocomplete="off">
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input id="pwPass" type="text" placeholder="Yangi parol (kamida 6 belgi)" autocomplete="off" style="flex:1">
+      <button type="button" onclick="$('#pwPass').value=Math.random().toString(36).slice(2,10)">Tasodifiy</button>
+      <button type="button" class="dark" onclick="sendPassword('${c.id}')">O'rnatish</button>
+    </div>
+    <label class="row" style="gap:8px;margin-top:8px;cursor:pointer"><input id="pwMust" type="checkbox" style="width:auto;min-height:0"> Kirgach parolni o'zi almashtirsin</label>
+    <div class="muted" style="margin-top:6px">${logins.length ? `Adminlar: ${logins.map(esc).join(', ')}.` : ''} Login topilmasa — shu login bilan yangi administrator yaratiladi.
+      ${last ? `<br>Oxirgi tiklash: ${esc(last.detail)} (${ago(last.at)})` : ''}</div>`
+}
+async function sendPassword(id) {
+  const c = list.find(x => x.id === id)
+  const body = { login: $('#pwLogin').value.trim(), newLogin: $('#pwNewLogin').value.trim(), password: $('#pwPass').value, mustChange: $('#pwMust').checked }
+  if (body.password.length < 6) return toast("Parol kamida 6 belgidan iborat bo'lsin")
+  if (!confirm(`«${c.name}» — «${body.login}» ${body.newLogin ? `login «${body.newLogin}» ga o'zgaradi va ` : ''}parol yangilanadi.
+Yangi parol: ${body.password}
+
+Parolni restoran egasiga ayting.`)) return
+  try {
+    await api('POST', `/customers/${id}/password`, body)
+    copy(body.password); $('#dlg').close()
+    toast(c.online ? "Yuborildi — bir necha soniyada o'rnatiladi (parol nusxalandi)" : "Yuborildi — restoran internetga ulanishi bilan o'rnatiladi (parol nusxalandi)"); load()
+  } catch (e) { toast('Xato: ' + e.message) }
 }
 const link = (label, onclick, danger) => `<a href="#" onclick="event.preventDefault();${onclick}" style="color:${danger ? 'var(--accent-ink)' : 'inherit'};text-decoration:underline">${label}</a>`
 function eventsHtml(c) {

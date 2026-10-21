@@ -9,6 +9,7 @@
 //  Oyna yopilsa dastur trayda ishlashda davom etadi (ofitsantlar uchun).
 // ============================================================
 const updater = require('./updater')
+const appIcon = require('./appicon')
 const { app, BrowserWindow, Tray, Menu, ipcMain, dialog, shell, clipboard, nativeImage, Notification } = require('electron')
 const path   = require('path')
 const fs     = require('fs')
@@ -214,7 +215,7 @@ function createMainWindow() {
   mainWin = new BrowserWindow({
     width: 1366, height: 860, minWidth: 1000, minHeight: 640, show: false,
     title: 'RestoPro Kassa', autoHideMenuBar: true, backgroundColor: '#0B0B0C',
-    icon: path.join(__dirname, 'assets', 'icon.png'),
+    icon: appIcon.current(),
     webPreferences: { preload: path.join(__dirname, 'preload-app.js'), contextIsolation: true, nodeIntegration: false },
   })
   mainWin.loadURL(`http://127.0.0.1:${config.port}/`)
@@ -242,7 +243,7 @@ function createSetupWindow() {
   setupWin = new BrowserWindow({
     width: 560, height: 680, resizable: false, title: 'RestoPro Kassa — sozlash',
     autoHideMenuBar: true, backgroundColor: '#0B0B0C',
-    icon: path.join(__dirname, 'assets', 'icon.png'),
+    icon: appIcon.current(),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
   })
   setupWin.loadFile(path.join(__dirname, 'setup.html'))
@@ -250,8 +251,7 @@ function createSetupWindow() {
 }
 
 function createTray() {
-  const icon = nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png')).resize({ width: 16, height: 16 })
-  tray = new Tray(icon)
+  tray = new Tray(appIcon.current().resize({ width: 16, height: 16 }))
   tray.setToolTip('RestoPro Kassa')
   tray.on('double-click', createMainWindow)
   refreshTrayMenu()
@@ -356,6 +356,7 @@ app.on('second-instance', () => (config.mode ? createMainWindow() : createSetupW
 app.on('window-all-closed', e => e.preventDefault?.())   // trayda qolamiz
 
 app.whenReady().then(async () => {
+  appIcon.setup({ icon: path.join(__dirname, 'assets', 'icon.png'), onImage: img => tray?.setImage(img.resize({ width: 16, height: 16 })) })
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: true })   // Windows bilan birga ishga tushsin
   createTray()
   try {

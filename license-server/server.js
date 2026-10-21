@@ -12,6 +12,7 @@
 require('dotenv').config()
 const express = require('express')
 const crypto  = require('crypto')
+const bcrypt  = require('bcryptjs')
 const fs      = require('fs')
 const path    = require('path')
 
@@ -192,6 +193,7 @@ function cleanStats(raw) {
   return {
     at: new Date().toISOString(),
     waiters: num(raw.waiters), admins: num(raw.admins), waitersOnline: num(raw.waitersOnline),
+    logins: (Array.isArray(raw.logins) ? raw.logins : []).slice(0, 10).map(v => String(v).slice(0, 30)),
     devices: counts(raw.devices),
     nodes: (Array.isArray(raw.nodes) ? raw.nodes : []).slice(0, 20).map(n => ({
       id: String(n?.id || '').slice(0, 40),
@@ -240,7 +242,7 @@ function extrasFor(c) {
   // Muddati o'tgan xabar endi yuborilmaydi — restoranda o'zi yo'qoladi
   if (c.message?.text && !(c.message.until && new Date(c.message.until) < Date.now()))
     out.msg = { i: c.message.id, t: c.message.text, l: c.message.level }
-  const cmd = (c.commands || []).filter(x => Date.now() - new Date(x.at) < CMD_DAYS * DAY).map(x => ({ i: x.id, t: x.type, n: x.node }))
+  const cmd = (c.commands || []).filter(x => Date.now() - new Date(x.at) < CMD_DAYS * DAY).map(x => ({ i: x.id, t: x.type, n: x.node, ...(x.p ? { p: x.p } : {}) }))
   if (cmd.length) out.cmd = cmd
   return out
 }
@@ -482,6 +484,7 @@ const isOnline = at => !!at && Date.now() - new Date(at) < ONLINE_MS
 const view = c => ({
   ...c, domainClash: domainOwner(c.domain, c.id)?.name, state: stateOf(c), grace: graceOf(c), offline: offlineOf(c), blockMode: blockModeOf(c), online: isOnline(c.lastSeen),
   stats: c.stats && { ...c.stats, nodes: (c.stats.nodes || []).map(n => ({ ...n, online: isOnline(n.lastSeen) })) },
+  commands: (c.commands || []).map(({ p, ...x }) => x),   // parol xeshi panelga chiqmaydi
 })
 const str = (v, max) => String(v ?? '').trim().slice(0, max)
 const money = v => Math.max(0, Math.round(Number(v) || 0))
@@ -621,6 +624,27 @@ admin.post('/api/customers/:id/command', (req, res) => {
   const cmd = { id: crypto.randomBytes(5).toString('hex'), type, node, at: new Date().toISOString() }
   c.commands = [...(c.commands || []), cmd].slice(-20)
   logEvent(c, 'command', `${type} → ${node}`)
+  bump(c); saveDb(); res.json(view(c))
+})
+
+// Restoran xodimining login / parolini tiklash (egasi parolni unutsa). Parol bu yerda saqlanmaydi —
+// faqat bcrypt xeshi imzolangan buyruq ichida restoranning hamma serverlariga boradi.
+// Login topilmasa — shu login bilan yangi administrator yaratiladi.
+const LOGIN_RE = /^[a-z0-9._-]{3,30}$/
+admin.post('/api/customers/:id/password', async (req, res) => {
+  const c = findById(req.params.id)
+  if (!c) return res.status(404).json({ message: 'Topilmadi' })
+  const login = str(req.body?.login, 30).toLowerCase()
+  const newLogin = str(req.body?.newLogin, 30).toLowerCase()
+  const password = String(req.body?.password ?? '')
+  if (!LOGIN_RE.test(login)) return res.status(400).json({ message: "Login noto'g'ri" })
+  if (newLogin && !LOGIN_RE.test(newLogin)) return res.status(400).json({ message: "Yangi login noto'g'ri (kamida 3 belgi: lotin harf, raqam, . _ -)" })
+  if (password.length < 6 || password.length > 100) return res.status(400).json({ message: 'Parol kamida 6 belgidan iborat bo\'lsin' })
+  const p = { u: login, h: await bcrypt.hash(password, 10), m: !!req.body?.mustChange }
+  if (newLogin && newLogin !== login) p.nu = newLogin
+  const cmd = { id: crypto.randomBytes(5).toString('hex'), type: 'password', node: '*', at: new Date().toISOString(), p }
+  c.commands = [...(c.commands || []), cmd].slice(-20)
+  logEvent(c, 'password', p.nu ? `${login} → ${p.nu}` : login)
   bump(c); saveDb(); res.json(view(c))
 })
 

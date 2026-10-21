@@ -134,6 +134,18 @@ async function test(name, fn) {
     await until(async () => procs.kassa.log.includes("to'liq qayta sinxronlash"), 'resync logi')
   })
 
+  await test('sotuvchi panelidan login / parol tiklash: cloud va kassada yangi parol bilan kiriladi', async () => {
+    const login = (port, username, password) => fetch(`http://127.0.0.1:${port}/api/auth/login`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username, password }),
+    }).then(r => r.status)
+    const c = await admin('POST', `/customers/${customer.id}/password`, { login: 'egasi', password: 'yangi-parol-1' })
+    assert.ok(!c.commands.some(x => x.p), 'parol xeshi panelga chiqmasligi kerak')
+    for (const port of [CLOUD, KASSA]) await until(async () => (await login(port, 'egasi', 'yangi-parol-1')) === 200, `kirish ${port}`)
+    await admin('POST', `/customers/${customer.id}/password`, { login: 'egasi', newLogin: 'boss', password: 'ikkinchi-parol' })
+    for (const port of [CLOUD, KASSA]) await until(async () => (await login(port, 'boss', 'ikkinchi-parol')) === 200, `yangi login ${port}`)
+    assert.strictEqual(await login(CLOUD, 'egasi', 'yangi-parol-1'), 401)
+  })
+
   await test('bitta kassani bloklash: kassa bloklanadi, cloud u bilan sync qilmaydi; ochish', async () => {
     await admin('POST', `/customers/${customer.id}/node`, { node: 'kassa1', blocked: true })
     await until(async () => (await lic(KASSA)).state === 'device', 'kassa device blok')

@@ -44,6 +44,16 @@ export function SettingsProvider({ children }) {
     return () => s.disconnect()
   }, [user?._id])
 
+  // Kassa / ofitsant ilovasi: admin tanlagan ikonka oyna, tray va yorliqlarga qo'llanadi
+  const iconSrc = settings.appIcon === 'logo' ? settings.brandLogo : settings.appIcon
+  useEffect(() => {
+    const setIcon = window.rpNative?.setIcon
+    if (!setIcon || settings.appIcon === undefined) return   // sozlamalar hali kelmagan
+    const isImg = typeof iconSrc === 'string' && (iconSrc.startsWith('/') || iconSrc.startsWith('http'))
+    const url = isImg ? new URL(iconSrc, API_URL || window.location.origin).href : ''
+    setIcon(url).then(r => { if (r && !r.ok) console.warn('Ilova ikonkasi:', r.message) }).catch(() => {})
+  }, [settings.appIcon, iconSrc])
+
   return (
     <SettingsContext.Provider value={{ settings, setSettings, refresh }}>
       {children}
