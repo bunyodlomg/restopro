@@ -108,13 +108,19 @@ async function offerMigration({ parent, feed, channel, extra = [], beforeQuit = 
     `if (Test-Path ${q(NEW_EXE)}) { Start-Process -FilePath ${q(NEW_EXE)} } else { Start-Process -FilePath ${q(process.execPath)} }`,
   ].join('\r\n'))
   log(`ko'chish boshlandi: ${ps}`)
-  // Yordamchi jarayon haqiqatan boshlangach yopilamiz — boshlanmasa ilova ishlashda davom etadi
+  // Ilova ochgan jarayonlar ilova yopilganda Windows tomonidan birga yopiladi (sinovda aniqlangan),
+  // shuning uchun skriptni WMI orqali ishga tushiramiz — u ilovaga bog'liq bo'lmaydi.
+  // Yordamchi qisqa jarayon tugaguncha kutamiz; boshlanmasa ilova ishlashda davom etadi.
   const pwsh = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+  const line = `"${pwsh}" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${ps}"`
+  const launcher = `$r = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${q(line)} }; ` +
+                   `if ($r.ReturnValue -ne 0) { exit 1 }; Write-Output $r.ProcessId`
   const started = await new Promise(resolve => {
-    const child = spawn(pwsh, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', ps],
-      { detached: true, stdio: 'ignore', windowsHide: true })
+    let out = ''
+    const child = spawn(pwsh, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', launcher], { windowsHide: true })
+    child.stdout.on('data', d => { out += d })
     child.once('error', err => { log(`powershell ishga tushmadi: ${err.message}`); resolve(false) })
-    child.once('spawn', () => { log(`powershell pid=${child.pid}`); child.unref(); setTimeout(() => resolve(true), 1500) })
+    child.once('exit', code => { log(`ko'chish skripti: kod=${code} pid=${out.trim()}`); resolve(code === 0) })
   })
   if (!started) return
   await beforeQuit()
