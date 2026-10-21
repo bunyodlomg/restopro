@@ -24,10 +24,9 @@ export async function syncQueue() {
         await removeFromQueue(item.clientId)
         sent++
       } catch (err) {
-        if (isNetworkError(err)) {
-          // Yana offline bo'lib qoldik — qolganini keyingi safarga qoldiramiz
-          break
-        }
+        // Yana offline bo'lib qoldik yoki obuna to'xtatilgan (402) — qolganini keyingi safarga qoldiramiz
+        // (obuna faollashgach buyurtmalar yuboriladi)
+        if (isNetworkError(err) || err.response?.status === 402) break
         // 409 = server bu clientId'ni allaqachon qabul qilgan (idempotency) → o'chiramiz
         if (err.response?.status === 409) {
           await removeFromQueue(item.clientId)

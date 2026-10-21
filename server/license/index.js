@@ -6,8 +6,10 @@
 //   to'langan muddat ichida            → ishlaydi
 //   muddat tugashiga ≤5 kun            → ishlaydi + ogohlantirish
 //   muddat o'tdi, lekin muhlat (g kun)  → ishlaydi + qizil ogohlantirish
-//   muhlat ham o'tdi / to'xtatilgan     → API bloklanadi (ma'lumotlar o'chmaydi)
-//   14 kundan beri tekshirilmagan       → bloklanadi (internetga ulash kerak)
+//   muhlat ham o'tdi / to'xtatilgan     → sotuvchi tanlovi (bm): yumshoq — yangi buyurtma yo'q,
+//                                        ochiq hisoblarni yopish va hisobotlar ishlaydi;
+//                                        to'liq — API bloklanadi (ma'lumotlar o'chmaydi)
+//   N kundan beri tekshirilmagan        → bloklanadi (internetga ulash kerak)
 //
 // Internetsiz ham saqlangan imzoli javob bo'yicha ishlaydi: to'langan muddat (+ muhlat) o'tsa
 // bloklanadi; internet qaytishi bilan joriy holat olinadi (to'langan bo'lsa — darhol ochiladi).
@@ -16,7 +18,9 @@
 // kutib turgan so'rovga (/api/v1/wait, long-poll) javob beradi → shu zahoti qayta tekshiriladi.
 // Kassa xuddi shunday cloud'ni kutadi (/api/sync/license/wait). Ochiq ekranlarga socket orqali.
 //
-// Kassa (SYNC_URL bor) javobni cloud orqali oladi: alohida kalit kerak emas.
+// Kassa (SYNC_URL bor) javobni cloud orqali oladi: alohida kalit kerak emas. Kalitni cloud javobidan
+// o'rganib saqlaydi va cloud server ishlamasa, litsenziya serveriga to'g'ridan-to'g'ri murojaat qiladi
+// (aks holda to'lagan restoran kassasi cloud nosozligi tufayli bloklanardi).
 
 const crypto   = require('crypto')
 const mongoose = require('mongoose')
@@ -100,19 +104,29 @@ async function persist(patch) {
 
 async function fetchToken() {
   const stats = await collectStats()
-  if (VIA_CLOUD) {
-    // Kassa o'zini cloud'ga tanitadi: cloud uni "online qurilmalar" ro'yxatida ko'rsatadi
-    const r = await fetch(`${SYNC_URL}/api/sync/license`, {
-      headers: {
-        'x-sync-key': SYNC_KEY, 'x-node': process.env.NODE_ID || 'kassa', 'x-version': VERSION,
-        ...(stats ? { 'x-stats': JSON.stringify(stats) } : {}),
-      },
-      signal: AbortSignal.timeout(20000),
-    })
-    if (r.status === 410) throw revokedError()   // cloud: sotuvchi litsenziyani bekor qilgan
-    if (!r.ok) throw new Error(r.status === 404 ? 'Cloud serverda litsenziya hali yo\'q' : `Cloud javobi: ${r.status}`)
-    return r.json()
+  if (!VIA_CLOUD) return fetchDirect(stats)
+  try { return await fetchViaCloud(stats) } catch (err) {
+    // Cloud "bekor qilingan" desa — shu; cloud'ga yetib bo'lmasa — litsenziya serverining o'zidan
+    if (err.revoked || !LICENSE_URL || !saved?.key) throw err
+    return fetchDirect(stats)
   }
+}
+
+async function fetchViaCloud(stats) {
+  // Kassa o'zini cloud'ga tanitadi: cloud uni "online qurilmalar" ro'yxatida ko'rsatadi
+  const r = await fetch(`${SYNC_URL}/api/sync/license`, {
+    headers: {
+      'x-sync-key': SYNC_KEY, 'x-node': process.env.NODE_ID || 'kassa', 'x-version': VERSION,
+      ...(stats ? { 'x-stats': JSON.stringify(stats) } : {}),
+    },
+    signal: AbortSignal.timeout(20000),
+  })
+  if (r.status === 410) throw revokedError()   // cloud: sotuvchi litsenziyani bekor qilgan
+  if (!r.ok) throw new Error(r.status === 404 ? 'Cloud serverda litsenziya hali yo\'q' : `Cloud javobi: ${r.status}`)
+  return r.json()
+}
+
+async function fetchDirect(stats) {
   if (!LICENSE_URL) throw new Error('Litsenziya serveri manzili yo\'q (vendor.json)')
   const r = await fetch(`${LICENSE_URL}/api/v1/check`, {
     method: 'POST',
@@ -142,6 +156,8 @@ async function check() {
     if (!VIA_CLOUD && key && key !== saved?.key) await persist({ key: String(key).toUpperCase() })
     const p = verify(token)
     if (!p) throw new Error('Litsenziya javobi imzosi noto\'g\'ri')
+    // Kassa kalitni cloud javobidan o'rganadi — cloud ishlamay qolsa, zaxira yo'l uchun
+    if (VIA_CLOUD && p.k && p.k !== saved?.key) await persist({ key: p.k })
     const cur = verify(saved?.token)
     // Eskiroq javob yangisini almashtira olmaydi
     if (!cur || p.iat >= cur.iat) {
@@ -166,7 +182,7 @@ const onChange = fn => listeners.push(fn)
 let lastKey = null
 function announce() {
   const s = status()
-  const key = [s.state, s.blocked, s.paidUntil].join('|')
+  const key = [s.state, s.blocked, s.readonly, s.paidUntil].join('|')
   if (key === lastKey) return
   const first = lastKey === null
   lastKey = key
@@ -175,16 +191,23 @@ function announce() {
 
 // ── Darhol: o'zgarishni kutib turish (long-poll) ───────────────
 const pause = ms => new Promise(r => setTimeout(r, ms).unref?.())
+// Kassa: cloud ishlamay qolsa (ketma-ket 2 marta), kalit ma'lum bo'lsa — litsenziya serverining o'zini kutadi;
+// har aylanishda cloud tiklanganini tekshiradi.
+const cloudAlive = () => fetch(`${SYNC_URL}/health`, { signal: AbortSignal.timeout(3000) }).then(r => r.ok, () => false)
 async function watch() {
   let rev = null
+  let cloudDown = 0
   for (;;) {
+    const direct = VIA_CLOUD && cloudDown >= 2 && LICENSE_URL && saved?.key
     try {
       let r
-      if (VIA_CLOUD) {
+      if (direct && await cloudAlive()) { cloudDown = 0; rev = null; continue }
+      if (VIA_CLOUD && !direct) {
         const iat = verify(saved?.token)?.iat || 0
         r = await fetch(`${SYNC_URL}/api/sync/license/wait?iat=${iat}`, { headers: { 'x-sync-key': SYNC_KEY }, signal: AbortSignal.timeout(40000) })
         if (r.status === 404) return               // eski cloud — faqat davriy tekshiruv
         if (!r.ok) throw new Error(String(r.status))
+        cloudDown = 0
         const j = await r.json()
         // iat 0 — cloud'da javob yo'q (bekor qilingan) — bu ham o'zgarish
         if (j.iat !== iat && Date.now() - lastTry > 2000) await check()
@@ -199,10 +222,12 @@ async function watch() {
         }
         if (!r.ok) throw new Error(String(r.status))
         const j = await r.json()
-        if (rev !== null && j.rev !== rev) await check()   // sotuvchi holatni o'zgartirdi
+        // Sotuvchi holatni o'zgartirdi; kassa endi to'g'ridan-to'g'ri kutyapti — cloud o'chgan paytdagi o'zgarishni ham olamiz
+        if ((rev !== null && j.rev !== rev) || (rev === null && direct)) await check()
         rev = j.rev
       }
     } catch {
+      if (VIA_CLOUD && !direct) cloudDown++
       await pause(5000)   // internet yo'q — biroz kutib qayta
     }
   }
@@ -240,8 +265,10 @@ function status() {
     daysLeft: Math.ceil((paidUntil - t) / DAY),
     contact: p.c || vendor.contact || '',
   }
-  if (p.s === 'suspended') return { ...info, state: 'suspended', blocked: true }
-  if (t > graceUntil) return { ...info, state: 'expired', blocked: true }
+  // Eski litsenziya serveri javobida bm yo'q — avvalgidek to'liq blok
+  const block = p.bm === 'soft' ? { blocked: false, readonly: true } : { blocked: true }
+  if (p.s === 'suspended') return { ...info, state: 'suspended', ...block }
+  if (t > graceUntil) return { ...info, state: 'expired', ...block }
   if (t > p.exp) return { ...info, state: 'stale', blocked: true }
   if (t > paidUntil) return { ...info, state: 'grace', blocked: false, graceDaysLeft: Math.ceil((graceUntil - t) / DAY) }
   if (paidUntil - t < WARN_DAYS * DAY) return { ...info, state: 'warning', blocked: false }
@@ -272,10 +299,27 @@ async function start() {
 // Sync: faqat litsenziya so'rovlari ochiq — bloklangan cloud kassalar bilan ma'lumot almashmaydi
 // (eski versiyadagi kassa bekor qilinganini tushunmasa ham, cloud bilan ishlay olmaydi).
 const ALLOW = [/^\/api\/license\//, /^\/api\/settings\/public$/, /^\/api\/sync\/(license|ping)/]
+// Yumshoq blok: o'qish (hisobotlar), kirish, ochiq hisobni yopish / bekor qilish, chek va sync —
+// mehmonlar hisobini yopib, kunni tugatish mumkin; yangi buyurtma va sozlash yo'q.
+// Sync ochiq: kassada yopilgan hisoblar cloud hisobotiga ham tushsin (eski kassa versiyasi
+// bm'ni bilmaydi va o'zini to'liq bloklaydi — shuning uchun bu aylanib o'tish yo'li emas).
+const READONLY_ALLOW = [
+  ['POST', /^\/api\/auth\/(login|pin|logout)$/],
+  ['PUT', /^\/api\/auth\/change-password$/],
+  ['PUT', /^\/api\/orders\/[^/]+\/close$/],
+  ['DELETE', /^\/api\/orders\/[^/]+$/],
+  ['POST', /^\/api\/print\/receipt\/[^/]+$/],
+  ['*', /^\/api\/sync\//],
+]
 function requireLicense(req, res, next) {
   if (!ENABLED || !req.path.startsWith('/api/') || ALLOW.some(r => r.test(req.path))) return next()
   const s = status()
-  if (!s.blocked) return next()
+  if (!s.blocked && !s.readonly) return next()
+  if (s.readonly) {
+    if (req.method === 'GET' || req.method === 'HEAD' ||
+        READONLY_ALLOW.some(([m, r]) => (m === '*' || m === req.method) && r.test(req.path))) return next()
+    return res.status(402).json({ code: 'LICENSE_READONLY', message: 'Obuna to\'xtatilgan — yangi buyurtma qabul qilinmaydi. Ochiq hisoblarni yopish mumkin.', license: s })
+  }
   res.status(402).json({ code: 'LICENSE_BLOCKED', message: 'Obuna faol emas', license: s })
 }
 

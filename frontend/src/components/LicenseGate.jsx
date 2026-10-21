@@ -40,10 +40,12 @@ function Blocked({ lic, onRetry, busy }) {
 function Banner({ lic, onClose }) {
   const grace = lic.state === 'grace'
   return (
-    <div className={`lic-banner ${grace ? 'red' : ''}`}>
+    <div className={`lic-banner ${grace || lic.readonly ? 'red' : ''}`}>
       <CalendarClock size={19}/>
       <span>
-        {grace
+        {lic.readonly
+          ? `${lic.state === 'expired' ? 'Obuna muddati tugagan' : "Obuna to'xtatilgan"} — yangi buyurtma qabul qilinmaydi. Ochiq hisoblarni yopish mumkin.`
+          : grace
           ? `Obuna muddati o'tdi. ${lic.graceDaysLeft} kundan keyin tizim to'xtaydi.`
           : `Obuna ${lic.daysLeft} kundan keyin tugaydi (${fmt(lic.paidUntil)}).`}
         {lic.contact && <> To'lov uchun: <b className="mono">{lic.contact}</b></>}
@@ -63,7 +65,7 @@ export default function LicenseGate({ children }) {
 
   // Blokdan chiqqanda sahifa qayta yuklanadi (bloklangan paytdagi xato holatlar qolmasin)
   const apply = next => setLic(prev => {
-    if (prev?.blocked && next && !next.blocked) setTimeout(() => window.location.reload(), 300)
+    if ((prev?.blocked || prev?.readonly) && next && !next.blocked && !next.readonly) setTimeout(() => window.location.reload(), 300)
     return next
   })
   const load = () => API.get('/api/license/status').then(r => apply(r.data)).catch(() => {})
@@ -94,6 +96,8 @@ export default function LicenseGate({ children }) {
   }
 
   if (lic?.blocked) return <Blocked lic={lic} onRetry={retry} busy={busy}/>
-  const warn = isAdmin && !hidden && (lic?.state === 'warning' || lic?.state === 'grace')
+  // Yumshoq blok — hamma ko'radi (ofitsant ham yangi buyurtma nega o'tmayotganini bilsin)
+  const warn = (lic?.readonly && !(isAdmin && hidden)) ||
+    (isAdmin && !hidden && (lic?.state === 'warning' || lic?.state === 'grace'))
   return <>{warn && <Banner lic={lic} onClose={() => setHidden(true)}/>}{children}</>
 }

@@ -23,12 +23,17 @@ Bu hujjat **siz uchun**, ya'ni RestoPro'ni sotuvchi uchun. Undan restoranlar oyl
 | To'langan muddat ichida | — | ishlaydi |
 | Muddat tugashiga 5 kun yoki kamroq qoldi | Adminga sariq ogohlantirish: «Obuna N kundan keyin tugaydi. To'lov uchun: telefon» | ishlaydi |
 | Muddat o'tdi, muhlat davom etmoqda (standart: 3 kun) | Qizil ogohlantirish: «N kundan keyin tizim to'xtaydi» | ishlaydi |
-| Muhlat ham o'tdi | «Obuna muddati tugagan» ekrani | **to'xtaydi** |
-| Siz **To'xtatish** tugmasini bosdingiz | «Obuna to'xtatilgan» ekrani | **1 soat ichida to'xtaydi** |
-| 14 kundan beri internet yo'q (tekshira olmadi) | «Litsenziyani tekshirib bo'lmadi» ekrani | to'xtaydi, internet ulanishi bilan ochiladi |
+| Muhlat ham o'tdi | Yumshoq blokda — qizil banner; to'liq blokda — «Obuna muddati tugagan» ekrani | **to'xtaydi** (bloklash turiga qarab) |
+| Siz **To'xtatish** tugmasini bosdingiz | Yumshoq blokda — qizil banner; to'liq blokda — «Obuna to'xtatilgan» ekrani | **bir necha soniyada** |
+| N kundan beri internet yo'q (standart: 3 kun, mijozga alohida sozlanadi) | «Litsenziyani tekshirib bo'lmadi» ekrani | to'xtaydi, internet ulanishi bilan ochiladi |
+
+**Bloklash turi** (to'xtatishda tanlanadi, mijoz oynasida o'zgartiriladi):
+- **Yumshoq** (standart) — yangi buyurtma ochilmaydi, sozlamalarni o'zgartirib bo'lmaydi. Lekin ochiq hisoblarni yopish, chek chiqarish, hisobotlarni ko'rish ishlaydi: mehmonlar xizmatining o'rtasida to'xtatsangiz ham ochiq stollar yopiladi.
+- **To'liq** — tizim butunlay yopiladi, faqat to'lov ekrani ko'rinadi.
 
 - Tizim to'xtaganda **ma'lumotlar o'chirilmaydi**: buyurtmalar, menyu va hisobotlar saqlanib qoladi.
-- Siz panelda **To'lov** tugmasini bosgach, restoran ekranidagi «Qayta tekshirish» tugmasi bilan tizim darhol ochiladi. Tugma bosilmasa, 1 soat ichida o'zi ochiladi.
+- Siz panelda **To'lov** yoki **Faollashtirish** tugmasini bosgach, restoran bir necha soniyada o'zi ochiladi.
+- Kassa holatni cloud orqali oladi. Restoranning cloud serveri ishlamay qolsa, kassa litsenziya serveringizga to'g'ridan-to'g'ri murojaat qiladi. Shunda to'lagan restoran cloud nosozligi tufayli bloklanmaydi, to'xtatish ham kassaga baribir yetib boradi.
 
 ## 1. Litsenziya serverini ishga tushirish (bir marta)
 
@@ -115,10 +120,17 @@ Ro'yxat to'lov muddati bo'yicha saralangan: eng yaqini tepada turadi.
 
 ## 5. To'xtatish
 
-**To'xtatish** tugmasini bosing. Restoran tizimi 1 soat ichida bloklanadi.
+**To'xtatish** tugmasini bosing, bloklash turini (yumshoq / to'liq) tanlang va sababini yozing. Restoran bir necha soniyada bloklanadi; internetsiz bo'lsa, internetga ulanishi bilan bloklanadi.
 
 - Qayta yoqish uchun **Faollashtirish** yoki **To'lov** tugmasini bosing.
-- Mijozni o'chirishdan ko'ra to'xtatgan ma'qul. O'chirilgan kalit imzolangan javob olmaydi, lekin restoran oxirgi saqlangan javob bilan uning muddati (14 kungacha) tugaguncha ishlashda davom etadi.
+- Mijozni o'chirishdan ko'ra to'xtatgan ma'qul: o'chirilgan mijozning tarixi ham yo'qoladi.
+- Barcha amallar (to'lov, to'xtatish, faollashtirish, server biriktirish/ajratish) mijoz oynasidagi **Amallar tarixi**da qoladi.
+
+### Bitta serverni ajratish
+
+Restoran yangi kompyuterga ko'chdi yoki ruxsatsiz nusxa paydo bo'ldi. Bunday holatda mijoz oynasidagi **Qurilmalar** ro'yxatida o'sha server yonidagi **ajratish** havolasini bosing. Natija:
+- server shu zahoti bloklanadi va «Ulanmagan serverlar» ro'yxatiga tushadi (kerak bo'lsa qayta biriktirasiz);
+- restoranning boshqa serverlari ishlashda davom etadi.
 
 ## 6. Ilovalarni yangilash (avtomatik)
 

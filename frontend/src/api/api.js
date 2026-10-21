@@ -17,7 +17,8 @@ API.interceptors.response.use(
   (res) => res,
   (err) => {
     // Obuna to'xtatilgan / muddati o'tgan — butun ilova bloklash ekraniga o'tadi
-    if (err.response?.status === 402 && err.response.data?.code === 'LICENSE_BLOCKED') {
+    // Yumshoq blok (LICENSE_READONLY) — ilova ishlaydi, banner chiqadi; xabar so'rov xatosi sifatida ko'rinadi
+    if (err.response?.status === 402 && ['LICENSE_BLOCKED', 'LICENSE_READONLY'].includes(err.response.data?.code)) {
       window.dispatchEvent(new CustomEvent('rp-license', { detail: err.response.data.license }))
       return Promise.reject(err)
     }

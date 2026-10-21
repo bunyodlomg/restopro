@@ -119,7 +119,18 @@ function limit(req, res, next) {
 // Har bir restoran serveri o'zining tasodifiy ID'sini (instance) yuboradi. Kalit .env da bo'lmasa ham,
 // sotuvchi admin panelda shu serverni mijozga biriktirsa — server kalitni shu yerdan oladi.
 const findByInstance = inst => (inst ? db.customers.find(c => c.instances?.[inst]) : null)
-const customerFor = (key, inst) => findByKey(key) || findByInstance(inst)
+// Sotuvchi ajratgan server (eski / o'g'irlangan nusxa) — kaliti to'g'ri bo'lsa ham tanilmaydi
+function customerFor(key, inst) {
+  const c = findByKey(key) || findByInstance(inst)
+  return c && inst && c.revokedInstances?.[inst] ? null : c
+}
+
+// Amallar tarixi (admin panelda: kim / qachon to'xtatdi, faollashtirdi, to'lov...)
+function logEvent(c, act, detail = '') {
+  c.events = [...(c.events || []), { at: new Date().toISOString(), act, detail: String(detail).slice(0, 200) }].slice(-200)
+}
+// Bloklash turi: yumshoq — yangi buyurtma yo'q, ochiq hisoblarni yopish mumkin; to'liq — tizim yopiladi
+const blockModeOf = c => (c.blockMode === 'hard' ? 'hard' : 'soft')
 
 // Biriktirilmagan serverlar (admin panelda "Ulanmagan serverlar")
 db.pending = db.pending || {}
@@ -217,6 +228,7 @@ app.post('/api/v1/check', limit, (req, res) => {
       s: c.status === 'suspended' ? 'suspended' : 'active',
       pu: c.paidUntil,             // shu sanagacha to'langan
       g: graceOf(c),               // undan keyin necha kun ogohlantirish bilan ishlaydi
+      bm: blockModeOf(c),          // to'xtatilgan / muddati o'tgan: soft yoki hard
       c: VENDOR_CONTACT,
       iat: now,
       exp: now + offlineOf(c) * DAY, // internetsiz ishlash chegarasi
@@ -340,7 +352,7 @@ admin.get('/', (req, res) => { res.set('Cache-Control', 'no-store'); res.sendFil
 const ONLINE_MS = 3 * 60000   // restoran serveri har daqiqada tekshiradi
 const isOnline = at => !!at && Date.now() - new Date(at) < ONLINE_MS
 const view = c => ({
-  ...c, state: stateOf(c), grace: graceOf(c), offline: offlineOf(c), online: isOnline(c.lastSeen),
+  ...c, state: stateOf(c), grace: graceOf(c), offline: offlineOf(c), blockMode: blockModeOf(c), online: isOnline(c.lastSeen),
   stats: c.stats && { ...c.stats, nodes: (c.stats.nodes || []).map(n => ({ ...n, online: isOnline(n.lastSeen) })) },
 })
 const str = (v, max) => String(v ?? '').trim().slice(0, max)
@@ -366,7 +378,9 @@ function bind(c, inst) {
   if (!p) return false
   c.instances = c.instances || {}
   c.instances[inst] = { lastSeen: p.lastSeen, ip: p.ip, role: p.role, host: p.host, boundAt: new Date().toISOString() }
+  if (c.revokedInstances) delete c.revokedInstances[inst]
   delete db.pending[inst]
+  logEvent(c, 'bind', `${inst.slice(0, 8).toUpperCase()} ${p.host || ''}`)
   bump(c)
   release('inst:' + inst, c.rev)
   return true
@@ -376,6 +390,19 @@ admin.post('/api/customers/:id/bind', (req, res) => {
   if (!c) return res.status(404).json({ message: 'Topilmadi' })
   if (!bind(c, String(req.body?.instance || ''))) return res.status(404).json({ message: 'Server topilmadi (ro\'yxatni yangilang)' })
   saveDb(); res.json(view(c))
+})
+
+// Serverni mijozdan ajratish: shu zahoti bloklanadi ("Ulanmagan serverlar"ga tushadi — qayta biriktirish mumkin).
+// Restoran yangi kompyuterga ko'chganda eski nusxani, yoki ruxsatsiz nusxani o'chirish uchun.
+admin.post('/api/customers/:id/unbind', (req, res) => {
+  const c = findById(req.params.id)
+  const inst = String(req.body?.instance || '')
+  if (!c || !c.instances?.[inst]) return res.status(404).json({ message: 'Topilmadi' })
+  const i = c.instances[inst]
+  delete c.instances[inst]
+  c.revokedInstances = { ...(c.revokedInstances || {}), [inst]: new Date().toISOString() }
+  logEvent(c, 'unbind', `${inst.slice(0, 8).toUpperCase()} ${i.host || ''}`)
+  bump(c); saveDb(); res.json(view(c))
 })
 
 admin.post('/api/customers', (req, res) => {
@@ -397,6 +424,7 @@ admin.post('/api/customers', (req, res) => {
     createdAt: new Date().toISOString(),
     payments: [],
   }
+  logEvent(c, 'create', trialDays ? `${trialDays} kun sinov` : '')
   db.customers.push(c)
   if (req.body.instance) bind(c, String(req.body.instance))   // "Yangi mijoz" — ulanmagan serverdan
   saveDb()
@@ -412,7 +440,12 @@ admin.put('/api/customers/:id', (req, res) => {
   if (req.body.paidUntil) {
     const d = new Date(req.body.paidUntil)
     if (isNaN(d)) return res.status(400).json({ message: 'Sana noto\'g\'ri' })
+    if (d.toISOString().slice(0, 10) !== String(c.paidUntil).slice(0, 10)) logEvent(c, 'paidUntil', d.toISOString().slice(0, 10))
     c.paidUntil = d.toISOString()
+  }
+  if (['soft', 'hard'].includes(req.body.blockMode) && req.body.blockMode !== blockModeOf(c)) {
+    c.blockMode = req.body.blockMode
+    logEvent(c, 'blockMode', c.blockMode)
   }
   // Muhlat: bo'sh — umumiy (GRACE_DAYS), 0 — muddat tugashi bilan blok
   if (req.body.graceDays !== undefined) {
@@ -442,6 +475,7 @@ admin.post('/api/customers/:id/pay', (req, res) => {
     until: c.paidUntil,
   })
   if (c.status === 'suspended' && req.body.activate !== false) c.status = 'active'
+  logEvent(c, 'pay', `${months} oy · ${c.payments.at(-1).amount} so'm → ${c.paidUntil.slice(0, 10)}`)
   bump(c); saveDb(); res.json(view(c))
 })
 
@@ -449,12 +483,16 @@ admin.post('/api/customers/:id/suspend', (req, res) => {
   const c = findById(req.params.id)
   if (!c) return res.status(404).json({ message: 'Topilmadi' })
   c.status = 'suspended'; c.suspendedAt = new Date().toISOString()
+  // Tanlangan bloklash turi saqlanadi (muddat o'tganda ham shu ishlatiladi)
+  if (['soft', 'hard'].includes(req.body?.mode)) c.blockMode = req.body.mode
+  logEvent(c, 'suspend', [blockModeOf(c) === 'hard' ? "to'liq" : 'yumshoq', str(req.body?.reason, 150)].filter(Boolean).join(' · '))
   bump(c); saveDb(); res.json(view(c))
 })
 admin.post('/api/customers/:id/activate', (req, res) => {
   const c = findById(req.params.id)
   if (!c) return res.status(404).json({ message: 'Topilmadi' })
   c.status = 'active'
+  logEvent(c, 'activate')
   bump(c); saveDb(); res.json(view(c))
 })
 admin.delete('/api/customers/:id', (req, res) => {
