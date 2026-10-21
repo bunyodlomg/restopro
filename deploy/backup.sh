@@ -41,7 +41,7 @@ fail() { log "❌ $*"; notify "❌ RestoPro backup xatosi ($(hostname)): $*"; ex
 # .env dan bitta qiymatni o'qish (source qilmasdan — maxsus belgilar xavfsiz)
 env_get() {
   [ -f "$ENV_FILE" ] || return 0
-  grep -E "^[[:space:]]*$1=" "$ENV_FILE" | tail -n1 | cut -d= -f2- \
+  { grep -E "^[[:space:]]*$1=" "$ENV_FILE" || true; } | tail -n1 | cut -d= -f2- \
     | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
 }
 

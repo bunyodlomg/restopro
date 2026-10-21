@@ -10,9 +10,10 @@
 INST_DIR="/etc/restopro"
 
 # .env dan bitta qiymat (source qilmasdan — maxsus belgilar xavfsiz):  env_val FAYL KALIT
+# Kalit yo'q bo'lsa — bo'sh (xato emas: set -e/pipefail da skript jim to'xtab qolmasin)
 env_val() {
   [ -f "$1" ] || return 0
-  grep -E "^[[:space:]]*$2=" "$1" | tail -n1 | cut -d= -f2- \
+  { grep -E "^[[:space:]]*$2=" "$1" || true; } | tail -n1 | cut -d= -f2- \
     | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/"
 }
 
