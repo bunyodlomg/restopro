@@ -84,7 +84,7 @@ async function request(method, urlPath, { body, type, raw } = {}) {
   const startedAt = Date.now()
   const res = await fetch(SYNC_URL + urlPath, {
     method,
-    headers: { 'x-sync-key': SYNC_KEY, ...(type ? { 'content-type': type } : {}) },
+    headers: { 'x-sync-key': SYNC_KEY, 'x-node': engine.NODE_ID, ...(type ? { 'content-type': type } : {}) },
     body,
     signal: AbortSignal.timeout(TIMEOUT_MS),
   })
@@ -221,7 +221,7 @@ async function watchRemote(io) {
   let seq = 0
   for (;;) {
     try {
-      const res = await fetch(`${SYNC_URL}/api/sync/wait?seq=${seq}`, { headers: { 'x-sync-key': SYNC_KEY }, signal: AbortSignal.timeout(40000) })
+      const res = await fetch(`${SYNC_URL}/api/sync/wait?seq=${seq}`, { headers: { 'x-sync-key': SYNC_KEY, 'x-node': engine.NODE_ID }, signal: AbortSignal.timeout(40000) })
       if (res.status === 404) return   // eski cloud versiyasi — faqat davriy sync
       if (!res.ok) throw new Error(String(res.status))
       const { seq: next } = await res.json()
@@ -229,6 +229,26 @@ async function watchRemote(io) {
     } catch {
       await new Promise(r => setTimeout(r, 5000))   // internet yo'q — biroz kutib qayta
     }
+  }
+}
+
+// Sotuvchi buyrug'i: cloud'dagi hamma narsani qaytadan olish (kassada tafovut bo'lsa).
+// Avval lokal o'zgarishlar yuboriladi (tick push'dan boshlanadi), so'ng since=0 dan pull —
+// kassa cloud bilan to'liq tenglashadi, yuborilmagan lokal o'zgarishlar birlashtiriladi.
+async function resync(io) {
+  if (!SYNC_URL) return
+  await saveState({ pulled: 0 })
+  status.conflicts = []
+  console.log("🔁 sync: to'liq qayta sinxronlash (sotuvchi buyrug'i)")
+  await tick(io)
+}
+
+// Sotuvchi panelida ko'rinadigan sog'lik ko'rsatkichlari
+function health() {
+  return {
+    online: status.online, initialized: status.initialized, pending: status.pending,
+    lastSyncAt: status.lastSyncAt, conflicts: status.conflicts.length, merged: status.merged,
+    clockOffset: status.clockOffset, lastError: status.online ? null : status.lastError,
   }
 }
 
@@ -268,4 +288,4 @@ function requireInitialized(req, res, next) {
   })
 }
 
-module.exports = { start, tick, pull, publicStatus, requireInitialized, status }
+module.exports = { start, tick, pull, resync, health, publicStatus, requireInitialized, status }

@@ -46,6 +46,7 @@ const DEV_OFF = process.env.LICENSE_DEV === '1' && process.env.NODE_ENV !== 'pro
 const ENABLED = !!PUBKEY && !DEV_OFF
 const VIA_CLOUD = !!SYNC_URL
 const ROLE = VIA_CLOUD ? 'kassa' : process.env.SYNC_KEY ? 'cloud' : 'server'
+const NODE = process.env.NODE_ID || (VIA_CLOUD ? 'kassa' : 'cloud')
 const DAY = 86400000
 const WARN_DAYS = 5
 
@@ -163,6 +164,7 @@ async function check() {
     if (!cur || p.iat >= cur.iat) {
       await persist({ token, revoked: false, lastCheckAt: Date.now(), ...(verifyUpdate(updateToken) ? { updateToken } : {}) })
       bus.emit('token')
+      await runCommands(p)
     } else if (saved?.revoked) await persist({ revoked: false })
     lastError = null
   } catch (err) {
@@ -176,13 +178,38 @@ async function check() {
   announce()
 }
 
+// ── Sotuvchining masofaviy buyruqlari (imzolangan javob ichida: cmd: [{ i, t, n }]) ──
+// n — qaysi tugun uchun (kassa NODE_ID / 'cloud'); har buyruq bir marta bajariladi.
+//   resync  — kassa cloud'dagi hamma ma'lumotni qaytadan oladi (tafovut bo'lsa)
+//   restart — server qayta ishga tushadi (kassa ilovasi / pm2 o'zi qayta ochadi)
+const commandHandlers = []
+const onCommand = fn => commandHandlers.push(fn)
+async function runCommands(p) {
+  const done = new Set(saved?.doneCmds || [])
+  const mine = (Array.isArray(p.cmd) ? p.cmd : []).filter(c => c && c.n === NODE && !done.has(c.i))
+  if (!mine.length) return
+  // Avval "bajarildi" deb yozamiz — restart buyrug'i aylanib qolmasin
+  await persist({ doneCmds: [...done, ...mine.map(c => c.i)].slice(-50), lastCmd: mine[mine.length - 1].i })
+  for (const c of mine) {
+    console.log(`📡 Sotuvchi buyrug'i: ${c.t}`)
+    for (const fn of commandHandlers) { try { await fn(c.t) } catch (err) { console.error('Buyruq:', err.message) } }
+  }
+}
+const lastCommand = () => saved?.lastCmd || null
+
+// Cloud: sotuvchi bloklagan kassa sync qila olmaydi
+const nodeBlocked = node => {
+  const p = verify(saved?.token)
+  return !!node && Array.isArray(p?.bn) && p.bn.includes(String(node))
+}
+
 // ── Holat o'zgarsa — ochiq ekranlarga (server.js socket orqali yuboradi) ──
 const listeners = []
 const onChange = fn => listeners.push(fn)
 let lastKey = null
 function announce() {
   const s = status()
-  const key = [s.state, s.blocked, s.readonly, s.paidUntil].join('|')
+  const key = [s.state, s.blocked, s.readonly, s.paidUntil, s.message?.id].join('|')
   if (key === lastKey) return
   const first = lastKey === null
   lastKey = key
@@ -264,7 +291,11 @@ function status() {
     graceUntil: new Date(graceUntil).toISOString(),
     daysLeft: Math.ceil((paidUntil - t) / DAY),
     contact: p.c || vendor.contact || '',
+    // Sotuvchidan xabar (imzolangan — soxtalashtirib bo'lmaydi)
+    message: p.msg?.t ? { id: String(p.msg.i), text: String(p.msg.t), level: p.msg.l === 'warn' ? 'warn' : 'info' } : null,
   }
+  // Sotuvchi shu kassani alohida bloklagan (restoranning boshqa qurilmalari ishlayveradi)
+  if (VIA_CLOUD && Array.isArray(p.bn) && p.bn.includes(NODE)) return { ...info, state: 'device', blocked: true }
   // Eski litsenziya serveri javobida bm yo'q — avvalgidek to'liq blok
   const block = p.bm === 'soft' ? { blocked: false, readonly: true } : { blocked: true }
   if (p.s === 'suspended') return { ...info, state: 'suspended', ...block }
@@ -347,4 +378,4 @@ router.get('/update-token', async (req, res) => {
   res.json({ url: `${LICENSE_URL}/updates`, token })
 })
 
-module.exports = { start, status, requireLicense, router, currentToken, currentUpdateToken, isRevoked, verify, onChange, setStatsProvider, waitToken }
+module.exports = { start, status, requireLicense, router, currentToken, currentUpdateToken, isRevoked, verify, onChange, setStatsProvider, waitToken, onCommand, lastCommand, nodeBlocked }

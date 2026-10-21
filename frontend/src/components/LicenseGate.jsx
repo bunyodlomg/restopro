@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { RefreshCw, Phone, CalendarClock, X } from 'lucide-react'
+import { RefreshCw, Phone, CalendarClock, X, Megaphone } from 'lucide-react'
 import API from '../api/api.js'
 import { createSocket } from '../api/socket.js'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -13,7 +13,8 @@ const BLOCKED_TEXT = {
   revoked:   ["Litsenziya ulanmagan", "Bu server hech qaysi mijozga biriktirilmagan (yoki sotuvchi bekor qilgan). Ma'lumotlaringiz saqlangan — sotuvchiga quyidagi Server ID ni ayting: u biriktirishi bilan tizim o'zi ochiladi."],
   stale:     ["Litsenziyani tekshirib bo'lmadi", "Tizim uzoq vaqt litsenziya serveri bilan bog'lanmadi. Internetga ulang va «Qayta tekshirish» tugmasini bosing."],
   missing:   ["Litsenziya faollashtirilmagan", "Litsenziya hali tekshirilmadi. Internetga ulanganini tekshiring va «Qayta tekshirish» tugmasini bosing."],
-  nokey:     ["Litsenziya ulanmagan", "Sotuvchiga quyidagi Server ID ni ayting: u admin panelda shu serverni mijozga biriktirishi bilan tizim o'zi ochiladi."],
+  device:    ["Bu kassa bloklangan", "Sotuvchi shu kompyuterni alohida blokladi (restoranning boshqa qurilmalari ishlayapti). Ma'lumotlaringiz saqlangan — sotuvchiga murojaat qiling."],
+  nokey:     ["Litsenziya ulanmagan","Sotuvchiga quyidagi Server ID ni ayting: u admin panelda shu serverni mijozga biriktirishi bilan tizim o'zi ochiladi."],
 }
 
 function Blocked({ lic, onRetry, busy }) {
@@ -56,11 +57,25 @@ function Banner({ lic, onClose }) {
   )
 }
 
+// Sotuvchidan xabar — adminlarga, yopilgach shu xabar qayta chiqmaydi
+const MSG_KEY = 'rp_vendor_msg_seen'
+function seenMessage() { try { return localStorage.getItem(MSG_KEY) } catch { return null } }
+function VendorMessage({ msg, onClose, raised }) {
+  return (
+    <div className={`lic-banner ${msg.level === 'warn' ? '' : 'upd'}`} style={raised ? { transform: 'translate(-50%, -64px)' } : undefined}>
+      <Megaphone size={19}/>
+      <span>{msg.text}</span>
+      <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose} aria-label="Yopish" style={{ color: 'inherit', marginLeft: 'auto' }}><X size={18}/></button>
+    </div>
+  )
+}
+
 // Butun ilovani o'raydi: bloklangan bo'lsa — to'lov ekrani, tugayotgan bo'lsa — adminlarga ogohlantirish
 export default function LicenseGate({ children }) {
   const [lic, setLic] = useState(null)
   const [busy, setBusy] = useState(false)
   const [hidden, setHidden] = useState(false)
+  const [msgSeen, setMsgSeen] = useState(seenMessage)
   const { isAdmin, user } = useAuth()
 
   // Blokdan chiqqanda sahifa qayta yuklanadi (bloklangan paytdagi xato holatlar qolmasin)
@@ -99,5 +114,11 @@ export default function LicenseGate({ children }) {
   // Yumshoq blok — hamma ko'radi (ofitsant ham yangi buyurtma nega o'tmayotganini bilsin)
   const warn = (lic?.readonly && !(isAdmin && hidden)) ||
     (isAdmin && !hidden && (lic?.state === 'warning' || lic?.state === 'grace'))
-  return <>{warn && <Banner lic={lic} onClose={() => setHidden(true)}/>}{children}</>
+  const msg = isAdmin && lic?.message && lic.message.id !== msgSeen ? lic.message : null
+  const closeMsg = () => { try { localStorage.setItem(MSG_KEY, msg.id) } catch {} setMsgSeen(msg.id) }
+  return <>
+    {warn && <Banner lic={lic} onClose={() => setHidden(true)}/>}
+    {msg && <VendorMessage msg={msg} onClose={closeMsg} raised={warn}/>}
+    {children}
+  </>
 }

@@ -103,7 +103,12 @@ license.onChange(s => io.emit('license', s))
   // nusxalab oladi, VPS'ga kirib .env qidirish shart emas
   license.setStatsProvider(async () => (isCloud
     ? { ...(await stats.report(io)), sync: publicUrl ? { url: publicUrl, key: process.env.SYNC_KEY } : undefined }
-    : stats.localStats(io)))
+    : { ...(await stats.localStats(io)), health: { ...syncClient.health(), license: license.status().state, lastCmd: license.lastCommand() } }))
+  // Sotuvchining masofaviy buyruqlari
+  license.onCommand(async type => {
+    if (type === 'resync') await syncClient.resync(io)
+    if (type === 'restart') setTimeout(() => process.exit(0), 500)   // kassa ilovasi / pm2 qayta ochadi
+  })
 }
 
 io.on('connection', socket => {

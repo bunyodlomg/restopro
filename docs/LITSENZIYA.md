@@ -126,6 +126,23 @@ Ro'yxat to'lov muddati bo'yicha saralangan: eng yaqini tepada turadi.
 - Mijozni o'chirishdan ko'ra to'xtatgan ma'qul: o'chirilgan mijozning tarixi ham yo'qoladi.
 - Barcha amallar (to'lov, to'xtatish, faollashtirish, server biriktirish/ajratish) mijoz oynasidagi **Amallar tarixi**da qoladi.
 
+### Kassalarni boshqarish va kuzatish
+
+Mijoz oynasidagi **Qurilmalar** ro'yxatida har bir kassa uchun quyidagilar ko'rinadi:
+- sync holati: oxirgi sinxronlash vaqti, cloud'ga yetmagan o'zgarishlar, ikki tomonda o'zgarib birlashtirilgan yozuvlar;
+- muammolar (sariq ⚠): o'zgarishlar 10 daqiqadan beri cloud'ga yetmayapti, sinxronlanmagan yozuvlar bor yoki kompyuter soati noto'g'ri. Muammo bo'lsa, mijozlar ro'yxatida ham «⚠ N ta muammo» chiqadi.
+
+Kassa ostidagi amallar:
+- **bloklash / ochish** — faqat shu kompyuter bloklanadi, restoranning qolgan qurilmalari ishlayveradi;
+- **qayta sinxronlash** — kassa cloud'dagi hamma ma'lumotni qaytadan oladi (kassada nimadir mos kelmasa ishlating);
+- **qayta ishga tushirish** — kassa serveri qayta ochiladi (~10 soniya). Cloud server uchun ham shu amal bor.
+
+Buyruq restoran online bo'lsa bir necha soniyada, offline bo'lsa internetga ulanishi bilan bajariladi (7 kun ichida).
+
+### Restoranga xabar
+
+Mijoz oynasidagi **Restoranga xabar** bo'limiga matn yozib, **Yuborish** tugmasini bosing. Xabar restoran adminlari ekranida banner bo'lib chiqadi. Masalan: «25-oktabr 02:00 da yangilanish», «To'lov eslatmasi». Xabarni olib tashlash uchun matnni o'chirib, yana yuboring.
+
 ### Bitta serverni ajratish
 
 Restoran yangi kompyuterga ko'chdi yoki ruxsatsiz nusxa paydo bo'ldi. Bunday holatda mijoz oynasidagi **Qurilmalar** ro'yxatida o'sha server yonidagi **ajratish** havolasini bosing. Natija:

@@ -22,6 +22,10 @@ function syncAuth(req, res, next) {
   const ok = expected.length >= 32 && given.length === expected.length &&
     crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected))
   if (!ok) return res.status(401).json({ message: 'Sync kaliti noto\'g\'ri' })
+  // Sotuvchi shu kassani alohida bloklagan — ma'lumot almashmaydi (litsenziya holatini olishi mumkin)
+  const node = req.get('x-node') || req.query.node
+  if (!/^\/(license|ping)/.test(req.path) && require('../license').nodeBlocked(node))
+    return res.status(403).json({ code: 'NODE_BLOCKED', message: 'Bu kassa sotuvchi tomonidan bloklangan' })
   next()
 }
 

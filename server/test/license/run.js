@@ -114,6 +114,35 @@ async function test(name, fn) {
     for (const port of [CLOUD, KASSA]) await until(async () => (await lic(port)).state === 'active', `active ${port}`)
   })
 
+  await test('sotuvchi xabari kassaga yetadi; kassa sog\'ligi panelda ko\'rinadi', async () => {
+    await admin('POST', `/customers/${customer.id}/message`, { text: 'Ertaga yangilanish', level: 'warn' })
+    await until(async () => (await lic(KASSA)).message?.text === 'Ertaga yangilanish', 'xabar')
+    // Kassa holati cloud orqali keladi: har o'zgarishda (bump) cloud va kassa qayta tekshiradi
+    const node = await until(async () => {
+      await admin('POST', `/customers/${customer.id}/message`, { text: 'Ertaga yangilanish', level: 'warn' })
+      await wait(1500)
+      const c = (await admin('GET', '/customers')).find(x => x.id === customer.id)
+      return c.stats?.nodes?.find(n => n.id === 'kassa1' && n.health)
+    }, 'kassa sog\'ligi', 30000)
+    assert.strictEqual(node.health.license, 'active')
+    assert.strictEqual(node.health.online, true)
+  })
+
+  await test('masofaviy buyruq: kassa qayta sinxronlanadi', async () => {
+    await admin('POST', `/customers/${customer.id}/command`, { type: 'resync', node: 'kassa1' })
+    await until(async () => procs.kassa.log.includes("to'liq qayta sinxronlash"), 'resync logi')
+  })
+
+  await test('bitta kassani bloklash: kassa bloklanadi, cloud u bilan sync qilmaydi; ochish', async () => {
+    await admin('POST', `/customers/${customer.id}/node`, { node: 'kassa1', blocked: true })
+    await until(async () => (await lic(KASSA)).state === 'device', 'kassa device blok')
+    assert.strictEqual((await lic(CLOUD)).state, 'active', 'cloud ishlashi kerak')
+    const r = await fetch(`http://127.0.0.1:${CLOUD}/api/sync/pull?since=0&node=kassa1`, { headers: { 'x-sync-key': SYNC_KEY, 'x-node': 'kassa1' } })
+    assert.strictEqual(r.status, 403)
+    await admin('POST', `/customers/${customer.id}/node`, { node: 'kassa1', blocked: false })
+    await until(async () => (await lic(KASSA)).state === 'active', 'kassa ochildi')
+  })
+
   await test('cloud o\'chdi — kassa litsenziyani to\'g\'ridan-to\'g\'ri oladi', async () => {
     const before = (await lic(KASSA)).lastCheckAt
     procs.cloud.kill()

@@ -189,8 +189,35 @@ function cleanStats(raw) {
       version: String(n?.version || '').slice(0, 20),
       lastSeen: n?.lastSeen && !isNaN(new Date(n.lastSeen)) ? new Date(n.lastSeen).toISOString() : null,
       devices: counts(n?.devices),
+      health: cleanHealth(n?.health),
     })),
   }
+}
+
+// Kassa sog'ligi: sync navbati, ziddiyatlar, soat farqi, litsenziya holati, oxirgi bajarilgan buyruq
+const int = v => Math.round(Math.max(-1e9, Math.min(1e9, Number(v) || 0)))
+const isoOrNull = v => (v && !isNaN(new Date(v)) ? new Date(v).toISOString() : null)
+function cleanHealth(h) {
+  if (!h || typeof h !== 'object') return undefined
+  return {
+    online: !!h.online, pending: int(h.pending), conflicts: int(h.conflicts), merged: int(h.merged),
+    clockOffset: int(h.clockOffset), lastSyncAt: isoOrNull(h.lastSyncAt),
+    lastError: h.lastError ? String(h.lastError).slice(0, 120) : null,
+    license: h.license ? String(h.license).slice(0, 20) : null,
+    lastCmd: h.lastCmd ? String(h.lastCmd).slice(0, 40) : null,
+  }
+}
+
+// Imzolangan javobga: alohida bloklangan kassalar, sotuvchi xabari, masofaviy buyruqlar (oxirgi 7 kun)
+const CMD_DAYS = 7
+function extrasFor(c) {
+  const out = {}
+  const bn = Object.keys(c.blockedNodes || {})
+  if (bn.length) out.bn = bn
+  if (c.message?.text) out.msg = { i: c.message.id, t: c.message.text, l: c.message.level }
+  const cmd = (c.commands || []).filter(x => Date.now() - new Date(x.at) < CMD_DAYS * DAY).map(x => ({ i: x.id, t: x.type, n: x.node }))
+  if (cmd.length) out.cmd = cmd
+  return out
 }
 
 app.post('/api/v1/check', limit, (req, res) => {
@@ -202,15 +229,21 @@ app.post('/api/v1/check', limit, (req, res) => {
     return res.status(404).json({ code: 'UNKNOWN_KEY', message: 'Bu server hech qaysi mijozga biriktirilmagan' })
   }
 
-  c.lastSeen = new Date().toISOString()
-  c.lastIp = req.ip
-  c.version = String(req.body?.version || '').slice(0, 20)
+  // Kassa bu yerga faqat cloud ishlamaganda keladi (zaxira yo'l) — restoranning umumiy holati
+  // (online, versiya, qurilmalar) cloud'niki bo'lib qoladi, kassa faqat "Serverlar" ro'yxatida yangilanadi
+  const role = String(req.body?.role || '').slice(0, 20)
+  const at = new Date().toISOString()
+  if (role !== 'kassa') {
+    c.lastSeen = at
+    c.lastIp = req.ip
+    c.version = String(req.body?.version || '').slice(0, 20)
+  }
   if (inst) {
     c.instances = c.instances || {}
-    c.instances[inst] = { lastSeen: c.lastSeen, ip: req.ip, role: String(req.body?.role || '').slice(0, 20), host: String(req.body?.host || '').slice(0, 120) }
+    c.instances[inst] = { lastSeen: at, ip: req.ip, role, host: String(req.body?.host || '').slice(0, 120) }
     delete db.pending[inst]
   }
-  const stats = cleanStats(req.body?.stats)
+  const stats = role !== 'kassa' && cleanStats(req.body?.stats)
   if (stats) c.stats = stats
   // Cloud kassani ulash ma'lumotini yuboradi — admin panelda "Kassani ulash" (nusxalash uchun)
   const sync = req.body?.stats?.sync
@@ -230,6 +263,7 @@ app.post('/api/v1/check', limit, (req, res) => {
       g: graceOf(c),               // undan keyin necha kun ogohlantirish bilan ishlaydi
       bm: blockModeOf(c),          // to'xtatilgan / muddati o'tgan: soft yoki hard
       c: VENDOR_CONTACT,
+      ...extrasFor(c),
       iat: now,
       exp: now + offlineOf(c) * DAY, // internetsiz ishlash chegarasi
     }),
@@ -402,6 +436,41 @@ admin.post('/api/customers/:id/unbind', (req, res) => {
   delete c.instances[inst]
   c.revokedInstances = { ...(c.revokedInstances || {}), [inst]: new Date().toISOString() }
   logEvent(c, 'unbind', `${inst.slice(0, 8).toUpperCase()} ${i.host || ''}`)
+  bump(c); saveDb(); res.json(view(c))
+})
+
+// Bitta kassani bloklash / ochish (restoranning qolgan qurilmalari ishlayveradi)
+admin.post('/api/customers/:id/node', (req, res) => {
+  const c = findById(req.params.id)
+  const node = str(req.body?.node, 40)
+  if (!c || !node) return res.status(404).json({ message: 'Topilmadi' })
+  c.blockedNodes = c.blockedNodes || {}
+  if (req.body.blocked) c.blockedNodes[node] = new Date().toISOString()
+  else delete c.blockedNodes[node]
+  logEvent(c, req.body.blocked ? 'nodeBlock' : 'nodeUnblock', node)
+  bump(c); saveDb(); res.json(view(c))
+})
+
+// Restoranga xabar (admin ekranida banner). Bo'sh matn — xabarni olib tashlash.
+admin.post('/api/customers/:id/message', (req, res) => {
+  const c = findById(req.params.id)
+  if (!c) return res.status(404).json({ message: 'Topilmadi' })
+  const text = str(req.body?.text, 300)
+  c.message = text ? { id: crypto.randomBytes(4).toString('hex'), text, level: req.body.level === 'warn' ? 'warn' : 'info', at: new Date().toISOString() } : null
+  logEvent(c, 'message', text || "olib tashlandi")
+  bump(c); saveDb(); res.json(view(c))
+})
+
+// Masofaviy buyruq: resync (kassa hamma ma'lumotni qaytadan oladi) yoki restart. node — kassa ID yoki 'cloud'.
+admin.post('/api/customers/:id/command', (req, res) => {
+  const c = findById(req.params.id)
+  const type = String(req.body?.type || '')
+  const node = str(req.body?.node, 40)
+  if (!c || !node) return res.status(404).json({ message: 'Topilmadi' })
+  if (!['resync', 'restart'].includes(type)) return res.status(400).json({ message: 'Noma\'lum buyruq' })
+  const cmd = { id: crypto.randomBytes(5).toString('hex'), type, node, at: new Date().toISOString() }
+  c.commands = [...(c.commands || []), cmd].slice(-20)
+  logEvent(c, 'command', `${type} → ${node}`)
   bump(c); saveDb(); res.json(view(c))
 })
 

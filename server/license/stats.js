@@ -37,7 +37,7 @@ async function report(io) {
   const list = await nodes().find().sort({ lastSeen: -1 }).limit(20).toArray()
   return {
     ...own,
-    nodes: list.map(n => ({ id: n._id, version: n.version || '', lastSeen: n.lastSeen, devices: n.stats?.devices || {} })),
+    nodes: list.map(n => ({ id: n._id, version: n.version || '', lastSeen: n.lastSeen, devices: n.stats?.devices || {}, health: n.stats?.health })),
   }
 }
 
@@ -49,10 +49,25 @@ async function recordNode(id, { version, stats } = {}) {
   if (stats) {
     try {
       const s = typeof stats === 'string' ? JSON.parse(stats) : stats
-      set.stats = { devices: Object.fromEntries(Object.entries(s?.devices || {}).slice(0, 10).map(([k, v]) => [String(k).slice(0, 20), Math.max(0, +v || 0)])) }
+      set.stats = {
+        devices: Object.fromEntries(Object.entries(s?.devices || {}).slice(0, 10).map(([k, v]) => [String(k).slice(0, 20), Math.max(0, +v || 0)])),
+        health: cleanHealth(s?.health),
+      }
     } catch {}
   }
   await nodes().updateOne({ _id: String(id).slice(0, 40) }, { $set: set }, { upsert: true })
 }
 
-module.exports = { localStats, report, recordNode }
+// Kassa sog'ligi (sync navbati, ziddiyatlar, soat farqi, litsenziya holati) — faqat raqam va qisqa matn
+const int = v => Math.round(Math.max(-1e9, Math.min(1e9, Number(v) || 0)))
+const short = (v, max) => (v == null ? null : String(v).slice(0, max))
+function cleanHealth(h) {
+  if (!h || typeof h !== 'object') return undefined
+  return {
+    online: !!h.online, initialized: !!h.initialized, pending: int(h.pending), conflicts: int(h.conflicts), merged: int(h.merged),
+    clockOffset: int(h.clockOffset), lastSyncAt: h.lastSyncAt && !isNaN(new Date(h.lastSyncAt)) ? new Date(h.lastSyncAt).toISOString() : null,
+    lastError: short(h.lastError, 120), license: short(h.license, 20), lastCmd: short(h.lastCmd, 40),
+  }
+}
+
+module.exports = { localStats, report, recordNode, cleanHealth }
