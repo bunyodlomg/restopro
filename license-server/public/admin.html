@@ -59,6 +59,7 @@
     <div><h1 style="margin:0;font-size:28px;letter-spacing:-.03em">Mijozlar</h1><div class="label" id="sub"></div></div>
     <div class="row">
       <input id="q" placeholder="Qidirish: nom, telefon, kalit" style="width:260px">
+      <button class="dark" onclick="openBroadcast()">📣 Xabar yuborish</button>
       <button class="primary" onclick="openNew()">+ Yangi mijoz</button>
     </div>
   </div>
@@ -191,7 +192,7 @@ function render() {
     const days = Math.ceil((new Date(c.paidUntil) - Date.now()) / 86400000)
     const d = devicesOf(c), st = c.stats
     return `<tr>
-      <td><b>${esc(c.name)}</b><div class="muted">${esc([c.owner, c.phone].filter(Boolean).join(' · '))}</div>
+      <td><b>${esc(c.name)}</b>${msgActive(c) ? ` <span title="${esc(c.message.text)}" style="cursor:help">📣</span>` : ''}<div class="muted">${esc([c.owner, c.phone].filter(Boolean).join(' · '))}</div>
         <span class="key" title="Nusxa olish" onclick="copy('${c.key}')">${c.key}</span></td>
       <td><span class="tag t-${c.state}">${STATE[c.state]}</span><div class="muted">${['suspended', 'expired'].includes(c.state) ? (c.blockMode === 'hard' ? "to'liq blok" : 'yumshoq blok') : `muhlat ${c.grace} kun`}</div></td>
       <td style="white-space:nowrap"><span class="dot ${c.online ? 'on' : ''}"></span>${c.online ? 'Online' : 'Offline'}<div class="muted">${ago(c.lastSeen)}${c.version ? ' · v' + esc(c.version) : ''}</div></td>
@@ -314,14 +315,75 @@ async function nodeAct(id, node, what) {
 }
 async function sendMessage(id) {
   const text = $('#msgText').value.trim()
-  try { await api('POST', `/customers/${id}/message`, { text, level: $('#msgLevel').value }); $('#dlg').close(); toast(text ? 'Xabar yuborildi' : 'Xabar olib tashlandi'); load() }
+  try { await api('POST', `/customers/${id}/message`, { text, level: $('#msgLevel').value, days: $('#msgDays').value }); $('#dlg').close(); toast(text ? 'Xabar yuborildi' : 'Xabar olib tashlandi'); load() }
   catch (e) { toast('Xato: ' + e.message) }
 }
+// Xabar hozir restoranda ko'rinadimi (muddati o'tmagan)
+const msgActive = c => !!c.message?.text && !(c.message.until && new Date(c.message.until) < Date.now())
+const DAYS_OPTS = sel => [['', 'Olib tashlanguncha'], [1, '1 kun'], [3, '3 kun'], [7, '1 hafta'], [30, '1 oy']]
+  .map(([v, t]) => `<option value="${v}" ${String(sel ?? '') === String(v) ? 'selected' : ''}>${t}</option>`).join('')
+
+// Bir nechta restoranga birdaniga xabar: hammasi / faollar / to'xtatilganlar / qo'lda tanlash
+function openBroadcast() {
+  const sorted = list.slice().sort((a, b) => a.name.localeCompare(b.name))
+  dialog('Xabar yuborish',
+    `<textarea name="text" rows="3" maxlength="300" required placeholder="Masalan: Ertaga 02:00–03:00 da tizim yangilanadi"></textarea>
+    <div class="grid2">
+      <label><div class="label" style="margin-bottom:6px">Turi</div><select name="level"><option value="info">Oddiy</option><option value="warn">Muhim (sariq)</option></select></label>
+      <label><div class="label" style="margin-bottom:6px">Ko'rinadi</div><select name="days">${DAYS_OPTS(3)}</select></label>
+    </div>
+    <div class="row" style="justify-content:space-between">
+      <div class="label">Kimga (<span id="bcCount">0</span> ta)</div>
+      <div class="row" style="gap:12px;font-size:14px">
+        ${link('hammasi', "bcPick('all')")} ${link('faollar', "bcPick('active')")} ${link("to'xtatilganlar", "bcPick('blocked')")} ${link('hech biri', "bcPick('none')")}
+      </div>
+    </div>
+    <input id="bcSearch" placeholder="Qidirish" oninput="bcFilter()">
+    <div id="bcList" style="display:grid;gap:2px;max-height:280px;overflow:auto">
+      ${sorted.map(c => `<label class="row bc-row" data-q="${esc((c.name + ' ' + (c.phone || '') + ' ' + (c.owner || '')).toLowerCase())}" style="gap:10px;padding:6px 4px;cursor:pointer;border-top:1px solid var(--rule)">
+        <input type="checkbox" name="ids" value="${c.id}" data-state="${c.state}" onchange="bcCount()" style="width:auto;min-height:0">
+        <span style="flex:1">${esc(c.name)}${msgActive(c) ? ' <span title="Hozirgi xabari bor">📣</span>' : ''}</span>
+        <span class="tag t-${c.state}">${STATE[c.state]}</span></label>`).join('')}
+    </div>
+    <div class="muted">Restoran adminlari ekranida banner bo'lib chiqadi (online bo'lsa bir necha soniyada). Har restoranda bitta xabar turadi — yangisi eskisini almashtiradi.</div>`,
+    `<button value="clear" class="ghost" style="margin-right:auto" onclick="bcClear(event)">Tanlanganlardan olib tashlash</button>
+     <button value="cancel" class="ghost">Bekor</button><button value="ok" class="primary">Yuborish</button>`,
+    async fd => {
+      const ids = fd.getAll('ids')
+      if (!ids.length) throw new Error('Kamida bitta restoran tanlang')
+      const r = await api('POST', '/broadcast', { ids, text: fd.get('text'), level: fd.get('level'), days: fd.get('days') })
+      toast(`Xabar ${r.count} ta restoranga yuborildi`)
+    })
+}
+function bcPick(what) {
+  for (const el of document.querySelectorAll('#bcList input[name=ids]')) {
+    const st = el.dataset.state
+    el.checked = what === 'all' || (what === 'active' && ['active', 'warning', 'grace'].includes(st)) || (what === 'blocked' && ['suspended', 'expired'].includes(st))
+  }
+  bcCount()
+}
+function bcCount() { $('#bcCount').textContent = document.querySelectorAll('#bcList input[name=ids]:checked').length }
+function bcFilter() {
+  const q = $('#bcSearch').value.trim().toLowerCase()
+  for (const row of document.querySelectorAll('#bcList .bc-row')) row.style.display = !q || row.dataset.q.includes(q) ? '' : 'none'
+}
+async function bcClear(e) {
+  e.preventDefault()
+  const ids = [...document.querySelectorAll('#bcList input[name=ids]:checked')].map(el => el.value)
+  if (!ids.length) return toast('Kamida bitta restoran tanlang')
+  if (!confirm(`${ids.length} ta restorandagi xabar olib tashlansinmi?`)) return
+  try { await api('POST', '/broadcast', { ids, text: '' }); $('#dlg').close(); toast('Olib tashlandi'); load() }
+  catch (err) { toast('Xato: ' + err.message) }
+}
+
 function messageHtml(c) {
   return `<textarea id="msgText" rows="2" maxlength="300" placeholder="Masalan: 25-oktabr kuni 02:00–03:00 yangilanish bo'ladi">${esc(c.message?.text || '')}</textarea>
     <div class="row" style="margin-top:8px"><select id="msgLevel" style="width:auto"><option value="info">Oddiy</option><option value="warn" ${c.message?.level === 'warn' ? 'selected' : ''}>Muhim (sariq)</option></select>
-      <button type="button" class="dark" onclick="sendMessage('${c.id}')">Yuborish</button>
-      ${c.message ? `<span class="muted">Hozirgi: ${date(c.message.at)}. Olib tashlash uchun matnni o'chirib yuboring.</span>` : '<span class="muted">Restoran adminlari ekranida banner bo\'lib chiqadi.</span>'}</div>`
+      <select id="msgDays" style="width:auto">${DAYS_OPTS('')}</select>
+      <button type="button" class="dark" onclick="sendMessage('${c.id}')">Yuborish</button></div>
+    <div class="muted" style="margin-top:6px">${c.message
+      ? `Hozirgi: ${date(c.message.at)}${c.message.until ? (msgActive(c) ? ` · ${date(c.message.until)} gacha` : ' · muddati tugagan') : ''}. Olib tashlash uchun matnni o'chirib yuboring.`
+      : 'Restoran adminlari ekranida banner bo\'lib chiqadi.'}</div>`
 }
 const link = (label, onclick, danger) => `<a href="#" onclick="event.preventDefault();${onclick}" style="color:${danger ? 'var(--accent-ink)' : 'inherit'};text-decoration:underline">${label}</a>`
 function eventsHtml(c) {

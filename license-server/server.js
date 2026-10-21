@@ -227,7 +227,9 @@ function extrasFor(c) {
   if (bn.length) out.bn = bn
   const bd = Object.keys(c.blockedDevices || {})
   if (bd.length) out.bd = bd
-  if (c.message?.text) out.msg = { i: c.message.id, t: c.message.text, l: c.message.level }
+  // Muddati o'tgan xabar endi yuborilmaydi — restoranda o'zi yo'qoladi
+  if (c.message?.text && !(c.message.until && new Date(c.message.until) < Date.now()))
+    out.msg = { i: c.message.id, t: c.message.text, l: c.message.level }
   const cmd = (c.commands || []).filter(x => Date.now() - new Date(x.at) < CMD_DAYS * DAY).map(x => ({ i: x.id, t: x.type, n: x.node }))
   if (cmd.length) out.cmd = cmd
   return out
@@ -528,13 +530,32 @@ admin.post('/api/customers/:id/device', (req, res) => {
 })
 
 // Restoranga xabar (admin ekranida banner). Bo'sh matn — xabarni olib tashlash.
+// days — necha kundan keyin o'zi yo'qoladi (bo'sh — olib tashlanguncha turadi).
+function setMessage(c, { text, level, days }, id = crypto.randomBytes(4).toString('hex')) {
+  text = str(text, 300)
+  const d = Math.min(365, Math.max(0, parseInt(days, 10) || 0))
+  c.message = text ? {
+    id, text, level: level === 'warn' ? 'warn' : 'info', at: new Date().toISOString(),
+    ...(d ? { until: new Date(Date.now() + d * DAY).toISOString() } : {}),
+  } : null
+  logEvent(c, 'message', text ? text + (d ? ` (${d} kun)` : '') : 'olib tashlandi')
+  bump(c)
+}
 admin.post('/api/customers/:id/message', (req, res) => {
   const c = findById(req.params.id)
   if (!c) return res.status(404).json({ message: 'Topilmadi' })
-  const text = str(req.body?.text, 300)
-  c.message = text ? { id: crypto.randomBytes(4).toString('hex'), text, level: req.body.level === 'warn' ? 'warn' : 'info', at: new Date().toISOString() } : null
-  logEvent(c, 'message', text || "olib tashlandi")
-  bump(c); saveDb(); res.json(view(c))
+  setMessage(c, req.body || {})
+  saveDb(); res.json(view(c))
+})
+
+// Bir nechta restoranga birdaniga: ids — tanlanganlar ID ro'yxati. Bitta e'lon ID — restoranlarda bir xil.
+admin.post('/api/broadcast', (req, res) => {
+  const ids = new Set(Array.isArray(req.body?.ids) ? req.body.ids.map(String) : [])
+  const targets = db.customers.filter(c => ids.has(c.id))
+  if (!targets.length) return res.status(400).json({ message: 'Hech qaysi restoran tanlanmagan' })
+  const id = crypto.randomBytes(4).toString('hex')
+  for (const c of targets) setMessage(c, req.body, id)
+  saveDb(); res.json({ ok: true, count: targets.length })
 })
 
 // Masofaviy buyruq: resync (kassa hamma ma'lumotni qaytadan oladi) yoki restart. node — kassa ID yoki 'cloud'.
