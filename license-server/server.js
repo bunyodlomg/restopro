@@ -267,11 +267,19 @@ app.post('/api/v1/check', limit, (req, res) => {
   }
   const stats = role !== 'kassa' && cleanStats(req.body?.stats)
   if (stats) c.stats = stats
-  // Cloud kassani ulash ma'lumotini yuboradi — admin panelda "Kassani ulash" (nusxalash uchun)
+  // Restoranning cloud serveri — bittasi (c.cloudInstance). Birinchi ulangan cloud shu bo'ladi va o'z
+  // kalitini panelga beradi (ulangan kassalar buzilmasin); keyin panel asosiy: kalit almashsa, cloud oladi.
   const sync = req.body?.stats?.sync
-  if (sync && /^https?:\/\/[\w.-]+(:\d+)?$/.test(String(sync.url || '')) && /^[\w-]{32,128}$/.test(String(sync.key || ''))) {
+  const syncOk = role === 'cloud' && inst && sync && /^https?:\/\/[\w.-]+(:\d+)?$/.test(String(sync.url || '')) && /^[\w-]{32,128}$/.test(String(sync.key || ''))
+  if (syncOk && (!c.cloudInstance || (inst !== c.cloudInstance && new Date(c.reinstallUntil || 0) > Date.now()))) {
+    if (c.cloudInstance !== inst && c.cloudInstance) logEvent(c, 'reinstall', `${inst.slice(0, 8).toUpperCase()} ${String(req.body?.host || '')}`)
+    c.cloudInstance = inst
+    c.syncKey = String(sync.key)
+    delete c.reinstallUntil
+  }
+  const isCloud = role === 'cloud' && inst && inst === c.cloudInstance
+  if (isCloud && syncOk) {
     c.sync = { url: String(sync.url), key: String(sync.key), at: new Date().toISOString() }
-    c.syncKey = c.sync.key
     if (!c.domain) c.domain = cleanDomain(c.sync.url).replace(/:\d+$/, '')
   }
   saveDb()
@@ -279,6 +287,7 @@ app.post('/api/v1/check', limit, (req, res) => {
   const now = Date.now()
   res.json({
     key: c.key,                    // server kalitni o'zida saqlaydi (.env shart emas)
+    ...(isCloud ? { syncKey: c.syncKey } : {}),   // kassalar ulanish kaliti — panel almashtirsa, cloud oladi
     token: signToken({
       v: 1,
       k: c.key,
@@ -372,6 +381,16 @@ app.post('/api/v1/self-update', (req, res) => {
   catch (err) { res.status(err.status || 500).json({ message: err.message }) }
 })
 // GET /api/v1/version — CI yangilanish tugaganini shu orqali tekshiradi
+// O'rnatish (install.sh --license-key): domen va sync kaliti paneldan — VPS'da qo'lda yozish shart emas.
+// Faqat cloud hali ulanmagan bo'lsa yoki sotuvchi panelda "qayta o'rnatish"ga ruxsat bergan bo'lsa.
+app.post('/api/v1/provision', limit, (req, res) => {
+  const c = findByKey(String(req.body?.key || '').trim().toUpperCase())
+  if (!c) return res.status(404).json({ message: 'Litsenziya kaliti topilmadi' })
+  if (c.cloudInstance && !(new Date(c.reinstallUntil || 0) > Date.now()))
+    return res.status(409).json({ message: "Bu restoranning cloud serveri allaqachon ulangan. Ko'chirish uchun panelda «Qayta o'rnatishga ruxsat» bosing." })
+  res.json({ name: c.name, domain: c.domain || '', syncKey: c.syncKey })
+})
+
 app.get('/api/v1/version', (req, res) => {
   if (!uploadAuth(req)) return res.status(401).json({ message: 'Ruxsat yo\'q' })
   res.json({ ...selfUpdateState(), commit: COMMIT })
@@ -509,6 +528,7 @@ admin.post('/api/customers/:id/unbind', (req, res) => {
   if (!c || !c.instances?.[inst]) return res.status(404).json({ message: 'Topilmadi' })
   const i = c.instances[inst]
   delete c.instances[inst]
+  if (c.cloudInstance === inst) delete c.cloudInstance   // yangi cloud paneldan o'rnatilishi mumkin
   c.revokedInstances = { ...(c.revokedInstances || {}), [inst]: new Date().toISOString() }
   logEvent(c, 'unbind', `${inst.slice(0, 8).toUpperCase()} ${i.host || ''}`)
   bump(c); saveDb(); res.json(view(c))
@@ -537,6 +557,23 @@ admin.post('/api/customers/:id/device', (req, res) => {
   else delete c.blockedDevices[device]
   logEvent(c, req.body.blocked ? 'deviceBlock' : 'deviceUnblock', label || device.slice(0, 8))
   bump(c); saveDb(); res.json(view(c))
+})
+
+// Sync kalitini almashtirish (sizib chiqqan bo'lsa): cloud bir necha soniyada oladi, kassalar yangi kod bilan qayta ulanadi
+admin.post('/api/customers/:id/sync-key', (req, res) => {
+  const c = findById(req.params.id)
+  if (!c) return res.status(404).json({ message: 'Topilmadi' })
+  c.syncKey = newSyncKey()
+  logEvent(c, 'syncKey')
+  bump(c); saveDb(); res.json(view(c))
+})
+// Cloud'ni qayta o'rnatish / yangi VPS'ga ko'chirish: 1 soat ichida install.sh paneldan sozlamalarni oladi
+// va yangi server restoranning cloud'i bo'lib qoladi (eskisini "Serverlar"dan ajratish mumkin)
+admin.post('/api/customers/:id/reinstall', (req, res) => {
+  const c = findById(req.params.id)
+  if (!c) return res.status(404).json({ message: 'Topilmadi' })
+  c.reinstallUntil = new Date(Date.now() + 3600000).toISOString()
+  saveDb(); res.json(view(c))
 })
 
 // Restoranga xabar (admin ekranida banner). Bo'sh matn — xabarni olib tashlash.

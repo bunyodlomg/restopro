@@ -152,9 +152,15 @@ async function check() {
   if (!ENABLED) return
   lastTry = Date.now()
   try {
-    const { token, updateToken, key } = await fetchToken()
+    const { token, updateToken, key, syncKey } = await fetchToken()
     // Sotuvchi serverni mijozga biriktirgan / kalit almashgan — yangi kalitni saqlaymiz
     if (!VIA_CLOUD && key && key !== saved?.key) await persist({ key: String(key).toUpperCase() })
+    // Cloud: kassalar ulanish kaliti paneldan (sotuvchi almashtirsa) — .env ga kirish shart emas
+    if (ROLE === 'cloud' && /^[\w-]{32,128}$/.test(syncKey || '') && syncKey !== process.env.SYNC_KEY) {
+      process.env.SYNC_KEY = syncKey
+      await persist({ syncKey })
+      console.log('🔁 Sync kaliti litsenziya panelidan yangilandi')
+    }
     const p = verify(token)
     if (!p) throw new Error('Litsenziya javobi imzosi noto\'g\'ri')
     // Kassa kalitni cloud javobidan o'rganadi — cloud ishlamay qolsa, zaxira yo'l uchun
@@ -321,6 +327,7 @@ async function start() {
   }
   saved = (await coll().findOne({ _id: 'main' })) || {}
   if (!saved.instance) await persist({ instance: crypto.randomUUID() })
+  if (ROLE === 'cloud' && saved.syncKey) process.env.SYNC_KEY = saved.syncKey   // paneldan olingan kalit .env dagidan ustun
   loaded = true
   // Server litsenziya serverini kutmasdan ishga tushadi (saqlangan javob bilan)
   check().then(() => {

@@ -5,17 +5,20 @@
 #  Ubuntu 22.04 / 24.04, root huquqi bilan:
 #    git clone https://github.com/bunyodlomg/restopro.git /opt/restopro
 #    cd /opt/restopro
-#    sudo ./deploy/install.sh --domain cafe.example.uz --email siz@example.uz
+#    sudo ./deploy/install.sh --license-key RP-XXXX-XXXX-XXXX
+#
+#  Litsenziya kaliti berilsa — domen va sync kaliti sotuvchi panelidan olinadi
+#  (panelda mijozning «Cloud domeni» to'ldirilgan bo'lishi kerak).
 #
 #  Parametrlar:
-#    --domain D          sayt domeni (DNS shu serverga qaragan bo'lishi kerak)  [majburiy]
-#    --email E           Let's Encrypt (SSL) uchun email                        [SSL uchun majburiy]
+#    --domain D          sayt domeni (DNS shu serverga qaragan bo'lishi kerak)  [panelda bo'lmasa majburiy]
+#    --email E           Let's Encrypt (SSL) uchun email (ixtiyoriy)
 #    --port P            backend porti (standart: 5050)
 #    --name N            pm2 jarayon nomi (standart: restopro)
 #    --tg-token T        backup'larni Telegram'ga yuborish uchun bot token
 #    --tg-chat C         backup'lar boradigan Telegram chat ID
 #    --license-key K     sotuvchi bergan litsenziya kaliti (RP-XXXX-XXXX-XXXX)
-#    --sync-key S        kassalar ulanish kaliti (litsenziya panelidan; bo'lmasa yaratiladi)
+#    --sync-key S        kassalar ulanish kaliti (odatda paneldan o'zi olinadi)
 #    --no-ssl            SSL o'rnatmaslik (faqat test uchun)
 #    --no-firewall       ufw'ni sozlamaslik
 #
@@ -37,7 +40,7 @@ ok()   { echo -e "    \033[32m✓\033[0m $*"; }
 warn() { echo -e "    \033[33m⚠\033[0m $*"; }
 fail() { echo -e "\n\033[31m❌ $*\033[0m" >&2; exit 1; }
 
-usage() { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -79,11 +82,32 @@ env_default() { [ -n "$(env_get "$1")" ] || env_set "$1" "$2"; }
 # ── 0. Tekshiruvlar ────────────────────────────────────────────
 log "Tekshiruvlar"
 [ "$(id -u)" -eq 0 ] || fail "Root huquqi kerak: sudo $0 ..."
-[ -n "$DOMAIN" ] || { echo "--domain majburiy"; usage 1; }
+# Litsenziya kaliti bilan: domen va sync kaliti sotuvchi panelidan (license-server /api/v1/provision)
+if [ -n "$LICENSE_KEY_ARG" ] && { [ -z "$DOMAIN" ] || [ -z "$SYNC_KEY_ARG" ]; }; then
+  LICENSE_URL="$(sed -n 's/.*"licenseUrl": *"\([^"]*\)".*/\1/p' "$APP_DIR/server/license/vendor.json" 2>/dev/null | sed 's|/*$||')"
+  [ -n "$LICENSE_URL" ] || fail "server/license/vendor.json da licenseUrl yo'q — --domain va --sync-key bilan bering"
+  PROV_FILE="$(mktemp)"
+  PROV_CODE="$(curl -sS -m 20 -o "$PROV_FILE" -w '%{http_code}' -X POST -H 'content-type: application/json' \
+    -d "{\"key\":\"$LICENSE_KEY_ARG\"}" "$LICENSE_URL/api/v1/provision")" \
+    || fail "Litsenziya serveriga ulanib bo'lmadi: $LICENSE_URL"
+  prov_get() { python3 -c "import sys,json; print(json.load(open(sys.argv[1])).get(sys.argv[2]) or '')" "$PROV_FILE" "$1" 2>/dev/null; }
+  if [ "$PROV_CODE" = 200 ]; then
+    [ -n "$DOMAIN" ]       || DOMAIN="$(prov_get domain)"
+    [ -n "$SYNC_KEY_ARG" ] || SYNC_KEY_ARG="$(prov_get syncKey)"
+    ok "Paneldan olindi: $(prov_get name)${DOMAIN:+ — $DOMAIN}"
+  elif [ "$PROV_CODE" = 409 ] && [ -n "$(env_get SYNC_KEY)" ]; then
+    # Shu serverning o'zi qayta ishga tushirilmoqda — mavjud .env bilan davom etamiz
+    [ -n "$DOMAIN" ] || DOMAIN="$(env_get CLIENT_URL | cut -d, -f1 | sed 's|^https\?://||')"
+    ok "Cloud allaqachon ulangan — mavjud sozlamalar ishlatiladi"
+  else
+    fail "Panel javobi ($PROV_CODE): $(prov_get message)"
+  fi
+  rm -f "$PROV_FILE"
+fi
+[ -n "$DOMAIN" ] || fail "Domen yo'q: panelda mijozning «Cloud domeni»ni to'ldiring yoki --domain bering"
 [[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]] || fail "Domen noto'g'ri: $DOMAIN"
 [[ "$PORT" =~ ^[0-9]+$ ]] || fail "Port son bo'lishi kerak: $PORT"
 [[ "$PM2_NAME" =~ ^[A-Za-z0-9_-]+$ ]] || fail "--name faqat harf, raqam, - va _ dan iborat bo'lsin"
-[ "$WITH_SSL" = 0 ] || [ -n "$EMAIL" ] || fail "SSL uchun --email kerak (yoki --no-ssl)"
 # shellcheck disable=SC1091
 . /etc/os-release
 [ "${ID:-}" = "ubuntu" ] || fail "Faqat Ubuntu qo'llab-quvvatlanadi (topildi: ${ID:-?})"
@@ -248,11 +272,12 @@ fi
 # ── 9. SSL ─────────────────────────────────────────────────────
 if [ "$WITH_SSL" = 1 ]; then
   log "SSL (Let's Encrypt)"
-  if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect >/dev/null 2>&1; then
+  if [ -n "$EMAIL" ]; then CERT_MAIL=(-m "$EMAIL"); else CERT_MAIL=(--register-unsafely-without-email); fi
+  if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos "${CERT_MAIL[@]}" --redirect >/dev/null 2>&1; then
     ok "https://$DOMAIN (avtomatik yangilanadi)"
   else
     warn "SSL olinmadi. DNS A yozuvi shu serverga qaraganini tekshiring, so'ng:"
-    warn "  certbot --nginx -d $DOMAIN -m $EMAIL --agree-tos --redirect"
+    warn "  certbot --nginx -d $DOMAIN ${EMAIL:+-m $EMAIL} --agree-tos --redirect"
   fi
 fi
 

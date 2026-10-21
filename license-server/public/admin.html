@@ -279,21 +279,40 @@ function connectHtml(c) {
   if (!c.syncKey) return "<span class=\"muted\">Sync kaliti yo'q — litsenziya serverini yangilang.</span>"
   const url = c.sync?.url || (c.domain ? 'https://' + c.domain : '')
   const code = url && 'RP1.' + b64u(JSON.stringify({ u: url, k: c.syncKey }))
-  const install = `sudo ./deploy/install.sh --domain ${c.domain || 'DOMEN'} --email EMAIL --license-key ${c.key} --sync-key ${c.syncKey}`
+  const install = `sudo ./deploy/install.sh --license-key ${c.key}`
+  const reinstallOpen = c.reinstallUntil && new Date(c.reinstallUntil) > Date.now()
+  const waiting = c.sync && c.sync.key !== c.syncKey   // panelda almashtirilgan, cloud hali olmagan
   const line = (label, val, show) => `<div class="row" style="justify-content:space-between;gap:8px">
       <span class="muted" style="min-width:110px">${label}</span>
       <span class="key" style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(show)}</span>
       <button type="button" onclick="copy('${esc(val)}')">Nusxa</button></div>`
+  const note = !c.cloudInstance
+    ? "Cloud server hali ulanmagan. Yangi VPS'da RestoPro'ni yuklab, shu buyruqni ishga tushiring — domen va sync kaliti paneldan o'zi olinadi." + (c.domain ? '' : ' Avval yuqorida «Cloud domeni»ni kiriting va saqlang.')
+    : reinstallOpen
+      ? `Qayta o'rnatishga ruxsat ${new Date(c.reinstallUntil).toLocaleTimeString().slice(0, 5)} gacha — yangi VPS'da o'rnatish buyrug'ini ishga tushiring.`
+      : waiting
+        ? 'Yangi kalit cloud serverga yuborilmoqda (u online bo\'lishi bilan oladi). Kassalarga yangi ulanish kodini qo\'ying.'
+        : "Kassa sozlash oynasidagi «Ulanish kodi» maydoniga qo'ying — manzil va kalit o'zi to'ldiriladi."
   return `<div class="col" style="display:grid;gap:8px">
       ${code ? line('Ulanish kodi', code, code.slice(0, 28) + '…') : ''}
       ${url ? line('Server manzili', url, url) : ''}
       ${line('Sync kaliti', c.syncKey, '••••••••••••' + c.syncKey.slice(-4))}
-      ${c.sync ? '' : line("O'rnatish buyrug'i", install, install.slice(0, 40) + '…')}
-      <span class="muted">${c.sync
-        ? "Kassa sozlash oynasidagi «Ulanish kodi» maydoniga qo'ying — manzil va kalit o'zi to'ldiriladi."
-        : "Cloud server hali ulanmagan. VPS'da shu buyruq bilan o'rnating — kalit paneldagi bilan bir xil bo'ladi." + (c.domain ? '' : " Ulanish kodi uchun yuqorida «Cloud domeni»ni kiriting.")}</span></div>`
+      ${!c.cloudInstance || reinstallOpen ? line("O'rnatish buyrug'i", install, install) : ''}
+      <span class="muted">${note}</span>
+      ${c.cloudInstance ? `<div class="row" style="gap:8px;flex-wrap:wrap">
+        <button type="button" class="ghost" onclick="syncAct('${c.id}','sync-key')">Kalitni almashtirish</button>
+        ${reinstallOpen ? '' : `<button type="button" class="ghost" onclick="syncAct('${c.id}','reinstall')">Qayta o'rnatishga ruxsat</button>`}</div>` : ''}</div>`
 }
-const EVENT = { create: 'Yaratildi', pay: "To'lov", suspend: "To'xtatildi", activate: 'Faollashtirildi', paidUntil: "Sana qo'lda o'zgartirildi", blockMode: 'Bloklash turi', bind: 'Server biriktirildi', unbind: 'Server ajratildi', nodeBlock: 'Kassa bloklandi', nodeUnblock: 'Kassa ochildi', deviceBlock: 'Qurilma bloklandi', deviceUnblock: 'Qurilma ochildi', message: 'Xabar', command: 'Buyruq' }
+async function syncAct(id, what) {
+  const ask = {
+    'sync-key': "Yangi sync kaliti yaratiladi. Cloud server uni o'zi oladi, lekin ulangan kassalar eski kalit bilan ulana olmay qoladi — ularga yangi ulanish kodini qo'yish kerak bo'ladi. Davom etasizmi?",
+    reinstall: "1 soat ichida yangi VPS'da install.sh shu restoranning cloud'i sifatida o'rnatilishi mumkin bo'ladi (ko'chirish / qayta o'rnatish). Davom etasizmi?",
+  }[what]
+  if (!confirm(ask)) return
+  try { await api('POST', `/customers/${id}/${what}`); $('#dlg').close(); await load(); openEdit(id); toast(what === 'sync-key' ? 'Yangi kalit yaratildi' : 'Ruxsat berildi (1 soat)') }
+  catch (e) { toast('Xato: ' + e.message) }
+}
+const EVENT = { create: 'Yaratildi', pay: "To'lov", suspend: "To'xtatildi", activate: 'Faollashtirildi', paidUntil: "Sana qo'lda o'zgartirildi", blockMode: 'Bloklash turi', bind: 'Server biriktirildi', unbind: 'Server ajratildi', nodeBlock: 'Kassa bloklandi', nodeUnblock: 'Kassa ochildi', deviceBlock: 'Qurilma bloklandi', deviceUnblock: 'Qurilma ochildi', message: 'Xabar', command: 'Buyruq', syncKey: 'Sync kaliti almashtirildi', reinstall: "Cloud qayta o'rnatildi" }
 
 // Kassa sog'ligi: sotuvchi e'tibor berishi kerak bo'lgan holatlar
 function healthIssues(n) {

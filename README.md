@@ -24,11 +24,12 @@ restopro/
 ```bash
 git clone https://github.com/bunyodlomg/restopro.git /opt/restopro
 cd /opt/restopro
-./deploy/install.sh --domain cafe.example.uz --email siz@example.uz \
-                    --license-key RP-XXXX-XXXX-XXXX \
+./deploy/install.sh --license-key RP-XXXX-XXXX-XXXX \
                     --tg-token <BOT_TOKEN> --tg-chat <CHAT_ID>
 ```
 Litsenziya kaliti litsenziya serveringiz admin panelida yaratiladi ([batafsil](docs/LITSENZIYA.md)).
+Domen va sync kaliti paneldan o'zi olinadi (mijozda «Cloud domeni» to'ldirilgan bo'lsin);
+panelsiz o'rnatishda `--domain cafe.example.uz` bering.
 Skript Node.js 22, MongoDB 8, pm2, nginx, SSL (Let's Encrypt), firewall va kunlik backup'ni
 o'rnatadi, `.env` ni xavfsiz kalitlar bilan yaratadi va oxirida admin parolini ko'rsatadi.
 Qayta ishga tushirish xavfsiz — mavjud sozlamalar saqlanadi. Barcha parametrlar: `./deploy/install.sh --help`.
@@ -86,8 +87,8 @@ Birinchi kirishda parolni almashtirish majburiy.
 Tayyor `RestoPro Kassa Setup.exe` artifact sifatida yuklab olinadi
 (yoki `git tag kassa-v1.0.0 && git push origin kassa-v1.0.0` — Release'ga qo'shiladi).
 
-**Kassani ulash:** cloud serverda `install.sh` oxirida `SYNC_URL` va `SYNC_KEY` ko'rsatiladi.
-Kassa birinchi ochilganda shu ikkisi so'raladi. Birinchi ishga tushirishda internet kerak
+**Kassani ulash:** litsenziya panelida restoran → «...» → **Kassani ulash** → «Ulanish kodi»ni
+nusxalab, kassa sozlash oynasiga qo'ying (manzil va sync kaliti o'zi to'ldiriladi). Birinchi ishga tushirishda internet kerak
 (menyu, xodimlar, sozlamalar cloud'dan yuklanadi), keyin internetsiz ishlayveradi.
 
 > ⚠️ Ombor qoldig'i: kassa offline paytida taom sotib, xuddi shu vaqtda cloud'dan o'sha

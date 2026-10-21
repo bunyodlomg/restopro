@@ -92,15 +92,22 @@ Shundan keyin o'rnatilgan har bir restoran serveri va kassa sizning serveringiz 
 
 ## 3. Yangi restoran ulash
 
-1. Admin panelda **+ Yangi mijoz** tugmasini bosing. Restoran nomi, egasi, telefoni, oylik summa va bepul sinov kunlarini kiriting. Kalit avtomatik yaratiladi va nusxasi olinadi.
-2. Restoran serverini o'rnatishda kalitni bering:
+1. Admin panelda **+ Yangi mijoz** tugmasini bosing. Restoran nomi, egasi, telefoni, **cloud domeni**, oylik summa va bepul sinov kunlarini kiriting. Litsenziya kaliti va sync kaliti avtomatik yaratiladi.
+2. Restoranning cloud serverini (VPS) o'rnating. Faqat litsenziya kaliti kerak, domen va sync kaliti paneldan o'zi olinadi:
    ```bash
-   sudo ./deploy/install.sh --domain cafe.example.uz --email siz@example.uz --license-key RP-XXXX-XXXX-XXXX
+   sudo ./deploy/install.sh --license-key RP-XXXX-XXXX-XXXX
    ```
+   Tayyor buyruq panelda: restoran → «...» → **Kassani ulash** → «O'rnatish buyrug'i».
    Allaqachon o'rnatilgan serverda `server/.env` ga `LICENSE_KEY=RP-...` qatorini qo'shing va `pm2 restart restopro` qiling.
 3. Kassa:
-   - **Cloud rejimida** kalit kerak emas, kassa uni serverdan oladi.
+   - **Cloud rejimida** panelda «Kassani ulash» → «Ulanish kodi»ni nusxalab, kassa sozlash oynasiga qo'ying. Litsenziya kaliti kerak emas.
    - **Faqat lokal** rejimida sozlash oynasidagi «Litsenziya kaliti» maydoniga kalitni kiriting.
+
+### Sync kaliti (kassalar ulanishi)
+
+- Har restoranning sync kaliti panelda turadi. Restoranning cloud serveri birinchi ulanganda bitta server shu restoranning cloud'i bo'lib qoladi. Agar uning `.env` ida boshqa kalit bo'lsa, panel o'shanisini oladi, shunda ulangan kassalar buzilmaydi.
+- **Kalitni almashtirish** (kalit sizib chiqsa): cloud server yangi kalitni bir necha soniyada o'zi oladi, VPS'ga kirish kerak emas. Kassalarga yangi ulanish kodini qo'yish kerak bo'ladi.
+- **Qayta o'rnatishga ruxsat** (yangi VPS'ga ko'chish): 1 soat ichida yangi serverda `install.sh --license-key …` ishga tushirilsa, u restoranning cloud'i bo'ladi. Boshqa paytda kalitni bilgan kishi ham paneldan sozlamalarni ololmaydi.
 
 ## 4. Har oy: to'lov qabul qilish
 
