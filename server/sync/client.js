@@ -138,7 +138,14 @@ async function push() {
 async function pull(io) {
   let { pulled, pushed } = await getState()
   for (;;) {
-    const { items, cursor, more } = await request('GET', `/api/sync/pull?since=${pulled}&node=${encodeURIComponent(engine.NODE_ID)}`)
+    const { items, cursor, more, reset } = await request('GET', `/api/sync/pull?since=${pulled}&node=${encodeURIComponent(engine.NODE_ID)}`)
+    if (reset) {
+      // Kassa uzoq o'chiq turgan: cloud eski o'chirish belgilarini tozalagan — boshidan olamiz
+      console.log("🔁 sync: kassa uzoq ulanmagan — to'liq qayta sinxronlash")
+      pulled = 0
+      await saveState({ pulled, cleanup: true })
+      continue
+    }
     if (items.length) {
       await pullFiles(items)
       const shadows = []
@@ -158,6 +165,28 @@ async function pull(io) {
     await saveState({ pulled })
     if (!more) break
   }
+  if ((await getState()).cleanup) {
+    await removeOrphans(pushed)
+    await saveState({ cleanup: false })
+  }
+}
+
+// To'liq qayta sinxronlashdan keyin: cloud'da yo'q (u yerda o'chirilgan) hujjatlarni kassadan ham olib tashlash.
+// Kassada yaratilganlariga tegilmaydi — ma'lumot yo'qolmasin (cloud qabul qila olmagan bo'lishi mumkin).
+async function removeOrphans(pushed) {
+  let removed = 0
+  for (const name of engine.MODELS) {
+    const coll = mongoose.model(name).collection
+    const { ids } = await request('GET', `/api/sync/ids?coll=${coll.collectionName}`)
+    const remote = new Set(ids.map(String))
+    const local = await coll.find({}, { projection: { _id: 1, _origin: 1, _seq: 1 } }).toArray()
+    const orphans = local.filter(d => !remote.has(String(d._id)) && d._origin !== engine.NODE_ID).map(d => d._id)
+    if (!orphans.length) continue
+    await coll.deleteMany({ _id: { $in: orphans } })   // to'g'ridan-to'g'ri: o'chirish belgisi yozilmaydi (cloud'da allaqachon yo'q)
+    await shadowColl().deleteMany({ _id: { $in: orphans.map(i => ({ c: coll.collectionName, i })) } })
+    removed += orphans.length
+  }
+  if (removed) console.log(`🧹 sync: cloud'da o'chirilgan ${removed} ta yozuv kassadan ham olib tashlandi`)
 }
 
 function addConflicts(list) {
@@ -237,7 +266,7 @@ async function watchRemote(io) {
 // kassa cloud bilan to'liq tenglashadi, yuborilmagan lokal o'zgarishlar birlashtiriladi.
 async function resync(io) {
   if (!SYNC_URL) return
-  await saveState({ pulled: 0 })
+  await saveState({ pulled: 0, cleanup: true })
   status.conflicts = []
   console.log("🔁 sync: to'liq qayta sinxronlash (sotuvchi buyrug'i)")
   await tick(io)
@@ -268,7 +297,10 @@ async function start(io) {
   status.initialized = !!st.initialized
   if (st.clockOffset) { status.clockOffset = st.clockOffset; setClockOffset(st.clockOffset) }
   // Eski asoslarni tozalash (kuniga bir marta)
-  const purge = () => shadowColl().deleteMany({ at: { $lt: new Date(Date.now() - SHADOW_DAYS * 86400000) } }).catch(() => {})
+  const purge = async () => {
+    await shadowColl().deleteMany({ at: { $lt: new Date(Date.now() - SHADOW_DAYS * 86400000) } }).catch(() => {})
+    await engine.purgeTombstonesEdge((await getState()).pushed).catch(() => {})
+  }
   purge(); setInterval(purge, 86400000).unref()
   console.log(`🔁 sync: ${SYNC_URL} (har ${INTERVAL_MS / 1000}s)`)
   tick(io)

@@ -43,6 +43,11 @@ t('note', async b => M('Order').findByIdAndUpdate(b.id, { note: b.note }, { new:
 t('inc', async b => M('Ingredient').findByIdAndUpdate(b.id, { $inc: { quantity: b.by } }, { new: true }))
 t('get', async b => M(b.model).findById(b.id).lean())
 t('pull', async () => { await client.pull(io); return {} })
+t('del', async b => M(b.model).deleteOne({ _id: b.id }))
+t('ageTombs', async () => mongoose.connection.collection('sync_tombstones').updateMany({}, { $set: { _mtime: new Date(Date.now() - 200 * 86400000) } }))
+t('purgeHub', async () => ({ n: await engine.purgeTombstonesHub() }))
+t('setPulled', async b => mongoose.connection.collection('sync_state').updateOne({ _id: 'client' }, { $set: { pulled: b.v } }))
+t('count', async b => ({ n: await M(b.model).countDocuments() }))
 t('tick', async () => { await client.tick(io); return client.publicStatus() })
 t('clock', async b => { require(S + '/sync/plugin').setClockOffset(b.ms); return {} })
 

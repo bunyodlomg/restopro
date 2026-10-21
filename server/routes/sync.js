@@ -86,9 +86,26 @@ router.get('/pull', syncAuth, async (req, res, next) => {
     const node  = String(req.query.node || '')
     if (!node) return res.status(400).json({ message: 'node kerak' })
     recordNode(node).catch(() => {})
+    // Kassa tozalangan o'chirish belgilaridan oldingi joydan davom etmoqchi — o'chirishlarni ko'ra olmaydi,
+    // shuning uchun to'liq qayta sinxronlanishi kerak
+    const horizon = await engine.purgedHorizon()
+    if (since > 0 && since < horizon) return sendEjson(res, { reset: true, items: [], cursor: 0, more: false })
     // since=0 — kassa noldan yuklayapti (baza tozalangan): o'zi yaratganlarini ham beramiz,
     // aks holda ular hech qachon qaytib kelmaydi. Takror kelgani applyChanges'da o'tkazib yuboriladi.
-    sendEjson(res, await engine.collectChanges(since, since > 0 ? node : ''))
+    const r = await engine.collectChanges(since, since > 0 ? node : '')
+    // Oxirgi sahifa: kursor tozalangan belgilar chegarasidan past qolmasin (aks holda har safar reset)
+    if (!r.more) r.cursor = Math.max(r.cursor, horizon)
+    sendEjson(res, r)
+  } catch (err) { next(err) }
+})
+
+// GET /api/sync/ids?coll=orders — cloud'dagi barcha hujjat ID'lari (kassa to'liq qayta sinxronlanganda
+// cloud'da o'chirilganlarini o'zidan ham olib tashlashi uchun)
+router.get('/ids', syncAuth, async (req, res, next) => {
+  try {
+    const M = engine.MODELS.map(n => mongoose.model(n)).find(m => m.collection.collectionName === req.query.coll)
+    if (!M) return res.status(400).json({ message: "coll noto'g'ri" })
+    sendEjson(res, { ids: (await M.collection.find({}, { projection: { _id: 1 } }).toArray()).map(d => d._id) })
   } catch (err) { next(err) }
 })
 

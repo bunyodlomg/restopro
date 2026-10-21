@@ -201,6 +201,12 @@ mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/restopro')
   .then(async () => {
     console.log('✅ MongoDB ulandi')
     await syncEngine.migrate()
+    // Cloud / lokal server: eski o'chirish belgilarini kuniga bir marta tozalash (kassa o'zinikini client.js da)
+    if (!process.env.SYNC_URL) {
+      const purge = () => syncEngine.purgeTombstonesHub()
+        .then(n => n && console.log(`🧹 sync: ${n} ta eski o'chirish belgisi tozalandi`)).catch(() => {})
+      purge(); setInterval(purge, 86400000).unref()
+    }
     // Kassada admin va sozlamalar cloud'dan keladi — lokal yaratilsa to'qnashadi
     if (!process.env.SYNC_URL) await seedAdmin()
     if (!process.env.SYNC_URL) await require('./routes/categories').seedFromProducts()

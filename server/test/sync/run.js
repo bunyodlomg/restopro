@@ -100,6 +100,19 @@ async function test(name, fn) {
     assert.strictEqual(st.pending, 0, 'pending ' + st.pending)
   })
 
+  await test("eski o'chirish belgilari tozalanadi; uzoq o'chiq kassa to'liq qayta sinxronlanadi", async () => {
+    // Kassa "o'chiq" paytida cloud'da mahsulot o'chirildi
+    const p = await C('order', { ...ids, items: [{ productId: ids.p2, quantity: 1 }] })   // (mahsulot o'zi kerak)
+    await C('del', { model: 'Product', id: ids.p2 })
+    await C('ageTombs')                       // 200 kun oldin bo'lgandek
+    assert.ok((await C('purgeHub')).n >= 1, 'tozalanmadi')
+    await K('setPulled', { v: 1 })           // kassa juda eski joydan davom etmoqchi
+    await K('tick'); await K('tick')
+    assert.strictEqual(await K('get', { model: 'Product', id: ids.p2 }), null, "o'chirilgan mahsulot kassada qoldi")
+    assert.ok(await K('get', { model: 'Product', id: ids.p1 }), "boshqa mahsulot ham o'chdi")
+    assert.strictEqual((await K('count', { model: 'Order' })).n, (await C('count', { model: 'Order' })).n)
+  })
+
   console.log(failed ? `\n${failed} ta test yiqildi` : '\nHammasi o\'tdi')
   procs.forEach(p => p.kill()); process.exit(failed ? 1 : 0)
 })().catch(e => { console.error(e); procs.forEach(p => p.kill()); process.exit(1) })

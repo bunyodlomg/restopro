@@ -5,7 +5,7 @@
 
 const mongoose = require('mongoose')
 const { EJSON } = mongoose.mongo.BSON
-const { NODE_ID, nextSeq, recordTombstones, tombstones, syncNow } = require('./plugin')
+const { NODE_ID, nextSeq, recordTombstones, tombstones, counters, syncNow } = require('./plugin')
 const { merge3, sameData, sameVersion } = require('./resolve')
 
 // Sinxronlanadigan modellar
@@ -155,4 +155,25 @@ function uploadRefs(items) {
   return [...refs]
 }
 
-module.exports = { MODELS, migrate, collectChanges, applyChanges, encode, decode, uploadRefs, newer, NODE_ID }
+// ── O'chirish belgilarini (tombstone) tozalash ─────────────────
+// Har o'chirish sync_tombstones'da qoladi — vaqt o'tib baza kattalashmasin.
+// Cloud: 180 kundan eskilarini o'chiradi va chegarani (purged) eslab qoladi. Undan oldingi joydan
+// davom etmoqchi bo'lgan kassa (uzoq o'chiq turgan) to'liq qayta sinxronlanadi (routes/sync.js → reset).
+const DAY = 86400000
+const HUB_TOMB_DAYS = 180
+async function purgeTombstonesHub() {
+  const cutoff = new Date(Date.now() - HUB_TOMB_DAYS * DAY)
+  const last = await tombstones().find({ _mtime: { $lt: cutoff } }).sort({ _seq: -1 }).limit(1).next()
+  if (!last) return 0
+  await counters().updateOne({ _id: 'purged' }, { $max: { v: last._seq } }, { upsert: true })
+  return (await tombstones().deleteMany({ _seq: { $lte: last._seq }, _mtime: { $lt: cutoff } })).deletedCount
+}
+const purgedHorizon = async () => (await counters().findOne({ _id: 'purged' }))?.v || 0
+
+// Kassa: cloud'ga allaqachon yuborilgan yoki cloud'dan kelgan, 30 kundan eski belgilar kerak emas
+async function purgeTombstonesEdge(pushed, days = 30) {
+  const cutoff = new Date(Date.now() - days * DAY)
+  return (await tombstones().deleteMany({ _mtime: { $lt: cutoff }, $or: [{ _origin: { $ne: NODE_ID } }, { _seq: { $lte: pushed } }] })).deletedCount
+}
+
+module.exports = { purgeTombstonesHub, purgeTombstonesEdge, purgedHorizon, MODELS, migrate, collectChanges, applyChanges, encode, decode, uploadRefs, newer, NODE_ID }
