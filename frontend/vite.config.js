@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  // VPS'dagi yig'ish (deploy/*.sh, RESTOPRO_SAME_ORIGIN=1): bitta build bir nechta restoranga beriladi —
+  // har biri o'z domenidagi API'ga murojaat qilsin, frontend/.env dagi VITE_API_URL e'tiborsiz qoladi
+  ...(process.env.RESTOPRO_SAME_ORIGIN ? { define: { 'import.meta.env.VITE_API_URL': '""' } } : {}),
   plugins: [
     react(),
     VitePWA({

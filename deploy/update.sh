@@ -42,7 +42,7 @@ restart_one() {
 
 build_and_restart() {
   (cd "$APP_DIR/server"   && npm ci --omit=dev --no-audit --no-fund --loglevel=error)
-  (cd "$APP_DIR/frontend" && npm ci --no-audit --no-fund --loglevel=error && npm run build --silent)
+  (cd "$APP_DIR/frontend" && npm ci --no-audit --no-fund --loglevel=error && RESTOPRO_SAME_ORIGIN=1 npm run build --silent)
   local f rc=0
   for f in "${ENVS[@]}"; do restart_one "$f" || rc=1; done
   return "$rc"

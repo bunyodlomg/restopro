@@ -278,7 +278,7 @@ fi
 log "Ilovani yig'ish"
 (cd "$APP_DIR/server"   && npm ci --omit=dev --no-audit --no-fund --loglevel=error)
 ok "server bog'liqliklari"
-(cd "$APP_DIR/frontend" && npm ci --no-audit --no-fund --loglevel=error && npm run build --silent)
+(cd "$APP_DIR/frontend" && npm ci --no-audit --no-fund --loglevel=error && RESTOPRO_SAME_ORIGIN=1 npm run build --silent)
 WEB_ROOT="$(instance_web "$ENV_FILE")"
 mkdir -p "$WEB_ROOT"
 rsync -a --delete "$APP_DIR/frontend/dist/" "$WEB_ROOT/"
