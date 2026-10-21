@@ -2,7 +2,8 @@
 # ============================================================
 #  RestoPro — yangi versiyaga yangilash (shu VPS'dagi hamma restoranlar)
 #
-#    sudo ./deploy/update.sh   — joriy branchning oxirgi versiyasi
+#    sudo ./deploy/update.sh           — joriy branchning oxirgi versiyasi
+#    sudo ./deploy/update.sh --force   — versiya o'zgarmagan bo'lsa ham qayta yig'ish va qayta ishga tushirish
 #
 #  Kod bitta (shu papka), restoranlar ko'p: server/.env va /etc/restopro/*.env.
 #  Tartib: backup → git pull → npm ci → frontend build → har restoran: pm2 restart → tekshiruv.
@@ -52,15 +53,22 @@ for f in "${ENVS[@]}"; do
   ENV_FILE="$f" "$SCRIPT_DIR/backup.sh" || fail "Backup olinmadi ($(instance_name "$f")) — yangilash to'xtatildi"
 done
 
-OLD="$(git -C "$APP_DIR" rev-parse HEAD)"
+# Restoranlarga oxirgi o'rnatilgan versiya. Litsenziya serveri o'zini yangilaganda shu papkada git pull
+# qiladi — shuning uchun HEAD ga emas, shu faylga qaraymiz (aks holda restoranlar eski kodda qolib ketadi).
+DEPLOYED_FILE="$APP_DIR/.deployed-commit"
+OLD="$(cat "$DEPLOYED_FILE" 2>/dev/null || true)"
+git -C "$APP_DIR" cat-file -e "${OLD:-x}^{commit}" 2>/dev/null || OLD="$(git -C "$APP_DIR" rev-parse HEAD)"
 log "Yangi versiya yuklanmoqda..."
 git -C "$APP_DIR" pull --ff-only
 NEW="$(git -C "$APP_DIR" rev-parse HEAD)"
-if [ "$OLD" = "$NEW" ]; then log "Allaqachon oxirgi versiya ($(git -C "$APP_DIR" rev-parse --short HEAD))"; exit 0; fi
+if [ "$OLD" = "$NEW" ] && [ "${1:-}" != "--force" ]; then
+  log "Allaqachon oxirgi versiya ($(git -C "$APP_DIR" rev-parse --short HEAD)). Baribir qayta yig'ish: $0 --force"; exit 0
+fi
 git -C "$APP_DIR" log --oneline "$OLD..$NEW" | sed 's/^/  /'
 
 log "Yig'ish va qayta ishga tushirish (${#ENVS[@]} ta restoran)..."
 if build_and_restart; then
+  echo "$NEW" > "$DEPLOYED_FILE"
   log "✅ Yangilandi: $(git -C "$APP_DIR" rev-parse --short "$OLD") → $(git -C "$APP_DIR" rev-parse --short "$NEW")"
 else
   log "⚠️  Yangi versiya ishlamadi — oldingisiga qaytarilmoqda..."

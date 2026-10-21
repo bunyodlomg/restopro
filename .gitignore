@@ -38,3 +38,6 @@ ecosystem.config.local.js
 *.pid
 !desktop/build/
 !terminal/build/
+
+# deploy/update.sh: restoranlarga oxirgi o'Tnatilgan commit
+.deployed-commit
