@@ -276,7 +276,7 @@ function openEdit(id) {
 // Ulanish kodi — ikkalasi bitta qatorda: kassada "Ulanish kodi" maydoniga qo'yiladi.
 const b64u = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 function connectHtml(c) {
-  if (!c.syncKey) return '<span class="muted">Sync kaliti yo'q — litsenziya serverini yangilang.</span>'
+  if (!c.syncKey) return "<span class=\"muted\">Sync kaliti yo'q — litsenziya serverini yangilang.</span>"
   const url = c.sync?.url || (c.domain ? 'https://' + c.domain : '')
   const code = url && 'RP1.' + b64u(JSON.stringify({ u: url, k: c.syncKey }))
   const install = `sudo ./deploy/install.sh --domain ${c.domain || 'DOMEN'} --email EMAIL --license-key ${c.key} --sync-key ${c.syncKey}`
