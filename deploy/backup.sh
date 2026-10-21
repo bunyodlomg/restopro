@@ -12,7 +12,8 @@
 #    BACKUP_TELEGRAM_BOT_TOKEN — ixtiyoriy: arxivni Telegram'ga yuborish
 #    BACKUP_TELEGRAM_CHAT_ID   — ixtiyoriy: kimga yuborilsin
 #
-#  Ishlatish:   ./deploy/backup.sh
+#  Ishlatish:   ./deploy/backup.sh                                  — hamma restoranlar
+#               ENV_FILE=/etc/restopro/itop.env ./deploy/backup.sh  — bittasi
 #  Cron (har kuni 03:30):
 #    30 3 * * * /root/restopro/deploy/backup.sh >> /var/log/restopro-backup.log 2>&1
 #
@@ -22,8 +23,17 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(dirname "$SCRIPT_DIR")"
-ENV_FILE="${ENV_FILE:-$APP_DIR/server/.env}"
-UPLOADS_DIR="$APP_DIR/server/uploads"
+
+# ENV_FILE berilmagan (cron) — shu VPS'dagi hamma restoranlar navbat bilan, har biri o'z papkasiga
+if [ -z "${ENV_FILE:-}" ]; then
+  # shellcheck source=lib.sh
+  . "$SCRIPT_DIR/lib.sh"
+  mapfile -t ALL < <(instance_envs)
+  [ "${#ALL[@]}" -gt 0 ] || { echo "Restoran topilmadi ($APP_DIR/server/.env yoki $INST_DIR/*.env)" >&2; exit 1; }
+  RC=0
+  for f in "${ALL[@]}"; do ENV_FILE="$f" "$SCRIPT_DIR/backup.sh" || RC=1; done
+  exit "$RC"
+fi
 
 log()  { echo "[$(date '+%F %T')] $*"; }
 fail() { log "❌ $*"; notify "❌ RestoPro backup xatosi ($(hostname)): $*"; exit 1; }
@@ -36,6 +46,8 @@ env_get() {
 }
 
 MONGO_URI="${MONGO_URI:-$(env_get MONGO_URI)}"
+UPLOADS_DIR="$(env_get UPLOAD_DIR)"; UPLOADS_DIR="${UPLOADS_DIR:-$APP_DIR/server/uploads}"
+INSTANCE="$(env_get PM2_NAME)"; INSTANCE="${INSTANCE:-restopro}"
 BACKUP_DIR="${BACKUP_DIR:-$(env_get BACKUP_DIR)}";  BACKUP_DIR="${BACKUP_DIR:-/var/backups/restopro}"
 BACKUP_KEEP="${BACKUP_KEEP:-$(env_get BACKUP_KEEP)}"; BACKUP_KEEP="${BACKUP_KEEP:-14}"
 TG_TOKEN="${BACKUP_TELEGRAM_BOT_TOKEN:-$(env_get BACKUP_TELEGRAM_BOT_TOKEN)}"
@@ -69,7 +81,7 @@ trap 'rm -rf "$WORK"' EXIT
 umask 077
 
 # ── 1. MongoDB ─────────────────────────────────────────────────
-log "MongoDB dump..."
+log "[$INSTANCE] MongoDB dump..."
 mongodump --uri="$MONGO_URI" --archive="$WORK/db.archive.gz" --gzip --quiet \
   || fail "mongodump muvaffaqiyatsiz"
 
@@ -84,6 +96,7 @@ fi
 {
   echo "created=$(date -Iseconds)"
   echo "host=$(hostname)"
+  echo "instance=$INSTANCE"
   echo "commit=$(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 } > "$WORK/meta.txt"
 
@@ -101,7 +114,7 @@ for f in "${OLD[@]}"; do rm -f -- "$f"; log "O'chirildi: $(basename "$f")"; done
 
 # ── 6. Telegram'ga yuborish (server buzilsa ham nusxa qolsin) ──
 if [ -n "$TG_TOKEN" ] && [ -n "$TG_CHAT" ]; then
-  CAPTION="🗄 RestoPro backup — $(hostname) — $(date '+%d.%m.%Y %H:%M') — $SIZE_HUMAN"
+  CAPTION="🗄 RestoPro backup — $INSTANCE ($(hostname)) — $(date '+%d.%m.%Y %H:%M') — $SIZE_HUMAN"
   if [ "$SIZE_BYTES" -le "$TG_MAX_BYTES" ]; then
     if curl -sS -m 300 -o "$WORK/tg.json" "https://api.telegram.org/bot${TG_TOKEN}/sendDocument" \
          -F "chat_id=${TG_CHAT}" -F "caption=${CAPTION}" -F "document=@${ARCHIVE}" \

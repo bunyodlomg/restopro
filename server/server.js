@@ -1,4 +1,7 @@
-require('dotenv').config()
+// Bir VPS'da bir nechta restoran: har biri o'z .env fayli bilan (pm2 ... -- --env=/etc/restopro/<nom>.env).
+// Bunda server/.env umuman o'qilmaydi — boshqa restoranning sozlamasi aralashmasin.
+const ENV_ARG = process.argv.find(a => a.startsWith('--env='))
+require('dotenv').config(ENV_ARG ? { path: ENV_ARG.slice(6) } : undefined)
 const { JWT_SECRET } = require('./config')   // JWT_SECRET yo'q bo'lsa server to'xtaydi
 require('./sync/plugin')                     // modellardan OLDIN: har yozuvga sync belgisi
 const express    = require('express')

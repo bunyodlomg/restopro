@@ -36,6 +36,16 @@ Qayta ishga tushirish xavfsiz — mavjud sozlamalar saqlanadi. Barcha parametrla
 
 > MongoDB 5+ AVX'li protsessor talab qiladi. Ba'zi arzon VPS'larda AVX yo'q — skript buni aniqlab, ogohlantiradi.
 
+**Bir VPS'da bir nechta restoran:** har restoranga alohida subdomen (`kfc.example.uz`, `itop.example.uz`, …)
+va o'sha `/opt/restopro` papkasida shu buyruqni yangi kalit bilan qayta ishga tushiring:
+```bash
+cd /opt/restopro && sudo ./deploy/install.sh --license-key RP-YYYY-YYYY-YYYY
+```
+Har biri alohida pm2 jarayoni, port (5050, 5051, …), baza (`restopro_<nom>`), rasmlar, backup va nginx
+sayti oladi; sozlamalari `/etc/restopro/<nom>.env`. 4 GB RAM ~10–15 restoranga yetadi.
+`update.sh` va kunlik backup hamma restoranlarni birga qamraydi. Bitta restoranni tiklash:
+`ENV_FILE=/etc/restopro/<nom>.env ./deploy/restore.sh <arxiv>`.
+
 Yangilash (backup → pull → build → restart; ishlamasa avtomatik orqaga qaytadi):
 ```bash
 cd /opt/restopro && ./deploy/update.sh

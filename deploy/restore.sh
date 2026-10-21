@@ -6,6 +6,7 @@
 #    ./deploy/restore.sh                      — mavjud arxivlar ro'yxati
 #    ./deploy/restore.sh <arxiv.tar.gz>       — tiklash (tasdiq so'raladi)
 #    ./deploy/restore.sh <arxiv.tar.gz> --yes — tasdiqsiz
+#    ENV_FILE=/etc/restopro/itop.env ./deploy/restore.sh ...  — boshqa restoran (bir VPS'da bir nechta)
 #
 #  DIQQAT: joriy baza va uploads/ arxivdagisi bilan ALMASHTIRILADI.
 #  Tiklashdan oldin joriy holatning xavfsizlik nusxasi olinadi.
@@ -16,9 +17,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(dirname "$SCRIPT_DIR")"
-ENV_FILE="${ENV_FILE:-$APP_DIR/server/.env}"
-SERVER_DIR="$APP_DIR/server"
-PM2_NAME="${PM2_NAME:-restopro}"
+# Bir VPS'da bir nechta restoran: ENV_FILE=/etc/restopro/<nom>.env ./deploy/restore.sh ...
+export ENV_FILE="${ENV_FILE:-$APP_DIR/server/.env}"   # backup.sh ham shu restoranni zaxiralasin
+[ -f "$ENV_FILE" ] || { echo "❌ $ENV_FILE topilmadi" >&2; exit 1; }
 
 log()  { echo "[$(date '+%F %T')] $*"; }
 fail() { log "❌ $*"; exit 1; }
@@ -30,6 +31,9 @@ env_get() {
 }
 
 MONGO_URI="${MONGO_URI:-$(env_get MONGO_URI)}"
+PM2_NAME="${PM2_NAME:-$(env_get PM2_NAME)}"; PM2_NAME="${PM2_NAME:-restopro}"
+# uploads/ ning ota papkasi (arxivda "uploads" nomi bilan saqlangan)
+SERVER_DIR="$(env_get UPLOAD_DIR)"; SERVER_DIR="$(dirname "${SERVER_DIR:-$APP_DIR/server/uploads}")"
 BACKUP_DIR="${BACKUP_DIR:-$(env_get BACKUP_DIR)}"; BACKUP_DIR="${BACKUP_DIR:-/var/backups/restopro}"
 
 ARCHIVE="${1:-}"
