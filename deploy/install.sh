@@ -15,6 +15,7 @@
 #    --tg-token T        backup'larni Telegram'ga yuborish uchun bot token
 #    --tg-chat C         backup'lar boradigan Telegram chat ID
 #    --license-key K     sotuvchi bergan litsenziya kaliti (RP-XXXX-XXXX-XXXX)
+#    --sync-key S        kassalar ulanish kaliti (litsenziya panelidan; bo'lmasa yaratiladi)
 #    --no-ssl            SSL o'rnatmaslik (faqat test uchun)
 #    --no-firewall       ufw'ni sozlamaslik
 #
@@ -26,7 +27,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(dirname "$SCRIPT_DIR")"
 ENV_FILE="$APP_DIR/server/.env"
 
-DOMAIN="" EMAIL="" PORT=5050 PM2_NAME="restopro" TG_TOKEN="" TG_CHAT="" LICENSE_KEY_ARG=""
+DOMAIN="" EMAIL="" PORT=5050 PM2_NAME="restopro" TG_TOKEN="" TG_CHAT="" LICENSE_KEY_ARG="" SYNC_KEY_ARG=""
 WITH_SSL=1 WITH_FIREWALL=1
 NODE_MAJOR=22
 MONGO_SERIES=8.0
@@ -47,6 +48,7 @@ while [ $# -gt 0 ]; do
     --tg-token)    TG_TOKEN="${2:-}"; shift 2 ;;
     --tg-chat)     TG_CHAT="${2:-}";  shift 2 ;;
     --license-key) LICENSE_KEY_ARG="${2:-}"; shift 2 ;;
+    --sync-key)    SYNC_KEY_ARG="${2:-}";    shift 2 ;;
     --no-ssl)      WITH_SSL=0;        shift ;;
     --no-firewall) WITH_FIREWALL=0;   shift ;;
     -h|--help)     usage 0 ;;
@@ -137,7 +139,12 @@ if grep -q '"publicKey": *"[A-Za-z0-9+/=]\{20,\}"' "$APP_DIR/server/license/vend
    && [ -z "$(env_get LICENSE_KEY)" ]; then
   fail "Litsenziya kaliti kerak: --license-key RP-XXXX-XXXX-XXXX"
 fi
-env_default SYNC_KEY "$(openssl rand -hex 32)"   # kassalar (Electron) ulanishi uchun
+# Kassalar (Electron) ulanishi uchun. Panel bergan kalit — litsenziya panelida ko'rinib turadi
+if [ -n "$SYNC_KEY_ARG" ]; then
+  [ "${#SYNC_KEY_ARG}" -ge 32 ] || fail "--sync-key kamida 32 belgi bo'lishi kerak"
+  env_set SYNC_KEY "$SYNC_KEY_ARG"
+fi
+env_default SYNC_KEY "$(openssl rand -hex 32)"
 env_default BACKUP_DIR "/var/backups/restopro"
 env_default BACKUP_KEEP "14"
 [ -z "$TG_TOKEN" ] || env_set BACKUP_TELEGRAM_BOT_TOKEN "$TG_TOKEN"

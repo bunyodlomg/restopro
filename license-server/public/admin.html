@@ -237,6 +237,7 @@ function openNew(instance) {
     F('Restoran nomi', 'name', '', 'text', 'required') +
     `<div class="grid2">${F('Egasi', 'owner')}${F('Telefon', 'phone')}</div>` +
     F('Manzil', 'address') +
+    F('Cloud domeni (ixtiyoriy)', 'domain', '', 'text', 'placeholder="itop.example.uz"') +
     `<div class="grid2">${F("Oylik to'lov (so'm)", 'monthly', 350000, 'number')}${F("O'rnatish (so'm)", 'setupFee', 2500000, 'number')}</div>` +
     F('Bepul sinov (kun)', 'trialDays', 14, 'number', 'min="0" max="60"'),
     FOOT('Yaratish'),
@@ -255,6 +256,7 @@ function openEdit(id) {
     F('Restoran nomi', 'name', c.name) +
     `<div class="grid2">${F('Egasi', 'owner', c.owner)}${F('Telefon', 'phone', c.phone)}</div>` +
     F('Manzil', 'address', c.address) +
+    F('Cloud domeni', 'domain', c.domain || '', 'text', 'placeholder="itop.example.uz"') +
     `<div class="grid2">${F("Oylik to'lov (so'm)", 'monthly', c.monthly, 'number')}${F("To'langan sana (qo'lda)", 'paidUntil', c.paidUntil.slice(0, 10), 'date')}</div>` +
     `<label><div class="label" style="margin-bottom:6px">Muhlat (kun)</div><input name="graceDays" type="number" min="0" max="30" value="${Number.isInteger(c.graceDays) ? c.graceDays : ''}" placeholder="Umumiy: ${info.graceDays} kun">
       <div class="muted" style="margin-top:4px">To'langan muddat tugagach necha kun ishlay oladi. 0 — muddat tugashi bilan bloklanadi (internetsiz kassa ham).</div></label>` +
@@ -274,17 +276,22 @@ function openEdit(id) {
 // Ulanish kodi — ikkalasi bitta qatorda: kassada "Ulanish kodi" maydoniga qo'yiladi.
 const b64u = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 function connectHtml(c) {
-  if (!c.sync) return '<span class="muted">Hali ma\'lumot yo\'q — cloud server yangilangach va kimdir saytni ochgach bir daqiqada paydo bo\'ladi.</span>'
-  const code = 'RP1.' + b64u(JSON.stringify({ u: c.sync.url, k: c.sync.key }))
+  if (!c.syncKey) return '<span class="muted">Sync kaliti yo'q — litsenziya serverini yangilang.</span>'
+  const url = c.sync?.url || (c.domain ? 'https://' + c.domain : '')
+  const code = url && 'RP1.' + b64u(JSON.stringify({ u: url, k: c.syncKey }))
+  const install = `sudo ./deploy/install.sh --domain ${c.domain || 'DOMEN'} --email EMAIL --license-key ${c.key} --sync-key ${c.syncKey}`
   const line = (label, val, show) => `<div class="row" style="justify-content:space-between;gap:8px">
       <span class="muted" style="min-width:110px">${label}</span>
       <span class="key" style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(show)}</span>
       <button type="button" onclick="copy('${esc(val)}')">Nusxa</button></div>`
   return `<div class="col" style="display:grid;gap:8px">
-      ${line('Ulanish kodi', code, code.slice(0, 28) + '…')}
-      ${line('Server manzili', c.sync.url, c.sync.url)}
-      ${line('Sync kaliti', c.sync.key, '••••••••••••' + c.sync.key.slice(-4))}
-      <span class="muted">Kassa sozlash oynasidagi «Ulanish kodi» maydoniga qo'ying — manzil va kalit o'zi to'ldiriladi.</span></div>`
+      ${code ? line('Ulanish kodi', code, code.slice(0, 28) + '…') : ''}
+      ${url ? line('Server manzili', url, url) : ''}
+      ${line('Sync kaliti', c.syncKey, '••••••••••••' + c.syncKey.slice(-4))}
+      ${c.sync ? '' : line("O'rnatish buyrug'i", install, install.slice(0, 40) + '…')}
+      <span class="muted">${c.sync
+        ? "Kassa sozlash oynasidagi «Ulanish kodi» maydoniga qo'ying — manzil va kalit o'zi to'ldiriladi."
+        : "Cloud server hali ulanmagan. VPS'da shu buyruq bilan o'rnating — kalit paneldagi bilan bir xil bo'ladi." + (c.domain ? '' : " Ulanish kodi uchun yuqorida «Cloud domeni»ni kiriting.")}</span></div>`
 }
 const EVENT = { create: 'Yaratildi', pay: "To'lov", suspend: "To'xtatildi", activate: 'Faollashtirildi', paidUntil: "Sana qo'lda o'zgartirildi", blockMode: 'Bloklash turi', bind: 'Server biriktirildi', unbind: 'Server ajratildi', nodeBlock: 'Kassa bloklandi', nodeUnblock: 'Kassa ochildi', deviceBlock: 'Qurilma bloklandi', deviceUnblock: 'Qurilma ochildi', message: 'Xabar', command: 'Buyruq' }
 

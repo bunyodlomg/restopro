@@ -62,6 +62,12 @@ function saveDb() {
   fs.writeFileSync(tmp, JSON.stringify(db, null, 2), { mode: 0o600 })
   fs.renameSync(tmp, DB_FILE)
 }
+// Kassalar ulanadigan SYNC_KEY — panelda yaratiladi va saqlanadi (VPS'ga kirib .env qidirish shart emas).
+// Cloud o'z kalitini yuborsa (o'rnatilgan server) — o'shanisi to'g'ri hisoblanadi.
+const newSyncKey = () => crypto.randomBytes(32).toString('hex')
+const cleanDomain = v => String(v ?? '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').slice(0, 120)
+const isDomain = d => /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(d)
+for (const c of db.customers) if (!c.syncKey) c.syncKey = c.sync?.key || newSyncKey()
 const findByKey = key => db.customers.find(c => c.key === key)
 const findById  = id  => db.customers.find(c => c.id === id)
 
@@ -263,8 +269,11 @@ app.post('/api/v1/check', limit, (req, res) => {
   if (stats) c.stats = stats
   // Cloud kassani ulash ma'lumotini yuboradi — admin panelda "Kassani ulash" (nusxalash uchun)
   const sync = req.body?.stats?.sync
-  if (sync && /^https?:\/\/[\w.-]+(:\d+)?$/.test(String(sync.url || '')) && /^[\w-]{32,128}$/.test(String(sync.key || '')))
+  if (sync && /^https?:\/\/[\w.-]+(:\d+)?$/.test(String(sync.url || '')) && /^[\w-]{32,128}$/.test(String(sync.key || ''))) {
     c.sync = { url: String(sync.url), key: String(sync.key), at: new Date().toISOString() }
+    c.syncKey = c.sync.key
+    if (!c.domain) c.domain = cleanDomain(c.sync.url).replace(/:\d+$/, '')
+  }
   saveDb()
 
   const now = Date.now()
@@ -584,6 +593,8 @@ admin.post('/api/customers', (req, res) => {
     owner: str(req.body.owner, 80),
     phone: str(req.body.phone, 40),
     address: str(req.body.address, 160),
+    domain: isDomain(cleanDomain(req.body.domain)) ? cleanDomain(req.body.domain) : '',
+    syncKey: newSyncKey(),
     monthly: money(req.body.monthly),
     setupFee: money(req.body.setupFee),
     note: str(req.body.note, 500),
@@ -604,6 +615,11 @@ admin.put('/api/customers/:id', (req, res) => {
   if (!c) return res.status(404).json({ message: 'Topilmadi' })
   for (const [k, max] of [['name', 80], ['owner', 80], ['phone', 40], ['address', 160], ['note', 500]])
     if (req.body[k] !== undefined) c[k] = str(req.body[k], max)
+  if (req.body.domain !== undefined) {
+    const d = cleanDomain(req.body.domain)
+    if (d && !isDomain(d)) return res.status(400).json({ message: "Domen noto'g'ri (masalan: itop.example.uz)" })
+    c.domain = d
+  }
   if (req.body.monthly !== undefined) c.monthly = money(req.body.monthly)
   if (req.body.paidUntil) {
     const d = new Date(req.body.paidUntil)
