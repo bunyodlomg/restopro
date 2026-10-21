@@ -101,13 +101,23 @@ async function offerMigration({ parent, feed, channel, extra = [], beforeQuit = 
   const ps = path.join(dir, 'migrate.ps1')
   fs.writeFileSync(ps, [
     `Start-Transcript -Path ${q(LOG() + '.ps.txt')} -Append | Out-Null`,
+    // Ilova (kassada server va MongoDB ham) to'liq yopilishini kutamiz
+    `Wait-Process -Id ${process.pid} -Timeout 90 -ErrorAction SilentlyContinue`,
     installer ? `Start-Process -FilePath ${q(installer)} -ArgumentList '/S','/currentuser' -Wait` : '',
     `try { Start-Process -FilePath ${q(cmd)} -Verb RunAs -Wait -WindowStyle Hidden } catch {}`,
     `if (Test-Path ${q(NEW_EXE)}) { Start-Process -FilePath ${q(NEW_EXE)} } else { Start-Process -FilePath ${q(process.execPath)} }`,
   ].join('\r\n'))
   log(`ko'chish boshlandi: ${ps}`)
+  // Yordamchi jarayon haqiqatan boshlangach yopilamiz — boshlanmasa ilova ishlashda davom etadi
+  const pwsh = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+  const started = await new Promise(resolve => {
+    const child = spawn(pwsh, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', ps],
+      { detached: true, stdio: 'ignore', windowsHide: true })
+    child.once('error', err => { log(`powershell ishga tushmadi: ${err.message}`); resolve(false) })
+    child.once('spawn', () => { log(`powershell pid=${child.pid}`); child.unref(); setTimeout(() => resolve(true), 1500) })
+  })
+  if (!started) return
   await beforeQuit()
-  spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', ps], { detached: true, stdio: 'ignore' }).unref()
   app.exit(0)
 }
 
