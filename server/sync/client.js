@@ -34,7 +34,7 @@ const status = {
   pending: 0,             // hali yuborilmagan lokal o'zgarishlar
   merged: 0,              // ikki tomonda o'zgarib, birlashtirilgan hujjatlar
   clockOffset: 0,         // cloud soati - kassa soati (ms)
-  conflicts: [],
+  conflicts: 0,           // qo'llab bo'lmagan yozuvlar (sync_retry) — keyin qayta uriniladi
 }
 
 async function getState() {
@@ -116,19 +116,50 @@ async function pullFiles(items) {
   }
 }
 
+// ── Qo'llab bo'lmagan yozuvlar (sync_retry) — keyingi safar qayta uriniladi, yo'qolmaydi ──
+// push: cloud qabul qilmagan kassa hujjati (kursor o'tib ketgan — qayta yuboriladi)
+// pull: kassaga yozib bo'lmagan cloud hujjati (odatda cloud ziddiyatni hal qilgach o'tadi)
+const retryColl = () => mongoose.connection.collection('sync_retry')
+async function settleRetries(side, items, conflicts) {
+  const ids = items.filter(it => it.t === 'doc').map(it => ({ c: it.coll, i: it.doc._id }))
+  if (ids.length) await retryColl().deleteMany({ _id: { $in: ids.map(k => ({ ...k, s: side })) } })
+  for (const c of conflicts || []) {
+    const it = items.find(x => x.t === 'doc' && x.coll === c.coll && String(x.doc._id) === c.id)
+    if (!it) continue
+    await retryColl().replaceOne({ _id: { c: c.coll, i: it.doc._id, s: side } },
+      { side, coll: c.coll, error: String(c.error).slice(0, 300), at: new Date(), ...(side === 'pull' ? { item: it } : {}) }, { upsert: true })
+    console.warn(`⚠️  sync: ${c.coll}/${c.id} ${side === 'push' ? "cloud qabul qilmadi" : "kassaga yozilmadi"} — keyin qayta uriniladi: ${c.error}`)
+  }
+}
+async function pushRetries() {
+  const list = await retryColl().find({ side: 'push' }).toArray()
+  const out = []
+  for (const r of list) {
+    const doc = await mongoose.connection.collection(r._id.c).findOne({ _id: r._id.i })
+    if (doc) out.push({ t: 'doc', coll: r._id.c, seq: doc._seq, doc })
+    else await retryColl().deleteOne({ _id: r._id })   // o'chirilgan — yuborish shart emas
+  }
+  return out
+}
+
 async function push() {
   let { pushed } = await getState()
+  let retry = await pushRetries()
   for (;;) {
-    const { items, cursor, more } = await engine.collectChanges(pushed, REMOTE_ID)
+    const { items: fresh, cursor, more } = await engine.collectChanges(pushed, REMOTE_ID)
+    const same = (a, b) => a.coll === b.coll && String(a.doc?._id) === String(b.doc?._id)
+    const items = [...fresh, ...retry.filter(r => !fresh.some(f => same(f, r)))]
+    retry = []
     if (!items.length) break
     await pushFiles(items)
     await attachBases(items)
     const r = await request('POST', '/api/sync/push', {
       body: engine.encode({ node: engine.NODE_ID, items }), type: 'application/ejson',
     })
-    if (r.conflicts?.length) addConflicts(r.conflicts.map(c => ({ ...c, side: 'cloud' })))
+    await settleRetries('push', items, r.conflicts)
     // Cloud endi shu versiyani biladi — keyingi o'zgarish shunga nisbatan birlashtiriladi
-    await saveShadows(items.filter(it => it.t === 'doc').map(it => ({ coll: it.coll, doc: it.doc })))
+    await saveShadows(items.filter(it => it.t === 'doc' && !r.conflicts?.some(c => c.id === String(it.doc._id)))
+      .map(it => ({ coll: it.coll, doc: it.doc })))
     pushed = cursor
     await saveState({ pushed })
     if (!more) break
@@ -146,25 +177,14 @@ async function pull(io) {
       await saveState({ pulled, cleanup: true })
       continue
     }
-    if (items.length) {
-      await pullFiles(items)
-      const shadows = []
-      const result = await engine.applyChanges(items, {
-        edge: { pushed, baseOf: async (coll, id) => (await shadowColl().findOne({ _id: { c: coll, i: id } }))?.doc },
-        onApplied: (coll, doc) => { shadows.push({ coll, doc }) },
-      })
-      await saveShadows(shadows)
-      if (result.conflicts.length) addConflicts(result.conflicts.map(c => ({ ...c, side: 'kassa' })))
-      status.merged += result.merged
-      // Birinchi to'liq yuklashda eski ochiq buyurtmalar uchun ovoz chalinmasin
-      notifyApplied(io, result, { quiet: !status.initialized })
-      // Cloud'da yaratilgan chek/talon — kutmasdan printerga
-      if (result.touched.some(t => t.coll === 'printjobs')) require('../print').kick()
-    }
+    if (items.length) await applyPulled(io, items, pushed)
     pulled = cursor
     await saveState({ pulled })
     if (!more) break
   }
+  // Avval yozib bo'lmaganlar — odatda cloud ziddiyatni hal qilib, qayta nomlangan hujjat endi keldi
+  const retry = (await retryColl().find({ side: 'pull' }).toArray()).map(r => r.item).filter(Boolean)
+  if (retry.length) await applyPulled(io, retry, pushed)
   if ((await getState()).cleanup) {
     await removeOrphans(pushed)
     await saveState({ cleanup: false })
@@ -189,9 +209,20 @@ async function removeOrphans(pushed) {
   if (removed) console.log(`🧹 sync: cloud'da o'chirilgan ${removed} ta yozuv kassadan ham olib tashlandi`)
 }
 
-function addConflicts(list) {
-  status.conflicts = [...list.map(c => ({ ...c, at: new Date() })), ...status.conflicts].slice(0, 50)
-  for (const c of list) console.warn(`⚠️  sync ziddiyati (${c.side}) ${c.coll}/${c.id}: ${c.error}`)
+async function applyPulled(io, items, pushed) {
+  await pullFiles(items)
+  const shadows = []
+  const result = await engine.applyChanges(items, {
+    edge: { pushed, baseOf: async (coll, id) => (await shadowColl().findOne({ _id: { c: coll, i: id } }))?.doc },
+    onApplied: (coll, doc) => { shadows.push({ coll, doc }) },
+  })
+  await saveShadows(shadows)
+  await settleRetries('pull', items, result.conflicts)
+  status.merged += result.merged
+  // Birinchi to'liq yuklashda eski ochiq buyurtmalar uchun ovoz chalinmasin
+  notifyApplied(io, result, { quiet: !status.initialized })
+  // Cloud'da yaratilgan chek/talon — kutmasdan printerga
+  if (result.touched.some(t => t.coll === 'printjobs')) require('../print').kick()
 }
 
 async function countPending() {
@@ -228,6 +259,7 @@ async function tick(io) {
     if (wasOnline) { console.warn('📴 sync: offline —', status.lastError); io?.emit('syncStatus', publicStatus()) }
   } finally {
     status.pending = await countPending().catch(() => status.pending)
+    status.conflicts = await retryColl().countDocuments().catch(() => status.conflicts)
     lastLocalSeq = await localSeq().catch(() => lastLocalSeq)
     status.syncing = false
     if (again) { again = false; setImmediate(() => tick(io)) }
@@ -267,7 +299,6 @@ async function watchRemote(io) {
 async function resync(io) {
   if (!SYNC_URL) return
   await saveState({ pulled: 0, cleanup: true })
-  status.conflicts = []
   console.log("🔁 sync: to'liq qayta sinxronlash (sotuvchi buyrug'i)")
   await tick(io)
 }
@@ -276,7 +307,7 @@ async function resync(io) {
 function health() {
   return {
     online: status.online, initialized: status.initialized, pending: status.pending,
-    lastSyncAt: status.lastSyncAt, conflicts: status.conflicts.length, merged: status.merged,
+    lastSyncAt: status.lastSyncAt, conflicts: status.conflicts, merged: status.merged,
     clockOffset: status.clockOffset, lastError: status.online ? null : status.lastError,
   }
 }
@@ -285,7 +316,7 @@ function publicStatus() {
   return {
     enabled: status.enabled, online: status.online, initialized: status.initialized,
     lastSyncAt: status.lastSyncAt, lastError: status.lastError,
-    pending: status.pending, conflicts: status.conflicts.length,
+    pending: status.pending, conflicts: status.conflicts,
     merged: status.merged, clockOffset: status.clockOffset,
   }
 }

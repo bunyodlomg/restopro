@@ -22,7 +22,11 @@ const M = n => mongoose.model(n)
 const t = (path, fn) => app.post('/t/' + path, async (req, res) => {
   try { res.json(await fn(req.body)) } catch (e) { console.error(e); res.status(500).json({ error: e.message }) }
 })
-t('reset', async () => { await mongoose.connection.db.dropDatabase(); return { ok: 1 } })
+t('reset', async () => {
+  await mongoose.connection.db.dropDatabase()
+  for (const n of mongoose.modelNames()) await M(n).syncIndexes()   // unique indekslar (production'dagidek)
+  return { ok: 1 }
+})
 t('seed', async () => {
   const cat = await M('Category').create({ name: 'Ovqat' })
   const p1 = await M('Product').create({ name: 'Osh', price: 30000, category: cat._id })
@@ -48,6 +52,9 @@ t('ageTombs', async () => mongoose.connection.collection('sync_tombstones').upda
 t('purgeHub', async () => ({ n: await engine.purgeTombstonesHub() }))
 t('setPulled', async b => mongoose.connection.collection('sync_state').updateOne({ _id: 'client' }, { $set: { pulled: b.v } }))
 t('count', async b => ({ n: await M(b.model).countDocuments() }))
+t('user', async b => M('User').create({ name: b.name, username: b.username, password: 'xxxxxxxx1', role: 'waiter' }))
+t('table', async b => M('Table').create({ number: b.number, category: 'zal' }))
+t('find', async b => M(b.model).find(b.q || {}).lean())
 t('tick', async () => { await client.tick(io); return client.publicStatus() })
 t('clock', async b => { require(S + '/sync/plugin').setClockOffset(b.ms); return {} })
 

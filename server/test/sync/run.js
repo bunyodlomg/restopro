@@ -100,6 +100,27 @@ async function test(name, fn) {
     assert.strictEqual(st.pending, 0, 'pending ' + st.pending)
   })
 
+  await test("ikki joyda bir xil login va stol — avtomatik qayta nomlanadi, hech narsa yo'qolmaydi", async () => {
+    await C('user', { name: 'Vali (cloud)', username: 'vali' })
+    await K('user', { name: 'Vali (kassa)', username: 'vali' })
+    await C('table', { number: 7 })
+    await K('table', { number: 7 })
+    let st
+    for (let i = 0; i < 3; i++) st = await K('tick')
+    for (const [side, X] of [['cloud', C], ['kassa', K]]) {
+      const users = (await X('find', { model: 'User' })).map(u => u.username).filter(u => u.startsWith('vali')).sort()
+      assert.deepStrictEqual(users, ['vali', 'vali-2'], side + ' loginlar: ' + users)
+      const tables = (await X('find', { model: 'Table', q: { category: 'zal' } })).map(t => t.number).sort((a, b) => a - b)
+      assert.ok(tables.includes(7) && tables.length === new Set(tables).size && tables.length >= 3, side + ' stollar: ' + tables)
+      const notices = await X('find', { model: 'SyncNotice' })
+      assert.strictEqual(notices.length, 2, side + ' xabarlar: ' + notices.length)
+    }
+    // Kassada yaratilgani qayta nomlangan (cloud'dagisi avval bor edi)
+    const kv = (await K('find', { model: 'User', q: { username: 'vali-2' } }))[0]
+    assert.strictEqual(kv.name, 'Vali (kassa)')
+    assert.strictEqual(st.conflicts, 0, 'qolgan ziddiyatlar: ' + st.conflicts)
+  })
+
   await test("eski o'chirish belgilari tozalanadi; uzoq o'chiq kassa to'liq qayta sinxronlanadi", async () => {
     // Kassa "o'chiq" paytida cloud'da mahsulot o'chirildi
     const p = await C('order', { ...ids, items: [{ productId: ids.p2, quantity: 1 }] })   // (mahsulot o'zi kerak)

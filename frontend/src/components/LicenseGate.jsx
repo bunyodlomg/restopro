@@ -4,6 +4,7 @@ import API from '../api/api.js'
 import { createSocket } from '../api/socket.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import AuthFrame from './auth/AuthFrame.jsx'
+import SyncNotices from './shared/SyncNotices.jsx'
 
 const fmt = s => (s ? new Date(s).toLocaleDateString('ru-RU') : '—')
 
@@ -119,6 +120,7 @@ export default function LicenseGate({ children }) {
   return <>
     {warn && <Banner lic={lic} onClose={() => setHidden(true)}/>}
     {msg && <VendorMessage msg={msg} onClose={closeMsg} raised={warn}/>}
+    {isAdmin && !msg && <SyncNotices raised={warn}/>}
     {children}
   </>
 }

@@ -7,9 +7,11 @@ const mongoose = require('mongoose')
 const { EJSON } = mongoose.mongo.BSON
 const { NODE_ID, nextSeq, recordTombstones, tombstones, counters, syncNow } = require('./plugin')
 const { merge3, sameData, sameVersion } = require('./resolve')
+const { resolveUnique } = require('./unique')
+require('../models/SyncNotice')
 
 // Sinxronlanadigan modellar
-const MODELS = ['User', 'Session', 'Category', 'Product', 'Ingredient', 'Order', 'Table', 'Salary', 'Purchase', 'Settings', 'Reservation', 'GuestOrder', 'PrintJob']
+const MODELS = ['User', 'Session', 'Category', 'Product', 'Ingredient', 'Order', 'Table', 'Salary', 'Purchase', 'Settings', 'Reservation', 'GuestOrder', 'PrintJob', 'SyncNotice']
 const BATCH = 500
 
 const models = () => MODELS.map(name => mongoose.model(name))
@@ -131,9 +133,22 @@ async function applyChanges(items, opts = {}) {
         console.log(`🔀 sync: ${it.coll}/${doc._id} — ikki tomondagi o'zgarishlar birlashtirildi`)
       }
       result.touched.push({ coll: it.coll, id: String(doc._id), created: !cur })
-    } catch (err) {
-      // Odatda unique ziddiyati: masalan ikkala tomonda bir xil username yaratilgan
-      result.conflicts.push({ coll: it.coll, id: String(doc._id), error: err.message })
+    } catch (e) {
+      let err = e
+      // Unique ziddiyati: ikkala tomonda bir xil login / stol raqami yaratilgan.
+      // Cloud o'zi hal qiladi (kelganini qayta nomlaydi); kassa javobni kutadi (opts.onConflict — keyin qayta urinadi)
+      const fixed = !opts.edge && await resolveUnique(it.coll, coll, local, err).catch(() => null)
+      if (fixed) {
+        try {
+          await coll.replaceOne({ _id: doc._id }, { ...fixed.doc, _mtime: syncNow(), _origin: NODE_ID, _seq: await nextSeq() }, { upsert: true })
+          await mongoose.model('SyncNotice').create({ text: fixed.notice, coll: it.coll, docId: String(doc._id) })
+          console.log(`🔧 sync: ${fixed.notice}`)
+          result.applied++
+          result.touched.push({ coll: it.coll, id: String(doc._id), created: !cur }, { coll: 'syncnotices' })
+          continue
+        } catch (err2) { err = err2 }
+      }
+      result.conflicts.push({ coll: it.coll, id: String(doc._id), error: err.message, item: it })
     }
   }
   return result

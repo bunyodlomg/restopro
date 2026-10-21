@@ -118,7 +118,7 @@ router.post('/push', syncAuth, ejsonBody, async (req, res, next) => {
     // Kassa va cloud bir stolga alohida buyurtma ochgan bo'lsa — bittaga
     if (await mergeDuplicateOrders(result.touched)) result.touched.push({ coll: 'orders' }, { coll: 'tables' })
     notifyApplied(req.app.get('io'), result)
-    sendEjson(res, { applied: result.applied, skipped: result.skipped, conflicts: result.conflicts })
+    sendEjson(res, { applied: result.applied, skipped: result.skipped, conflicts: result.conflicts.map(({ coll, id, error }) => ({ coll, id, error })) })
   } catch (err) { next(err) }
 })
 
