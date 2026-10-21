@@ -1,10 +1,12 @@
 // ── Sync: o'zgarishlarni yig'ish va qo'llash ──────────────────
 // Ikkala tugunda (kassa va cloud) bir xil ishlaydi.
-// Ziddiyat qoidasi: _mtime kattaroq yutadi (teng bo'lsa — _origin bo'yicha).
+// Ziddiyat qoidasi: ikki tomonda o'zgargan hujjat birlashtiriladi (resolve.js);
+// asos (base) bo'lmasa — _mtime kattaroq yutadi (teng bo'lsa — _origin bo'yicha).
 
 const mongoose = require('mongoose')
 const { EJSON } = mongoose.mongo.BSON
-const { NODE_ID, nextSeq, recordTombstones, tombstones } = require('./plugin')
+const { NODE_ID, nextSeq, recordTombstones, tombstones, syncNow } = require('./plugin')
+const { merge3, sameData, sameVersion } = require('./resolve')
 
 // Sinxronlanadigan modellar
 const MODELS = ['User', 'Session', 'Category', 'Product', 'Ingredient', 'Order', 'Table', 'Salary', 'Purchase', 'Settings', 'Reservation', 'GuestOrder', 'PrintJob']
@@ -57,9 +59,40 @@ async function collectChanges(since, exceptOrigin) {
   return { items: batch, cursor, more: items.length > BATCH || batch.length === BATCH }
 }
 
-// Boshqa tugundan kelgan o'zgarishlarni qo'llash
-async function applyChanges(items) {
-  const result = { applied: 0, skipped: 0, conflicts: [], touched: [] }
+// ── Kelgan hujjatni joriysi bilan solishtirib, nima yozilishini hal qilish ──
+// → { write, merged } yoki null (o'tkazib yuborish)
+//
+// Cloud (hub): kassa doc bilan birga base'ni yuboradi (kassa oxirgi marta cloud bilan kelishgan versiya).
+//   joriy == base → kassa o'zgarishi to'g'ridan-to'g'ri; aks holda uch tomonlama birlashtirish,
+//   natija cloud nomidan yoziladi — shu bilan kassaga ham qaytadi.
+// Kassa (edge): cloud — haqiqat manbai. Lokal hujjatda hali yuborilmagan o'zgarish bo'lsa,
+//   shadow'ga nisbatan birlashtiriladi va kassa nomidan yoziladi (keyingi push'da cloud'ga ketadi).
+// base yo'q (eski kassa versiyasi / juda eski hujjat) — avvalgidek yangirog'i yutadi.
+function decide(coll, cur, doc, { base, edge }) {
+  if (!cur) return { write: doc }
+  if (edge) {
+    const unpushed = cur._origin === NODE_ID && cur._seq > edge.pushed
+    if (!unpushed) return { write: doc }
+    if (!base) return newer(doc, cur) ? { write: doc } : null
+    return mergedWrite(coll, base, cur, doc)
+  }
+  if (!base) return newer(doc, cur) ? { write: doc } : null
+  if (sameVersion(cur, base)) return { write: doc }
+  return mergedWrite(coll, base, cur, doc)
+}
+
+function mergedWrite(coll, base, cur, doc) {
+  const m = merge3(coll, base, cur, doc, newer(doc, cur))
+  if (sameData(m, cur)) return null   // kelgan o'zgarish allaqachon bor
+  if (sameData(m, doc)) return { write: doc }
+  return { write: { ...m, _mtime: syncNow(), _origin: NODE_ID }, merged: true }
+}
+
+// Boshqa tugundan kelgan o'zgarishlarni qo'llash.
+// opts.edge = { pushed, baseOf } — kassa tomonida (cloud'dan kelganini qo'llash)
+// opts.onApplied(coll, doc) — kassa shadow'ni yangilashi uchun
+async function applyChanges(items, opts = {}) {
+  const result = { applied: 0, skipped: 0, merged: 0, conflicts: [], touched: [] }
   for (const it of items) {
     const M = modelByColl(it.coll)
     if (!M) { result.skipped++; continue }
@@ -76,14 +109,27 @@ async function applyChanges(items) {
     }
 
     const doc = it.doc
-    const cur = await coll.findOne({ _id: doc._id }, { projection: { _mtime: 1, _origin: 1 } })
-    if (cur && !newer(doc, cur)) { result.skipped++; continue }
+    const cur = await coll.findOne({ _id: doc._id })
+    // Kassada asos — o'zining shadow'i (cloud bilan oxirgi kelishilgan versiya)
+    const base = opts.edge ? cur && await opts.edge.baseOf?.(it.coll, doc._id) : it.base
+    const d = decide(it.coll, cur, doc, { base, edge: opts.edge })
+    if (!d) {
+      result.skipped++
+      if (opts.edge) await opts.onApplied?.(it.coll, doc)   // cloud versiyasi — keyingi birlashtirish uchun asos
+      continue
+    }
 
     // Bu bazada yangi _seq beramiz; _origin saqlanadi — qaytib jo'natilmasligi uchun
-    const local = { ...doc, _seq: await nextSeq() }
+    // (birlashtirilgan bo'lsa — shu tugun nomidan, boshqa tomonga ham borishi uchun)
+    const local = { ...d.write, _seq: await nextSeq() }
     try {
       await coll.replaceOne({ _id: doc._id }, local, { upsert: true })
+      await opts.onApplied?.(it.coll, doc)
       result.applied++
+      if (d.merged) {
+        result.merged++
+        console.log(`🔀 sync: ${it.coll}/${doc._id} — ikki tomondagi o'zgarishlar birlashtirildi`)
+      }
       result.touched.push({ coll: it.coll, id: String(doc._id), created: !cur })
     } catch (err) {
       // Odatda unique ziddiyati: masalan ikkala tomonda bir xil username yaratilgan

@@ -9,6 +9,7 @@ const path     = require('path')
 const mongoose = require('mongoose')
 const engine   = require('./engine')
 const { notifyApplied } = require('./notify')
+const { setClockOffset } = require('./plugin')
 
 const SYNC_URL    = (process.env.SYNC_URL || '').replace(/\/+$/, '')
 const SYNC_KEY    = process.env.SYNC_KEY || ''
@@ -18,6 +19,10 @@ const { UPLOAD_DIR } = require('../config')
 const TIMEOUT_MS  = 20000
 
 const stateColl = () => mongoose.connection.collection('sync_state')
+// Har bir hujjatning cloud bilan oxirgi kelishilgan versiyasi — ikki tomonda bir vaqtda
+// o'zgarganda birlashtirish uchun asos (engine.decide / resolve.js)
+const shadowColl = () => mongoose.connection.collection('sync_shadow')
+const SHADOW_DAYS = 14   // shundan beri o'zgarmagan hujjatlarning asosi kerak emas
 
 const status = {
   enabled: !!SYNC_URL,
@@ -27,6 +32,8 @@ const status = {
   lastSyncAt: null,
   lastError: null,
   pending: 0,             // hali yuborilmagan lokal o'zgarishlar
+  merged: 0,              // ikki tomonda o'zgarib, birlashtirilgan hujjatlar
+  clockOffset: 0,         // cloud soati - kassa soati (ms)
   conflicts: [],
 }
 
@@ -37,13 +44,51 @@ async function saveState(patch) {
   await stateColl().updateOne({ _id: 'client' }, { $set: patch }, { upsert: true })
 }
 
+async function saveShadows(list) {
+  if (!list.length) return
+  await shadowColl().bulkWrite(list.map(({ coll, doc }) => ({
+    replaceOne: { filter: { _id: { c: coll, i: doc._id } }, replacement: { doc, at: new Date() }, upsert: true },
+  })), { ordered: false })
+}
+async function attachBases(items) {
+  const docs = items.filter(it => it.t === 'doc')
+  if (!docs.length) return
+  const found = await shadowColl().find({ $or: docs.map(it => ({ _id: { c: it.coll, i: it.doc._id } })) }).toArray()
+  const byKey = new Map(found.map(s => [`${s._id.c}:${s._id.i}`, s.doc]))
+  for (const it of docs) {
+    const base = byKey.get(`${it.coll}:${it.doc._id}`)
+    if (base) it.base = base
+  }
+}
+
+// ── Soat farqi: kassa _mtime'ni cloud vaqti bilan yozadi ──
+// Har sync javobida cloud vaqti (x-time) keladi; eng tez javobdagi o'lchov eng aniq.
+let bestRtt = Infinity
+async function measureClock(res, startedAt) {
+  const serverTime = Number(res.headers.get('x-time'))
+  if (!serverTime) return
+  const end = Date.now()
+  const rtt = end - startedAt
+  if (rtt > 3000 || rtt > bestRtt * 2) return
+  bestRtt = Math.min(bestRtt, rtt)
+  const offset = serverTime + rtt / 2 - end
+  setClockOffset(offset)
+  if (Math.abs(offset - (status.clockOffset || 0)) > 1000) {
+    if (Math.abs(offset) > 60000) console.warn(`🕒 sync: kassa soati cloud'dan ${Math.round(offset / 1000)} s farq qiladi — tuzatib yozilmoqda`)
+    status.clockOffset = Math.round(offset)
+    await saveState({ clockOffset: status.clockOffset }).catch(() => {})
+  }
+}
+
 async function request(method, urlPath, { body, type, raw } = {}) {
+  const startedAt = Date.now()
   const res = await fetch(SYNC_URL + urlPath, {
     method,
     headers: { 'x-sync-key': SYNC_KEY, ...(type ? { 'content-type': type } : {}) },
     body,
     signal: AbortSignal.timeout(TIMEOUT_MS),
   })
+  await measureClock(res, startedAt)
   if (method === 'HEAD') return res.status
   if (!res.ok) throw new Error(`${method} ${urlPath} → ${res.status} ${(await res.text()).slice(0, 200)}`)
   return raw ? Buffer.from(await res.arrayBuffer()) : engine.decode(await res.text())
@@ -77,10 +122,13 @@ async function push() {
     const { items, cursor, more } = await engine.collectChanges(pushed, REMOTE_ID)
     if (!items.length) break
     await pushFiles(items)
+    await attachBases(items)
     const r = await request('POST', '/api/sync/push', {
       body: engine.encode({ node: engine.NODE_ID, items }), type: 'application/ejson',
     })
     if (r.conflicts?.length) addConflicts(r.conflicts.map(c => ({ ...c, side: 'cloud' })))
+    // Cloud endi shu versiyani biladi — keyingi o'zgarish shunga nisbatan birlashtiriladi
+    await saveShadows(items.filter(it => it.t === 'doc').map(it => ({ coll: it.coll, doc: it.doc })))
     pushed = cursor
     await saveState({ pushed })
     if (!more) break
@@ -88,13 +136,19 @@ async function push() {
 }
 
 async function pull(io) {
-  let { pulled } = await getState()
+  let { pulled, pushed } = await getState()
   for (;;) {
     const { items, cursor, more } = await request('GET', `/api/sync/pull?since=${pulled}&node=${encodeURIComponent(engine.NODE_ID)}`)
     if (items.length) {
       await pullFiles(items)
-      const result = await engine.applyChanges(items)
+      const shadows = []
+      const result = await engine.applyChanges(items, {
+        edge: { pushed, baseOf: async (coll, id) => (await shadowColl().findOne({ _id: { c: coll, i: id } }))?.doc },
+        onApplied: (coll, doc) => { shadows.push({ coll, doc }) },
+      })
+      await saveShadows(shadows)
       if (result.conflicts.length) addConflicts(result.conflicts.map(c => ({ ...c, side: 'kassa' })))
+      status.merged += result.merged
       // Birinchi to'liq yuklashda eski ochiq buyurtmalar uchun ovoz chalinmasin
       notifyApplied(io, result, { quiet: !status.initialized })
       // Cloud'da yaratilgan chek/talon — kutmasdan printerga
@@ -183,13 +237,19 @@ function publicStatus() {
     enabled: status.enabled, online: status.online, initialized: status.initialized,
     lastSyncAt: status.lastSyncAt, lastError: status.lastError,
     pending: status.pending, conflicts: status.conflicts.length,
+    merged: status.merged, clockOffset: status.clockOffset,
   }
 }
 
 async function start(io) {
   if (!SYNC_URL) return
   if (SYNC_KEY.length < 32) throw new Error('SYNC_KEY kamida 32 belgi bo\'lishi kerak')
-  status.initialized = !!(await getState()).initialized
+  const st = await getState()
+  status.initialized = !!st.initialized
+  if (st.clockOffset) { status.clockOffset = st.clockOffset; setClockOffset(st.clockOffset) }
+  // Eski asoslarni tozalash (kuniga bir marta)
+  const purge = () => shadowColl().deleteMany({ at: { $lt: new Date(Date.now() - SHADOW_DAYS * 86400000) } }).catch(() => {})
+  purge(); setInterval(purge, 86400000).unref()
   console.log(`🔁 sync: ${SYNC_URL} (har ${INTERVAL_MS / 1000}s)`)
   tick(io)
   setInterval(() => tick(io), INTERVAL_MS).unref()
@@ -208,4 +268,4 @@ function requireInitialized(req, res, next) {
   })
 }
 
-module.exports = { start, tick, publicStatus, requireInitialized, status }
+module.exports = { start, tick, pull, publicStatus, requireInitialized, status }

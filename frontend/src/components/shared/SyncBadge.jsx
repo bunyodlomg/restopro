@@ -19,12 +19,19 @@ export default function SyncBadge({ compact = false }) {
 
   if (!st?.enabled) return null
   const last = st.lastSyncAt ? new Date(st.lastSyncAt).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }) : '—'
-  const title = st.online
+  // Kompyuter soati 2 daqiqadan ko'p farq qilsa — sync tuzatib yozadi, lekin cheklar vaqti noto'g'ri chiqadi
+  const skewMin = Math.round((st.clockOffset || 0) / 60000)
+  const notes = [
+    st.conflicts > 0 && `${st.conflicts} ta yozuv sinxronlanmadi (masalan, ikkala tomonda bir xil login yaratilgan) — sotuvchiga murojaat qiling`,
+    Math.abs(skewMin) >= 2 && `Kompyuter soati ${Math.abs(skewMin)} daqiqa ${skewMin > 0 ? 'orqada' : 'oldinda'} — Windows sozlamalarida vaqtni to'g'rilang`,
+  ].filter(Boolean)
+  const title = (st.online
     ? `Internet bor. Oxirgi sinxronlash: ${last}`
-    : `Internet yo'q — tizim lokal ishlayapti. Ma'lumotlar ulanish tiklanganda yuboriladi. Oxirgi sinxronlash: ${last}`
+    : `Internet yo'q — tizim lokal ishlayapti. Ma'lumotlar ulanish tiklanganda yuboriladi. Oxirgi sinxronlash: ${last}`)
+    + notes.map(n => `\n⚠️ ${n}`).join('')
   return (
     <span className={`sync ${st.online ? 'on' : 'off'}`} title={title}>
-      <i/>{!compact && (st.online ? 'ONLINE' : 'OFFLINE')}{st.pending > 0 && ` · ${st.pending}`}
+      <i/>{!compact && (st.online ? 'ONLINE' : 'OFFLINE')}{st.pending > 0 && ` · ${st.pending}`}{notes.length > 0 && ' ⚠'}
     </span>
   )
 }

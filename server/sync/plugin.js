@@ -11,6 +11,13 @@ const mongoose = require('mongoose')
 
 const NODE_ID = process.env.NODE_ID || 'cloud'
 
+// Kassa soati cloud soatidan farq qilishi mumkin (noto'g'ri sozlangan Windows soati).
+// _mtime ziddiyatda kim yutishini hal qiladi — shuning uchun kassa cloud vaqti bilan yozadi
+// (farq sync javoblaridan o'lchanadi: client.js → setClockOffset).
+let clockOffset = 0
+const setClockOffset = ms => { clockOffset = Math.round(ms) || 0 }
+const syncNow = () => new Date(Date.now() + clockOffset)
+
 const counters   = () => mongoose.connection.collection('sync_counters')
 const tombstones = () => mongoose.connection.collection('sync_tombstones')
 
@@ -38,12 +45,12 @@ function syncPlugin(schema) {
 
   schema.pre('save', async function () {
     this._seq    = await nextSeq()
-    this._mtime  = new Date()
+    this._mtime  = syncNow()
     this._origin = NODE_ID
   })
 
   schema.pre(['findOneAndUpdate', 'updateOne', 'updateMany'], async function () {
-    const fields = { _seq: await nextSeq(), _mtime: new Date(), _origin: NODE_ID }
+    const fields = { _seq: await nextSeq(), _mtime: syncNow(), _origin: NODE_ID }
     this.setUpdate(stampUpdate(this.getUpdate(), fields))
   })
 
@@ -55,7 +62,7 @@ function syncPlugin(schema) {
   schema.post(['findOneAndDelete', 'deleteOne', 'deleteMany'], { document: false, query: true }, async function () {
     const ids = this._syncDeletedIds || []
     if (!ids.length) return
-    await recordTombstones(this.model.collection.collectionName, ids, new Date(), NODE_ID)
+    await recordTombstones(this.model.collection.collectionName, ids, syncNow(), NODE_ID)
   })
 }
 
@@ -73,4 +80,4 @@ async function recordTombstones(coll, ids, mtime, origin) {
 
 mongoose.plugin(syncPlugin)
 
-module.exports = { NODE_ID, nextSeq, recordTombstones, counters, tombstones }
+module.exports = { NODE_ID, nextSeq, recordTombstones, counters, tombstones, syncNow, setClockOffset }

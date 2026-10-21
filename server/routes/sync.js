@@ -25,6 +25,9 @@ function syncAuth(req, res, next) {
   next()
 }
 
+// Har javobda cloud vaqti — kassa soat farqini o'lchaydi (client.js → measureClock)
+router.use((req, res, next) => { res.set('x-time', String(Date.now())); next() })
+
 const ejsonBody = express.text({ type: 'application/ejson', limit: '50mb' })
 const sendEjson = (res, obj) => res.type('application/ejson').send(engine.encode(obj))
 
