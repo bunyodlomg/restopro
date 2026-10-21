@@ -28,6 +28,7 @@ is_legacy()       { [ "$1" = "$APP_DIR/server/.env" ]; }
 instance_name()   { local n; n="$(env_val "$1" PM2_NAME)"; echo "${n:-restopro}"; }
 instance_domain() { env_val "$1" CLIENT_URL | cut -d, -f1 | sed 's|^https\?://||'; }
 instance_port()   { local p; p="$(env_val "$1" PORT)"; echo "${p:-5050}"; }
-instance_web()    { echo "/var/www/restopro-$(instance_name "$1")"; }
+# Frontend papkasi (.env dagi WEB_ROOT — qo'lda o'rnatilgan server uchun)
+instance_web()    { local w; w="$(env_val "$1" WEB_ROOT)"; echo "${w:-/var/www/restopro-$(instance_name "$1")}"; }
 # pm2 ga beriladigan argument: yangi usuldagi restoran o'z .env faylini o'qisin
 instance_args()   { is_legacy "$1" || echo "--env=$1"; }

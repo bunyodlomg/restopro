@@ -237,24 +237,32 @@ LOCAL_MONGO=0
 
 # ── 4. MongoDB ─────────────────────────────────────────────────
 log "MongoDB $MONGO_SERIES"
-KEYRING="/usr/share/keyrings/mongodb-server-${MONGO_SERIES}.gpg"
-if [ ! -f "$KEYRING" ]; then
-  curl -fsSL "https://www.mongodb.org/static/pgp/server-${MONGO_SERIES}.asc" | gpg --dearmor -o "$KEYRING"
-  echo "deb [ arch=amd64,arm64 signed-by=$KEYRING ] https://repo.mongodb.org/apt/ubuntu ${VERSION_CODENAME}/mongodb-org/${MONGO_SERIES} multiverse" \
+# VPS'da baza allaqachon ishlayapti (boshqa restoran / loyiha) — unga tegmaymiz: versiyasi
+# boshqacha bo'lishi mumkin, ustidan o'rnatish uni buzadi. Faqat backup uchun mongodump kerak.
+MONGO_RUNNING=0
+ss -ltnH "sport = :27017" 2>/dev/null | grep -q . && MONGO_RUNNING=1
+mongo_repo() {
+  local keyring="/usr/share/keyrings/mongodb-server-${MONGO_SERIES}.gpg"
+  [ -f "$keyring" ] && return 0
+  curl -fsSL "https://www.mongodb.org/static/pgp/server-${MONGO_SERIES}.asc" | gpg --dearmor -o "$keyring"
+  echo "deb [ arch=amd64,arm64 signed-by=$keyring ] https://repo.mongodb.org/apt/ubuntu ${VERSION_CODENAME}/mongodb-org/${MONGO_SERIES} multiverse" \
     > "/etc/apt/sources.list.d/mongodb-org-${MONGO_SERIES}.list"
   apt-get update -qq
-fi
-if [ "$LOCAL_MONGO" = 1 ]; then
+}
+if [ "$LOCAL_MONGO" = 1 ] && [ "$MONGO_RUNNING" = 0 ]; then
   # MongoDB 5+ AVX'siz protsessorlarda ishlamaydi (ba'zi arzon VPS'lar)
   grep -qw avx /proc/cpuinfo || fail "Protsessor AVX'ni qo'llab-quvvatlamaydi — MongoDB ishlamaydi. Boshqa VPS tanlang yoki MONGO_URI ga MongoDB Atlas manzilini yozing."
+  mongo_repo
   apt-get install -y -qq mongodb-org >/dev/null
   systemctl enable --now mongod >/dev/null
   for _ in $(seq 1 30); do mongosh --quiet --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1 && break; sleep 1; done
   mongosh --quiet --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1 || fail "mongod ishga tushmadi: journalctl -u mongod"
   ok "mongod ishlayapti (faqat 127.0.0.1 da)"
 else
-  apt-get install -y -qq mongodb-database-tools >/dev/null
-  ok "tashqi baza ishlatiladi; backup uchun mongodump o'rnatildi"
+  if ! command -v mongodump >/dev/null; then mongo_repo; apt-get install -y -qq mongodb-database-tools >/dev/null; fi
+  if [ "$LOCAL_MONGO" = 1 ]; then ok "mavjud MongoDB ishlatiladi (o'zgartirilmadi), baza: ${MONGO_URI##*/}"
+  else ok "tashqi baza ishlatiladi"; fi
+  command -v mongodump >/dev/null && ok "backup uchun mongodump bor" || warn "mongodump o'rnatilmadi — backup ishlamaydi"
 fi
 
 # ── 5. Ilovani yig'ish ─────────────────────────────────────────
@@ -262,7 +270,7 @@ log "Ilovani yig'ish"
 (cd "$APP_DIR/server"   && npm ci --omit=dev --no-audit --no-fund --loglevel=error)
 ok "server bog'liqliklari"
 (cd "$APP_DIR/frontend" && npm ci --no-audit --no-fund --loglevel=error && npm run build --silent)
-WEB_ROOT="/var/www/restopro-$PM2_NAME"
+WEB_ROOT="$(instance_web "$ENV_FILE")"
 mkdir -p "$WEB_ROOT"
 rsync -a --delete "$APP_DIR/frontend/dist/" "$WEB_ROOT/"
 ok "frontend → $WEB_ROOT"
@@ -309,6 +317,12 @@ systemctl reload nginx
 ok "http://$DOMAIN"
 
 # ── 8. Firewall ────────────────────────────────────────────────
+# VPS'da boshqa saytlar bor va ufw o'chiq — yoqmaymiz: ularning portlari yopilib qolishi mumkin
+if [ "$WITH_FIREWALL" = 1 ] && ! ufw status 2>/dev/null | grep -q "Status: active" \
+   && ls /etc/nginx/sites-enabled/ 2>/dev/null | grep -qv "^restopro-"; then
+  warn "Firewall o'zgartirilmadi: VPS'da boshqa saytlar bor (ufw o'chiq turibdi)"
+  WITH_FIREWALL=0
+fi
 if [ "$WITH_FIREWALL" = 1 ]; then
   log "Firewall (ufw)"
   SSH_PORTS="$(sshd -T 2>/dev/null | awk '/^port /{print $2}' || true)"
