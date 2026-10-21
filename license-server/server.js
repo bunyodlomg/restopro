@@ -66,6 +66,9 @@ function saveDb() {
 // Cloud o'z kalitini yuborsa (o'rnatilgan server) — o'shanisi to'g'ri hisoblanadi.
 const newSyncKey = () => crypto.randomBytes(32).toString('hex')
 const cleanDomain = v => String(v ?? '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').slice(0, 120)
+// Bitta domen — bitta restoranning cloud'i (aks holda kassa boshqa restoran serveriga ulanib ketadi)
+const hostOf = u => cleanDomain(u).replace(/:\d+$/, '')
+const domainOwner = (d, exceptId) => d && db.customers.find(c => c.id !== exceptId && (c.domain === d || hostOf(c.sync?.url) === d))
 const isDomain = d => /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(d)
 for (const c of db.customers) if (!c.syncKey) c.syncKey = c.sync?.key || newSyncKey()
 const findByKey = key => db.customers.find(c => c.key === key)
@@ -280,7 +283,7 @@ app.post('/api/v1/check', limit, (req, res) => {
   const isCloud = role === 'cloud' && inst && inst === c.cloudInstance
   if (isCloud && syncOk) {
     c.sync = { url: String(sync.url), key: String(sync.key), at: new Date().toISOString() }
-    if (!c.domain) c.domain = cleanDomain(c.sync.url).replace(/:\d+$/, '')
+    if (!c.domain && !domainOwner(hostOf(c.sync.url), c.id)) c.domain = hostOf(c.sync.url)
   }
   saveDb()
 
@@ -388,6 +391,8 @@ app.post('/api/v1/provision', limit, (req, res) => {
   if (!c) return res.status(404).json({ message: 'Litsenziya kaliti topilmadi' })
   if (c.cloudInstance && !(new Date(c.reinstallUntil || 0) > Date.now()))
     return res.status(409).json({ message: "Bu restoranning cloud serveri allaqachon ulangan. Ko'chirish uchun panelda «Qayta o'rnatishga ruxsat» bosing." })
+  const owner = domainOwner(c.domain, c.id)
+  if (owner) return res.status(409).json({ message: `${c.domain} — «${owner.name}» restoranining domeni. Panelda bu restoranga alohida subdomen kiriting.` })
   res.json({ name: c.name, domain: c.domain || '', syncKey: c.syncKey })
 })
 
@@ -475,7 +480,7 @@ admin.get('/', (req, res) => { res.set('Cache-Control', 'no-store'); res.sendFil
 const ONLINE_MS = 3 * 60000   // restoran serveri har daqiqada tekshiradi
 const isOnline = at => !!at && Date.now() - new Date(at) < ONLINE_MS
 const view = c => ({
-  ...c, state: stateOf(c), grace: graceOf(c), offline: offlineOf(c), blockMode: blockModeOf(c), online: isOnline(c.lastSeen),
+  ...c, domainClash: domainOwner(c.domain, c.id)?.name, state: stateOf(c), grace: graceOf(c), offline: offlineOf(c), blockMode: blockModeOf(c), online: isOnline(c.lastSeen),
   stats: c.stats && { ...c.stats, nodes: (c.stats.nodes || []).map(n => ({ ...n, online: isOnline(n.lastSeen) })) },
 })
 const str = (v, max) => String(v ?? '').trim().slice(0, max)
@@ -623,6 +628,9 @@ admin.post('/api/customers', (req, res) => {
   const name = str(req.body.name, 80)
   if (!name) return res.status(400).json({ message: 'Restoran nomi kerak' })
   const trialDays = Math.min(60, Math.max(0, parseInt(req.body.trialDays, 10) || 0))
+  const domain = isDomain(cleanDomain(req.body.domain)) ? cleanDomain(req.body.domain) : ''
+  const owner = domainOwner(domain)
+  if (owner) return res.status(400).json({ message: `${domain} — «${owner.name}» restoranining domeni. Har restoranga alohida subdomen kerak.` })
   const c = {
     id: crypto.randomUUID(),
     key: newKey(),
@@ -630,7 +638,7 @@ admin.post('/api/customers', (req, res) => {
     owner: str(req.body.owner, 80),
     phone: str(req.body.phone, 40),
     address: str(req.body.address, 160),
-    domain: isDomain(cleanDomain(req.body.domain)) ? cleanDomain(req.body.domain) : '',
+    domain,
     syncKey: newSyncKey(),
     monthly: money(req.body.monthly),
     setupFee: money(req.body.setupFee),
@@ -655,6 +663,8 @@ admin.put('/api/customers/:id', (req, res) => {
   if (req.body.domain !== undefined) {
     const d = cleanDomain(req.body.domain)
     if (d && !isDomain(d)) return res.status(400).json({ message: "Domen noto'g'ri (masalan: itop.example.uz)" })
+    const owner = d !== c.domain && domainOwner(d, c.id)   // o'zgarmagan bo'lsa boshqa tahrirlar to'silmasin
+    if (owner) return res.status(400).json({ message: `${d} — «${owner.name}» restoranining domeni. Har restoranga alohida subdomen kerak.` })
     c.domain = d
   }
   if (req.body.monthly !== undefined) c.monthly = money(req.body.monthly)

@@ -293,6 +293,7 @@ function connectHtml(c) {
       : waiting
         ? 'Yangi kalit cloud serverga yuborilmoqda (u online bo\'lishi bilan oladi). Kassalarga yangi ulanish kodini qo\'ying.'
         : "Kassa sozlash oynasidagi «Ulanish kodi» maydoniga qo'ying — manzil va kalit o'zi to'ldiriladi."
+  if (c.domainClash) return `<span style="color:var(--warn)">⚠ ${esc(c.domain)} — «${esc(c.domainClash)}» restoranining domeni ham. Yuqorida bu restoranga alohida subdomen kiriting (masalan: ${esc(c.domain.replace(/^[^.]+/, 'yangi'))}) va saqlang.</span>`
   return `<div class="col" style="display:grid;gap:8px">
       ${code ? line('Ulanish kodi', code, code.slice(0, 28) + '…') : ''}
       ${url ? line('Server manzili', url, url) : ''}
