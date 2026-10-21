@@ -2,7 +2,7 @@
 # ============================================================
 #  RestoPro — restoran serverini (cloud) o'rnatish
 #
-#  Ubuntu 22.04 / 24.04, root huquqi bilan:
+#  Ubuntu 22.04 / 24.04 yoki Debian 11 / 12, root huquqi bilan:
 #    git clone https://github.com/bunyodlomg/restopro.git /opt/restopro   (bir marta)
 #    cd /opt/restopro
 #    sudo ./deploy/install.sh --license-key RP-XXXX-XXXX-XXXX
@@ -153,9 +153,14 @@ if [ -z "$PORT" ]; then PORT=5050; while port_taken "$PORT"; do PORT=$((PORT + 1
 [ "$FRESH_INSTALL" = 0 ] || ! port_taken "$PORT" || fail "$PORT porti band — --port bilan boshqasini bering"
 # shellcheck disable=SC1091
 . /etc/os-release
-[ "${ID:-}" = "ubuntu" ] || fail "Faqat Ubuntu qo'llab-quvvatlanadi (topildi: ${ID:-?})"
-case "${VERSION_CODENAME:-}" in jammy|noble) ;; *) fail "Ubuntu 22.04 yoki 24.04 kerak (topildi: ${VERSION_ID:-?})";; esac
-ok "Ubuntu $VERSION_ID, restoran: $PM2_NAME, domen: $DOMAIN, port: $PORT"
+# MongoDB apt manzili: Ubuntu — multiverse, Debian — main (8.0 Debian 12 uchun chiqarilgan)
+case "${ID:-}:${VERSION_CODENAME:-}" in
+  ubuntu:jammy|ubuntu:noble) MONGO_APT="ubuntu ${VERSION_CODENAME}/mongodb-org/${MONGO_SERIES} multiverse" ;;
+  debian:bookworm|debian:trixie) MONGO_APT="debian bookworm/mongodb-org/${MONGO_SERIES} main" ;;
+  debian:bullseye) MONGO_SERIES=7.0; MONGO_APT="debian bullseye/mongodb-org/7.0 main" ;;   # 8.0 Debian 11 uchun yo'q
+  *) fail "Ubuntu 22.04/24.04 yoki Debian 11/12/13 kerak (topildi: ${PRETTY_NAME:-${ID:-?}})" ;;
+esac
+ok "${PRETTY_NAME:-$ID $VERSION_ID}, restoran: $PM2_NAME, domen: $DOMAIN, port: $PORT"
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -245,7 +250,7 @@ mongo_repo() {
   local keyring="/usr/share/keyrings/mongodb-server-${MONGO_SERIES}.gpg"
   [ -f "$keyring" ] && return 0
   curl -fsSL "https://www.mongodb.org/static/pgp/server-${MONGO_SERIES}.asc" | gpg --dearmor -o "$keyring"
-  echo "deb [ arch=amd64,arm64 signed-by=$keyring ] https://repo.mongodb.org/apt/ubuntu ${VERSION_CODENAME}/mongodb-org/${MONGO_SERIES} multiverse" \
+  echo "deb [ arch=amd64,arm64 signed-by=$keyring ] https://repo.mongodb.org/apt/$MONGO_APT" \
     > "/etc/apt/sources.list.d/mongodb-org-${MONGO_SERIES}.list"
   apt-get update -qq
 }
@@ -259,7 +264,11 @@ if [ "$LOCAL_MONGO" = 1 ] && [ "$MONGO_RUNNING" = 0 ]; then
   mongosh --quiet --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1 || fail "mongod ishga tushmadi: journalctl -u mongod"
   ok "mongod ishlayapti (faqat 127.0.0.1 da)"
 else
-  if ! command -v mongodump >/dev/null; then mongo_repo; apt-get install -y -qq mongodb-database-tools >/dev/null; fi
+  # Faqat backup asboblari — o'rnatilmasa ham o'rnatish davom etadi (backup ogohlantiradi)
+  if ! command -v mongodump >/dev/null; then
+    { mongo_repo && apt-get install -y -qq mongodb-database-tools >/dev/null; } \
+      || { warn "mongodb-database-tools o'rnatilmadi"; rm -f "/etc/apt/sources.list.d/mongodb-org-${MONGO_SERIES}.list"; }
+  fi
   if [ "$LOCAL_MONGO" = 1 ]; then ok "mavjud MongoDB ishlatiladi (o'zgartirilmadi), baza: ${MONGO_URI##*/}"
   else ok "tashqi baza ishlatiladi"; fi
   command -v mongodump >/dev/null && ok "backup uchun mongodump bor" || warn "mongodump o'rnatilmadi — backup ishlamaydi"
