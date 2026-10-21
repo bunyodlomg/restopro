@@ -6,5 +6,15 @@
 !macroend
 
 !macro customUnInstall
-  nsExec::Exec 'netsh advfirewall firewall delete rule name="RestoPro Kassa"'
+  ; Yangilanishda (eski versiya o'chirilganda) qoida qolsin — faqat haqiqiy o'chirishda olib tashlanadi
+  ${ifNot} ${isUpdated}
+    nsExec::Exec 'netsh advfirewall firewall delete rule name="RestoPro Kassa"'
+  ${endIf}
+!macroend
+
+; Har doim joriy foydalanuvchiga (%LOCALAPPDATA%\Programs) — yangilanishda Windows ruxsat so'ramaydi.
+; Firewall qoidasini (yuqorida) faqat administrator qo'sha oladi — bo'lmasa kassa ilovasi o'zi bir marta
+; ruxsat so'rab qo'shadi (main.js → ensureFirewall).
+!macro customInstallMode
+  StrCpy $isForceCurrentInstall "1"
 !macroend

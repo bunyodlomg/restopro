@@ -215,6 +215,7 @@ function cleanDeviceList(list) {
   const s = (v, max) => String(v ?? '').slice(0, max)
   return (Array.isArray(list) ? list : []).slice(0, 25).map(d => ({
     i: s(d?.i, 64), a: ['kassa', 'terminal', 'web'].includes(d?.a) ? d.a : 'web', u: s(d?.u, 40), r: s(d?.r, 20), d: s(d?.d, 40),
+    v: s(d?.v, 20), us: s(d?.us, 20), ue: s(d?.ue, 120),   // ilova versiyasi, yangilanish holati / xatosi
     s: isoOrNull(d?.s),
   })).filter(d => d.i)
 }
@@ -558,13 +559,14 @@ admin.post('/api/broadcast', (req, res) => {
   saveDb(); res.json({ ok: true, count: targets.length })
 })
 
-// Masofaviy buyruq: resync (kassa hamma ma'lumotni qaytadan oladi) yoki restart. node — kassa ID yoki 'cloud'.
+// Masofaviy buyruq: resync (kassa hamma ma'lumotni qaytadan oladi), restart, update (ilovalar yangilanishni
+// hozir tekshiradi). node — kassa ID, 'cloud' yoki '*' (restoranning hamma serverlari).
 admin.post('/api/customers/:id/command', (req, res) => {
   const c = findById(req.params.id)
   const type = String(req.body?.type || '')
   const node = str(req.body?.node, 40)
   if (!c || !node) return res.status(404).json({ message: 'Topilmadi' })
-  if (!['resync', 'restart'].includes(type)) return res.status(400).json({ message: 'Noma\'lum buyruq' })
+  if (!['resync', 'restart', 'update'].includes(type)) return res.status(400).json({ message: 'Noma\'lum buyruq' })
   const cmd = { id: crypto.randomBytes(5).toString('hex'), type, node, at: new Date().toISOString() }
   c.commands = [...(c.commands || []), cmd].slice(-20)
   logEvent(c, 'command', `${type} → ${node}`)

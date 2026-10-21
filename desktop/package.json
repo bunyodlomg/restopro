@@ -29,7 +29,8 @@
       "print.js",
       "setup.html",
       "assets/**",
-      "updater.js"
+      "updater.js",
+      "migrate.js"
     ],
     "extraResources": [
       {
@@ -52,7 +53,7 @@
     },
     "nsis": {
       "oneClick": false,
-      "perMachine": true,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "shortcutName": "RestoPro Kassa",

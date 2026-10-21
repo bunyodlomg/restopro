@@ -81,8 +81,12 @@
     <div class="pub" id="vendorJson"></div>
   </details>
   <div class="card" style="margin-top:12px;padding:14px 16px">
-    <b>Ilovalar yangilanishi</b>
+    <div class="row" style="justify-content:space-between">
+      <b>Ilovalar yangilanishi</b>
+      <button class="ghost" onclick="updateApps()">Hamma restoranlarda hozir tekshirish</button>
+    </div>
     <div class="muted" id="updInfo" style="margin-top:6px"></div>
+    <div class="muted" style="margin-top:6px">Ilovalar har 30 daqiqada o'zi tekshiradi. Har ekranning versiyasi mijoz oynasidagi «Ekranlar» ro'yxatida.</div>
   </div>
   <div class="card" style="margin-top:12px;padding:14px 16px">
     <div class="row" style="justify-content:space-between">
@@ -406,6 +410,26 @@ function screensOf(c) {
   for (const [i, b] of Object.entries(c.blockedDevices || {})) if (!all.has(i)) all.set(i, { i, a: '', u: b.label || '', d: '', s: b.at, where: '' })
   return [...all.values()].sort((a, b) => new Date(b.s) - new Date(a.s))
 }
+// Kassa / terminal ilovasi versiyasi: eskirgan bo'lsa sariq, yangilanish xatosi bo'lsa — sababi
+const latestOf = a => (a === 'kassa' ? info.updates?.kassa : a === 'terminal' ? info.updates?.terminal : null)?.version
+const vnum = v => String(v || '').split('.').map(n => parseInt(n, 10) || 0).reduce((x, n) => x * 100000 + n, 0)
+function verHtml(d) {
+  if (!d.v) return ''
+  const latest = latestOf(d.a)
+  const old = latest && vnum(d.v) < vnum(latest)
+  return ` · <span class="mono" style="${old ? 'color:var(--warn)' : ''}" title="${old ? 'Eski versiya — oxirgisi ' + esc(latest) : 'Oxirgi versiya'}">v${esc(d.v)}${old ? ' ⚠' : ''}</span>`
+    + (d.ue ? `<div style="color:var(--warn)">yangilanish xatosi: ${esc(d.ue)}</div>` : d.us === 'downloading' ? ' · yuklanmoqda' : d.us === 'ready' ? ' · yangilanish tayyor' : '')
+}
+// Restoran (yoki hamma restoranlar) ilovalari yangilanishni hozir tekshiradi
+async function updateApps(id) {
+  const ids = id ? [id] : list.map(c => c.id)
+  if (!id && !confirm(`${ids.length} ta restoranning kassa va terminal ilovalari yangilanishni hozir tekshiradi. Yangi versiya bo'lsa yuklab, «Yangilash» taklif qiladi.`)) return
+  let ok = 0
+  for (const x of ids) { try { await api('POST', `/customers/${x}/command`, { node: '*', type: 'update' }); ok++ } catch {} }
+  if (id) $('#dlg').close()
+  toast(`Buyruq yuborildi (${ok} ta restoran) — online ilovalar bir necha soniyada tekshiradi`); load()
+}
+
 function screensHtml(c) {
   const list = screensOf(c)
   if (!list.length) return '<span class="muted">Hali ma\'lumot yo\'q (restoran serveri yangilangach paydo bo\'ladi)</span>'
@@ -414,7 +438,7 @@ function screensHtml(c) {
     const label = screenLabel(d)
     return `<div class="row" style="justify-content:space-between;gap:8px;font-size:14px">
       <span>${esc(label)}${blocked ? ' <span class="tag t-suspended">bloklangan</span>' : ''}
-        <div class="muted" style="font-size:12.5px">${esc([d.d, d.where, ago(d.s), d.i.slice(0, 8).toUpperCase()].filter(Boolean).join(' · '))}</div></span>
+        <div class="muted" style="font-size:12.5px">${esc([d.d, d.where, ago(d.s), d.i.slice(0, 8).toUpperCase()].filter(Boolean).join(' · '))}${verHtml(d)}</div></span>
       ${blocked ? link('ochish', `deviceAct('${c.id}','${esc(d.i)}',false)`) : link('bloklash', `deviceAct('${c.id}','${esc(d.i)}',true)`, true)}
     </div>`
   }).join('')}</div>`
@@ -454,7 +478,7 @@ function devicesHtml(c) {
             </div></div>`
       }).join('')}
     </div>
-    <div class="label" style="margin:10px 0 6px">Ekranlar (oxirgi 30 kun)</div>
+    <div class="row" style="justify-content:space-between;margin:10px 0 6px"><span class="label">Ekranlar (oxirgi 30 kun)</span>${link('ilovalarni hozir yangilash', `updateApps('${c.id}')`)}</div>
     ${screensHtml(c)}
     <div class="label" style="margin:10px 0 6px">Hozir ulangan</div>
     <div class="dev">${screens || '<span class="muted">Hozir hech kim ulanmagan</span><span></span>'}</div>

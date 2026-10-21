@@ -36,3 +36,5 @@ ecosystem.config.local.js
 
 # test/pm jarayon fayllari
 *.pid
+!desktop/build/
+!terminal/build/

@@ -10,11 +10,11 @@ const APPS = ['kassa', 'terminal', 'web']
 const KEEP_DAYS = 30
 const seen = new Map()   // tez-tez yozmaslik: qurilma → oxirgi yozilgan vaqt
 
-async function touch(id, { app, user, role, ip, ua } = {}) {
+async function touch(id, { app, user, role, ip, ua, ver, upd, updErr } = {}) {
   id = String(id || '').slice(0, 64)
   if (!id) return
   const now = Date.now()
-  const key = `${id}|${user || ''}`
+  const key = `${id}|${user || ''}|${ver || ''}|${upd || ''}`
   if (now - (seen.get(key) || 0) < 60000) return
   seen.set(key, now)
   await coll().updateOne({ _id: id }, {
@@ -23,6 +23,7 @@ async function touch(id, { app, user, role, ip, ua } = {}) {
       ...(user ? { user: String(user).slice(0, 40), role: String(role || '').slice(0, 20) } : {}),
       ...(ip ? { ip: String(ip).slice(0, 45) } : {}),
       ...(ua ? { ua: shortUa(ua) } : {}),
+      ...(ver ? { ver: String(ver).slice(0, 20), upd: String(upd || '').slice(0, 20), updErr: String(updErr || '').slice(0, 120) } : {}),
     },
   }, { upsert: true })
 }
@@ -39,7 +40,7 @@ function shortUa(ua) {
 async function list(limit = 25) {
   const since = new Date(Date.now() - KEEP_DAYS * 86400000)
   const rows = await coll().find({ lastSeen: { $gt: since } }).sort({ lastSeen: -1 }).limit(limit).toArray()
-  return rows.map(d => ({ i: d._id, a: d.app, u: d.user || '', r: d.role || '', d: d.ua || '', s: d.lastSeen }))
+  return rows.map(d => ({ i: d._id, a: d.app, u: d.user || '', r: d.role || '', d: d.ua || '', s: d.lastSeen, v: d.ver || '', us: d.upd || '', ue: d.updErr || '' }))
 }
 
 module.exports = { touch, list }

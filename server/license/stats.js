@@ -75,6 +75,7 @@ function cleanHealth(h) {
 function cleanDeviceList(list) {
   return (Array.isArray(list) ? list : []).slice(0, 25).map(d => ({
     i: short(d?.i, 64), a: short(d?.a, 10), u: short(d?.u, 40), r: short(d?.r, 20), d: short(d?.d, 40),
+    v: short(d?.v, 20), us: short(d?.us, 20), ue: short(d?.ue, 120),
     s: d?.s && !isNaN(new Date(d.s)) ? new Date(d.s).toISOString() : null,
   })).filter(d => d.i)
 }

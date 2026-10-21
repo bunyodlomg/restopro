@@ -80,13 +80,14 @@ io.use(async (socket, next) => {
     socket.data.user = { _id: user._id, role: user.role }
     socket.data.sid  = payload.sid
     // Statistika uchun: qaysi ilova (kassa / terminal / brauzer) va qaysi qurilma
-    const { app: kind, device } = socket.handshake.auth || {}
+    const { app: kind, device, ver, upd, updErr } = socket.handshake.auth || {}
     socket.data.app    = ['kassa', 'terminal'].includes(kind) ? kind : 'web'
     socket.data.device = String(device || '').slice(0, 64) || socket.id
     // Sotuvchi shu qurilmani bloklagan
     if (license.deviceBlocked(socket.data.device)) return next(new Error('device_blocked'))
     require('./utils/devices').touch(device, {
       app: socket.data.app, user: user.name, role: user.role, ip: socket.handshake.address, ua: socket.handshake.headers['user-agent'],
+      ver, upd, updErr,   // kassa / terminal ilovasi versiyasi va yangilanish holati
     }).catch(() => {})
     socket.join(`user:${user._id}`)   // sessiya yopilsa — shu xona orqali chiqariladi
     next()
@@ -119,6 +120,7 @@ license.onChange(async s => {
   license.onCommand(async type => {
     if (type === 'resync') await syncClient.resync(io)
     if (type === 'restart') setTimeout(() => process.exit(0), 500)   // kassa ilovasi / pm2 qayta ochadi
+    if (type === 'update') io.emit('appUpdateCheck')                 // kassa / terminal ilovalari hozir tekshiradi
   })
 }
 

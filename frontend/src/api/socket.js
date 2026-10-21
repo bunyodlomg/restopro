@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client'
 import { API_URL } from '../config.js'
-import { appKind, deviceId } from '../utils/terminal.js'
+import { appKind, deviceId, appInfo } from '../utils/terminal.js'
 
 // Server socket ulanishida tokenni talab qiladi.
 // auth funksiya ko'rinishida — har qayta ulanishda yangi token olinadi.
@@ -8,7 +8,7 @@ import { appKind, deviceId } from '../utils/terminal.js'
 export function createSocket(opts = {}) {
   const s = io(API_URL, {
     ...opts,
-    auth: cb => cb({ token: localStorage.getItem('rp_token') || '', app: appKind() || 'web', device: deviceId() }),
+    auth: cb => cb({ token: localStorage.getItem('rp_token') || '', app: appKind() || 'web', device: deviceId(), ...appInfo() }),
   })
   // Sotuvchi shu qurilmani bloklagan — LicenseGate bloklash ekranini ko'rsatadi
   const blocked = () => window.dispatchEvent(new Event('rp-device-blocked'))

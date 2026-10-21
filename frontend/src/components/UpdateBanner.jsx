@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Download, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
+import { createSocket } from '../api/socket.js'
 
 // Kassa / ofitsant terminali ilovasida yangi versiya yuklab olinganda chiqadi.
 // Oddiy brauzerda (rpNative yo'q) hech narsa ko'rsatmaydi.
@@ -21,6 +22,15 @@ export default function UpdateBanner() {
   const [later, setLater] = useState(false)
   const [count, setCount] = useState(null)
   const terminal = !!window.rpNative?.terminal
+
+  // Sotuvchi «ilovalarni hozir yangilash» buyrug'ini berdi — 3 soniya ichida tasodifiy vaqtda tekshiramiz
+  // (hamma ekran bir paytda so'ramasin)
+  useEffect(() => {
+    if (!api || !user) return
+    const s = createSocket()
+    s.on('appUpdateCheck', () => setTimeout(() => api.check().catch(() => {}), Math.random() * 3000))
+    return () => s.disconnect()
+  }, [!!api, user?._id])
 
   // Ofitsant terminali: hech kim kirmagan (PIN ekrani) bo'lsa 30 soniyadan keyin o'zi yangilanadi
   useEffect(() => {

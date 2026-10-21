@@ -182,11 +182,12 @@ async function check() {
 // n — qaysi tugun uchun (kassa NODE_ID / 'cloud'); har buyruq bir marta bajariladi.
 //   resync  — kassa cloud'dagi hamma ma'lumotni qaytadan oladi (tafovut bo'lsa)
 //   restart — server qayta ishga tushadi (kassa ilovasi / pm2 o'zi qayta ochadi)
+//   update  — ulangan kassa va terminal ilovalari yangilanishni hozir tekshiradi (n: '*' — hamma tugun)
 const commandHandlers = []
 const onCommand = fn => commandHandlers.push(fn)
 async function runCommands(p) {
   const done = new Set(saved?.doneCmds || [])
-  const mine = (Array.isArray(p.cmd) ? p.cmd : []).filter(c => c && c.n === NODE && !done.has(c.i))
+  const mine = (Array.isArray(p.cmd) ? p.cmd : []).filter(c => c && (c.n === NODE || c.n === '*') && !done.has(c.i))
   if (!mine.length) return
   // Avval "bajarildi" deb yozamiz — restart buyrug'i aylanib qolmasin
   await persist({ doneCmds: [...done, ...mine.map(c => c.i)].slice(-50), lastCmd: mine[mine.length - 1].i })
@@ -375,10 +376,10 @@ const isRevoked = () => !!saved?.revoked
 const currentUpdateToken = () => (verifyUpdate(saved?.updateToken) ? saved.updateToken : null)
 
 // GET /api/license/update-token — kassa va ofitsant terminali ilovalari yangilanishni
-// litsenziya serveridan yuklashi uchun (faqat restoran ichidan: localhost / Wi-Fi)
+// litsenziya serveridan yuklashi uchun. Restoran tarmog'idan tashqarida ham (terminal cloud'ga
+// internet orqali ulangan bo'lishi mumkin): ruxsatnoma kalitsiz, faqat o'rnatuvchini yuklashga
+// yaraydi — o'rnatuvchi esa litsenziyasiz ishlamaydi. Muddati 30 kun.
 router.get('/update-token', async (req, res) => {
-  const { isOnPremise } = require('../utils/onPremise')
-  if (!(await isOnPremise(req))) return res.status(403).json({ message: 'Faqat restoran tarmog\'idan' })
   const token = ENABLED && currentUpdateToken()
   if (!token || !LICENSE_URL) return res.status(404).json({ message: 'Yangilanish sozlanmagan' })
   res.json({ url: `${LICENSE_URL}/updates`, token })

@@ -27,7 +27,8 @@
       "setup.html",
       "offline.html",
       "assets/**",
-      "updater.js"
+      "updater.js",
+      "migrate.js"
     ],
     "win": {
       "target": "nsis",
@@ -36,11 +37,12 @@
     },
     "nsis": {
       "oneClick": false,
-      "perMachine": true,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "shortcutName": "RestoPro Ofitsant",
-      "artifactName": "RestoPro-Ofitsant-Setup-${version}.${ext}"
+      "artifactName": "RestoPro-Ofitsant-Setup-${version}.${ext}",
+      "include": "build/installer.nsh"
     },
     "publish": [
       {

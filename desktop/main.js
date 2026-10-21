@@ -18,6 +18,9 @@ const crypto = require('crypto')
 const { spawn, execFile } = require('child_process')
 
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0) }
+// Eski "Program Files" nusxasidan ochilgan bo'lsa — yangi (foydalanuvchi papkasidagi) nusxani ochamiz
+const migrate = require('./migrate')
+if (migrate.redirectToNew()) process.exit(0)
 
 const IS_WIN = process.platform === 'win32'
 const EXE    = IS_WIN ? '.exe' : ''
@@ -161,6 +164,33 @@ async function stopServer() {
   if (!server) return
   const p = server
   await new Promise(r => { const t = setTimeout(() => { p.kill('SIGKILL'); r() }, 5000); p.once('exit', () => { clearTimeout(t); r() }); p.kill() })
+}
+
+// ── Windows Firewall: ofitsantlar telefonlari restoran Wi-Fi orqali kassaga ulanadi ──
+// Qoida port bo'yicha (dastur yo'liga bog'liq emas) — yangilanishlardan keyin ham amal qiladi.
+const FW_RULE = 'RestoPro Kassa'
+const firewallCmds = () => [
+  `netsh advfirewall firewall delete rule name="${FW_RULE}" >nul`,
+  `netsh advfirewall firewall add rule name="${FW_RULE}" dir=in action=allow protocol=TCP localport=${config.port}`,
+]
+const FW_ASKED = () => path.join(DATA, 'firewall-asked.txt')
+async function ensureFirewall() {
+  if (!IS_WIN || !app.isPackaged || !config.mode) return
+  const exists = await new Promise(r => execFile('netsh', ['advfirewall', 'firewall', 'show', 'rule', `name=${FW_RULE}`], { windowsHide: true }, err => r(!err)))
+  if (exists) return
+  try { if (Date.now() - (Number(fs.readFileSync(FW_ASKED(), 'utf8')) || 0) < 24 * 3600 * 1000) return } catch {}
+  fs.writeFileSync(FW_ASKED(), String(Date.now()))
+  const { response } = await dialog.showMessageBox(mainWin || undefined, {
+    type: 'info', buttons: ['Ruxsat berish', 'Keyinroq'], defaultId: 0, cancelId: 1, title: 'RestoPro Kassa',
+    message: 'Telefonlar kassaga ulanishi uchun',
+    detail: `Ofitsantlar telefonlari va terminallari Wi-Fi orqali kassaga ulanishi uchun Windows Firewall'da ${config.port}-portni ochish kerak. Windows bir marta ruxsat so'raydi.`,
+  })
+  if (response !== 0) return
+  const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'rp-fw-'))
+  const cmd = path.join(dir, 'firewall.cmd')
+  fs.writeFileSync(cmd, ['@echo off', ...firewallCmds(), ''].join('\r\n'))
+  execFile('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command',
+    `try { Start-Process -FilePath '${cmd.replace(/'/g, "''")}' -Verb RunAs -Wait -WindowStyle Hidden } catch {}`], { windowsHide: true }, () => {})
 }
 
 // ── Lokal backup (kuniga bir marta, oxirgi 14 ta) ──────────────
@@ -338,11 +368,15 @@ app.whenReady().then(async () => {
   }
   if (config.mode) createMainWindow(); else createSetupWindow()
   // Avtomatik yangilanish: o'rnatishdan oldin server va MongoDB toza to'xtatiladi
-  updater.setup({
-    feed: async () => (await fetch(`http://127.0.0.1:${config.port}/api/license/update-token`, { signal: AbortSignal.timeout(10000) })).json(),
-    onBeforeInstall: async () => { quitting = true; await stopServer(); await stopMongo(); cleanedUp = true },
-    onChange: () => refreshTrayMenu(),
-  })
+  const feed = async () => (await fetch(`http://127.0.0.1:${config.port}/api/license/update-token`, { signal: AbortSignal.timeout(10000) })).json()
+  const shutdown = async () => { quitting = true; await stopServer(); await stopMongo(); cleanedUp = true }
+  updater.setup({ feed, onBeforeInstall: shutdown, onChange: () => refreshTrayMenu() })
+  // Bir martalik: Program Files'dan foydalanuvchi papkasiga ko'chish (yangilanishlar ruxsatsiz bo'lishi uchun)
+  // va Firewall'da port (telefonlar kassaga ulanishi uchun) — foydalanuvchi papkasiga o'rnatuvchi buni qila olmaydi
+  setTimeout(async () => {
+    await migrate.offerMigration({ parent: mainWin || undefined, feed, channel: 'latest', extra: firewallCmds(), beforeQuit: shutdown })
+    await ensureFirewall()
+  }, 15000)
   setTimeout(runBackup, 60 * 1000)
   setInterval(runBackup, 24 * 3600 * 1000)
   setInterval(refreshTrayMenu, 60 * 1000)   // IP o'zgarsa

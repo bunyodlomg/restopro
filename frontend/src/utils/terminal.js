@@ -34,6 +34,16 @@ export const deviceId = () => {
   } catch { return '' }
 }
 
+// Ilova versiyasi va yangilanish holati — socket orqali serverga (sotuvchi panelida ko'rinadi)
+let appUpdate = null
+try {
+  const u = window.rpNative?.update
+  if (u) { u.get().then(s => { appUpdate = s }).catch(() => {}); u.onChange(s => { appUpdate = s }) }
+} catch {}
+export const appInfo = () => appUpdate
+  ? { ver: appUpdate.current || '', upd: appUpdate.status || '', updErr: appUpdate.status === 'error' ? String(appUpdate.error || '').slice(0, 120) : '' }
+  : {}
+
 // Buyurtma yuborilgach terminal tez bloklanadi (TerminalLock tinglaydi)
 export const LOCK_SOON_MS = 10000
 export const lockSoon = () => window.dispatchEvent(new Event('rp:lock-soon'))

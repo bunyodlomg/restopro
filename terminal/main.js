@@ -12,6 +12,9 @@ const path = require('path')
 const fs   = require('fs')
 
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0) }
+// Eski "Program Files" nusxasidan ochilgan bo'lsa — yangi (foydalanuvchi papkasidagi) nusxani ochamiz
+const migrate = require('./migrate')
+if (migrate.redirectToNew()) process.exit(0)
 
 const CONFIG_FILE = () => path.join(app.getPath('userData'), 'config.json')
 function loadConfig() {
@@ -146,12 +149,14 @@ app.on('will-quit', () => globalShortcut.unregisterAll())
 
 app.whenReady().then(() => {
   config = loadConfig()
+  // Windows bilan birga ochilish — har safar joriy nusxa yo'li bilan (ko'chishdan keyin eski yo'l qolmasin)
+  if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: config.autostart !== false })
   createTray()
   globalShortcut.register('CommandOrControl+Shift+Q', confirmQuit)
   if (config.url) createMainWindow()
   else createSetupWindow()
-  updater.setup({
-    channel: 'terminal',
-    feed: async () => config.url ? (await fetch(`${config.url}/api/license/update-token`, { signal: AbortSignal.timeout(10000) })).json() : null,
-    onBeforeInstall: async () => { quitting = true }, onChange: () => refreshTrayMenu() })
+  const feed = async () => config.url ? (await fetch(`${config.url}/api/license/update-token`, { signal: AbortSignal.timeout(10000) })).json() : null
+  updater.setup({ channel: 'terminal', feed, onBeforeInstall: async () => { quitting = true }, onChange: () => refreshTrayMenu() })
+  // Bir martalik: Program Files'dan foydalanuvchi papkasiga ko'chish — yangilanishlar ruxsatsiz bo'lishi uchun
+  setTimeout(() => migrate.offerMigration({ parent: mainWin || undefined, feed, channel: 'terminal', beforeQuit: async () => { quitting = true } }), 15000)
 })
