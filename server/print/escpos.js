@@ -5,8 +5,13 @@
 
 const ESC = 0x1b, GS = 0x1d
 
-// 58 mm qog'ozga 32 belgi, 80 mm ga 48 belgi sig'adi (A shrift)
-const colsFor = paperWidth => (Number(paperWidth) === 80 ? 48 : 32)
+// 58 mm qog'ozga 32 belgi, 80 mm ga 48 belgi sig'adi (A shrift); B shrift (kichik) — 42 / 64
+const colsFor = (paperWidth, small = false) => (Number(paperWidth) === 80 ? (small ? 64 : 48) : (small ? 42 : 32))
+
+// Sozlamalardagi "shrift o'lchami" (px) termal printerning 3 o'lchamidan biriga:
+// kichik — B shrift, o'rta — A shrift, katta — A shrift ikki baravar baland
+const FONT_SIZES = { small: 10, normal: 12, large: 16 }
+const fontOf = px => { px = Number(px) || 12; return px <= 10 ? 'small' : px <= 14 ? 'normal' : 'large' }
 
 // ── Matnni CP866 baytlarga ──────────────────────────────────────
 const CYR = 'АБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдежзийклмноп░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀рстуфхцчшщъыьэюяЁёЄєЇїЎў°∙·'
@@ -57,16 +62,30 @@ function pair(left, right, width) {
 const money = n => (Math.round(Number(n) || 0)).toLocaleString('ru-RU').replace(/\s/g, ' ')
 
 // ── Hujjat quruvchi ─────────────────────────────────────────────
+// Baytlar bilan birga har bir qator `lines` ga ham yoziladi — sozlamalardagi chek namunasi
+// aynan shu qatorlardan chiziladi, shuning uchun namuna va qog'oz doim bir xil.
 class Doc {
   // init, xitoycha (ikki baytli) rejimni o'chirish — Xprinter zavoddan shu rejimda keladi, CP866
-  constructor(paperWidth) { this.cols = colsFor(paperWidth); this.bytes = [ESC, 0x40, 0x1c, 0x2e, ESC, 0x74, 17] }
+  constructor(paperWidth, { font = 'normal' } = {}) {
+    this.font = font
+    this.cols = colsFor(paperWidth, font === 'small')
+    this.bytes = [ESC, 0x40, 0x1c, 0x2e, ESC, 0x74, 17, ESC, 0x4d, font === 'small' ? 1 : 0]
+    this.st = { a: 'left', b: false, inv: false, w: 1, h: 1 }
+    this.lines = []
+    this.size(1, 1)
+  }
   raw(...b) { this.bytes.push(...b); return this }
-  align(a) { return this.raw(ESC, 0x61, { left: 0, center: 1, right: 2 }[a] ?? 0) }
-  bold(on) { return this.raw(ESC, 0x45, on ? 1 : 0) }
-  invert(on) { return this.raw(GS, 0x42, on ? 1 : 0) }                 // oq harf, qora fon
-  size(w, h) { return this.raw(GS, 0x21, ((w - 1) << 4) | (h - 1)) }   // 1..2 marta katta
+  align(a) { this.st.a = a; return this.raw(ESC, 0x61, { left: 0, center: 1, right: 2 }[a] ?? 0) }
+  bold(on) { this.st.b = !!on; return this.raw(ESC, 0x45, on ? 1 : 0) }
+  invert(on) { this.st.inv = !!on; return this.raw(GS, 0x42, on ? 1 : 0) }    // oq harf, qora fon
+  // 1..2 marta katta; "katta" shriftda har qanday matn kamida ikki baravar baland
+  size(w, h) {
+    if (this.font === 'large') h = Math.max(h, 2)
+    this.st.w = w; this.st.h = h
+    return this.raw(GS, 0x21, ((w - 1) << 4) | (h - 1))
+  }
   text(s) { this.bytes.push(...encode(s)); return this }
-  line(s = '') { return this.text(s).raw(0x0a) }
+  line(s = '') { this.lines.push({ t: String(s), ...this.st }); return this.text(s).raw(0x0a) }
   // Katta shriftda bir qatorga yarim belgi sig'adi
   big(s, { center = true } = {}) {
     this.align(center ? 'center' : 'left').size(2, 2).bold(true)
@@ -109,9 +128,10 @@ class Doc {
     const merged = widths.slice(from, to).reduce((s, w) => s + w, 0) + 3 * (to - from - 1)
     return [...widths.slice(0, from), merged, ...widths.slice(to)]
   }
-  feed(n = 1) { return this.raw(ESC, 0x64, n) }
+  feed(n = 1) { for (let i = 0; i < n; i++) this.lines.push({ t: '', ...this.st, h: 1 }); return this.raw(ESC, 0x64, n) }
   cut() { return this.raw(GS, 0x56, 0x42, 2) }   // kesgichgacha surib, qisman kesish (ortiqcha bo'sh qog'ozsiz)
   build() { return Buffer.from(this.bytes) }
+  preview() { return { cols: this.cols, font: this.font, lines: this.lines } }
 }
 
 const two = n => String(n).padStart(2, '0')
@@ -123,18 +143,19 @@ const place = (o, s) => (o.category === 'soboy' ? `Soboy #${o.tableNumber ?? ''}
 // "Kabob | Tovuq" — taom va uning turi
 const splitName = n => { const [base, ...v] = String(n || '').split(' | '); return { base, variant: v.join(', ') } }
 
-// Mijoz cheki (to'lov uchun)
-function receipt(order, settings = {}, paperWidth) {
+// Mijoz cheki (to'lov uchun); shrift o'lchami — sozlamalardagi receipt.fontSize
+function receiptDoc(order, settings = {}, paperWidth) {
   const r = settings.receipt || {}
-  const d = new Doc(paperWidth)
+  const d = new Doc(paperWidth, { font: fontOf(r.fontSize) })
   const wide = d.cols >= 42
   if (r.showLogo !== false) d.big(settings.brandName || 'RestoPro')
   if (r.headerText) d.center(r.headerText)
   d.feed(1).banner(place(order, settings))
 
-  // Hammasi bitta jadvalda: Taom | Soni | Summa (80 mm: 24+4+10, 58 mm: 10+3+9 belgi),
+  // Hammasi bitta jadvalda: Taom | Soni | Summa (80 mm A shrift: 24+4+10, 58 mm: 10+3+9 belgi),
   // har bir taom o'z katagida; ofitsant/vaqt — tepadagi birlashtirilgan katakda, ustunlar oxirigacha
-  const W = wide ? [24, 4, 10] : [10, 3, 9]
+  const qtyW = wide ? 4 : 3, sumW = wide ? 10 : 9
+  const W = [d.cols - 10 - qtyW - sumW, qtyW, sumW]
   const R = ['l', 'r', 'r']
   const ALL = Doc.span(W, 0, 3)
   const waiter = r.showWaiter !== false && order.waiterName ? `Ofitsant: ${order.waiterName}` : ''
@@ -156,8 +177,10 @@ function receipt(order, settings = {}, paperWidth) {
   if (fee) d.row(W, ['Taomlar', '', money(subtotal)], R).border(W).row(W, ['Xizmat haqi', '', money(fee)], R).border(W)
   d.size(1, 2).bold(true).row(W, ["JAMI, so'm", '', money(subtotal + fee)], R).size(1, 1).bold(false).border(W)
   if (r.footerText) d.feed(1).center(r.footerText)
-  return d.feed(1).cut().build()
+  return d.feed(1)
 }
+const receipt = (order, settings, paperWidth) => receiptDoc(order, settings, paperWidth).cut().build()
+const receiptPreview = (order, settings, paperWidth) => receiptDoc(order, settings, paperWidth).preview()
 
 // Oshxona / shashlikchi taloni: faqat shu printerga tegishli taomlar, narxsiz
 function ticket(order, items, { station, added, settings } = {}, paperWidth) {
@@ -190,4 +213,4 @@ function test(printer = {}, settings = {}) {
   return d.feed(1).cut().build()
 }
 
-module.exports = { receipt, ticket, test, colsFor, encode, wrap, pair }
+module.exports = { receipt, receiptPreview, ticket, test, colsFor, fontOf, FONT_SIZES, encode, wrap, pair }

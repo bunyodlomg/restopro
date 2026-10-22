@@ -41,3 +41,6 @@ ecosystem.config.local.js
 
 # deploy/update.sh: restoranlarga oxirgi o'rnatilgan commit
 .deployed-commit
+
+# Claude Code — shaxsiy sozlamalar
+.claude/settings.local.json

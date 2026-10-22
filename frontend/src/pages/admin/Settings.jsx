@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import {
   Building2, Paintbrush, Volume2, Percent, Receipt, Upload, Trash2, Play, RotateCcw,
-  Sun, Moon, Check, Minus, Plus, MousePointerClick, Navigation, CircleCheck, PartyPopper,
+  Sun, Moon, Check, MousePointerClick, Navigation, CircleCheck, PartyPopper,
   TriangleAlert, BellRing, QrCode, Wifi, X, Printer,
 } from 'lucide-react'
 import PrintersTab from './PrintersTab.jsx'
@@ -13,7 +13,7 @@ import API from '../../api/api.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { useTheme } from '../../context/ThemeContext.jsx'
 import { ACCENTS, getAccentId, applyAccent } from '../../brand.js'
-import { buildReceiptHTML } from '../../utils/receipt.js'
+import ReceiptPreview from './ReceiptPreview.jsx'
 import { isSoundEnabled, setSoundEnabled, previewSound } from '../../utils/sound.js'
 import { PageHead, Field, Switch, Seg, fileUrl } from '../../components/ui.jsx'
 
@@ -51,6 +51,9 @@ const SAMPLE_ORDER = {
   ],
   extras: [], serviceFee: 9900,
 }
+
+// Saqlangan px qiymatini 3 o'lchamdan biriga (eski 8..20 px qiymatlar ham)
+const fontStep = px => { px = Number(px) || 12; return px <= 10 ? 10 : px <= 14 ? 12 : 16 }
 
 const isImg = s => !!s && (s.startsWith('/') || s.startsWith('http') || s.startsWith('blob:'))
 
@@ -350,18 +353,17 @@ export default function SettingsPage() {
               </div>
               <div>
                 <div className="label" style={{ marginBottom: 8 }}>Shrift o'lchami</div>
-                <div className="row" style={{ gap: 8 }}>
-                  <button className="btn btn-soft btn-icon" onClick={() => setR('fontSize', Math.max(8, r.fontSize - 1))}><Minus size={18}/></button>
-                  <span className="mono" style={{ minWidth: 54, textAlign: 'center', fontSize: 17 }}>{r.fontSize} px</span>
-                  <button className="btn btn-soft btn-icon" onClick={() => setR('fontSize', Math.min(20, r.fontSize + 1))}><Plus size={18}/></button>
-                </div>
+                {/* Termal printerda 3 o'lcham bor (server/print/escpos.js → fontOf) */}
+                <Seg value={fontStep(r.fontSize)} onChange={v => setR('fontSize', v)} items={[{ k: 10, l: 'Kichik' }, { k: 12, l: "O'rta" }, { k: 16, l: 'Katta' }]}/>
               </div>
             </div>
+            <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>
+              Namuna printer chiqaradigan chekning o'zi. Qog'oz eni bu yerda faqat namuna uchun — printer o'z enida
+              chiqaradi (Sozlamalar → Printerlar).
+            </p>
           </div>
           <div className="card card-pad" style={{ background: 'var(--thumb)', display: 'flex', justifyContent: 'center' }}>
-            <iframe title="Chek namunasi"
-              srcDoc={buildReceiptHTML(SAMPLE_ORDER, { brandName: name, brandLogo: logoFile ? '' : form.brandLogo, receipt: r })}
-              style={{ width: r.paperWidth === 80 ? 302 : 224, height: 440, border: 0, borderRadius: 6, background: '#fff', boxShadow: 'var(--shadow-2)' }}/>
+            <ReceiptPreview order={SAMPLE_ORDER} brandName={name} receipt={r}/>
           </div>
         </div>
       )}

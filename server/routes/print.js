@@ -5,7 +5,9 @@ const Order    = require('../models/Order')
 const PrintJob = require('../models/PrintJob')
 const auth     = require('../middleware/auth')
 const { adminOnly } = require('../middleware/auth')
+const Settings = require('../models/Settings')
 const print    = require('../print')
+const escpos   = require('../print/escpos')
 
 const view = j => ({ _id: j._id, kind: j.kind, title: j.title, printer: j.printer?.name || '', status: j.status, error: j.error, createdAt: j.createdAt, printedAt: j.printedAt })
 
@@ -21,6 +23,17 @@ router.post('/receipt/:orderId', auth, async (req, res) => {
     const jobs = await print.queueReceipt(order)
     if (!jobs.length) return res.status(409).json({ code: 'NO_PRINTER', message: 'Chek printeri sozlanmagan: Sozlamalar → Printerlar' })
     res.json({ agent: print.AGENT, jobs: jobs.map(view) })
+  } catch (err) { res.status(500).json({ message: err.message }) }
+})
+
+// POST /api/print/preview — chek namunasi (sozlamalar sahifasi): printer chiqaradigan qatorlarning o'zi.
+// body: { order, paperWidth, brandName?, receipt? } — hali saqlanmagan sozlamalar ham ko'rinadi
+router.post('/preview', auth, adminOnly, async (req, res) => {
+  try {
+    const saved = (await Settings.findById('main').lean()) || {}
+    const { order = {}, paperWidth, brandName, receipt } = req.body || {}
+    const settings = { ...saved, ...(brandName !== undefined && { brandName }), receipt: { ...saved.receipt, ...receipt } }
+    res.json(escpos.receiptPreview(order, settings, paperWidth))
   } catch (err) { res.status(500).json({ message: err.message }) }
 })
 
