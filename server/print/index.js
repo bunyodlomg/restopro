@@ -1,7 +1,7 @@
 // ── Chop etish xizmati ──────────────────────────────────────────
 // Vazifa yaratish istalgan tugunda (cloud yoki kassa) ishlaydi.
 // Printerga yuborish (agent) faqat restoran tarmog'idagi tugunda ishlaydi:
-// kassa (NODE_ID=kassa) yoki PRINT_AGENT=1 qo'yilgan lokal server.
+// kassa (NODE_ID=kassa…) yoki PRINT_AGENT=1 qo'yilgan lokal server.
 // Cloud VPS restoran ichidagi 192.168.x.x printerlarga yeta olmaydi.
 
 const PrintJob  = require('../models/PrintJob')
@@ -9,7 +9,7 @@ const Settings  = require('../models/Settings')
 const escpos    = require('./escpos')
 const transport = require('./transport')
 
-const AGENT    = process.env.NODE_ID === 'kassa' || process.env.PRINT_AGENT === '1'
+const AGENT    = /^kassa/.test(process.env.NODE_ID || '') || process.env.PRINT_AGENT === '1'   // kassa ilovasi: NODE_ID=kassa-xxxxxxxx
 const EXPIRE_MS = 30 * 60000     // 30 daqiqadan eski talon chiqarilmaydi (kech qolgan oshxona taloni foydasiz)
 const KEEP_DAYS = 7
 const MAX_TRIES = 3
