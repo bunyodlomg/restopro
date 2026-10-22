@@ -93,19 +93,21 @@ class Doc {
   // ── Jadval: widths — ustunlarning ichki kengligi (har tomonida 1 bo'shliq + chegara) ──
   border(widths) { return this.line('+' + widths.map(w => '-'.repeat(w + 2)).join('+') + '+') }
   // cells: matn yoki matnlar massivi (har biri yangi qatordan); align: 'l' | 'r'
-  // leader: 1-ustundagi nomdan keyingi bo'sh joy shu belgi bilan to'ldiriladi ("Osh ------- |   4"),
-  // raqamlar turgan birinchi qatorda — qaysi son qaysi taomniki ekani ko'rinib turadi
-  row(widths, cells, align = [], leader = '') {
-    const cols = cells.map((c, k) => [].concat(c).flatMap(s => wrap(s, widths[k])))
+  row(widths, cells, align = []) {
+    const cols = cells.map((c, k) => [].concat(c).flatMap(s => (len(s) <= widths[k] ? [s] : wrap(s, widths[k]))))   // sig'gan qator o'z bo'shliqlari bilan qoladi
     const h = Math.max(...cols.map(c => c.length))
     for (let n = 0; n < h; n++) {
       this.line('|' + cols.map((c, k) => {
-        const s = c[n] || '', room = Math.max(0, widths[k] - len(s))
-        const pad = k === 0 && n === 0 && leader && s && room >= 2 ? ' ' + leader.repeat(room - 1) : ' '.repeat(room)
+        const s = c[n] || '', pad = ' '.repeat(Math.max(0, widths[k] - len(s)))
         return ' ' + (align[k] === 'r' ? pad + s : s + pad) + ' '
       }).join('|') + '|')
     }
     return this
+  }
+  // Bir nechta ustunni bitta katakka birlashtirish: span([24, 4, 10], 0, 2) → [31, 10]
+  static span(widths, from, to) {
+    const merged = widths.slice(from, to).reduce((s, w) => s + w, 0) + 3 * (to - from - 1)
+    return [...widths.slice(0, from), merged, ...widths.slice(to)]
   }
   feed(n = 1) { return this.raw(ESC, 0x64, n) }
   cut() { return this.raw(GS, 0x56, 0x42, 2) }   // kesgichgacha surib, qisman kesish (ortiqcha bo'sh qog'ozsiz)
@@ -129,29 +131,30 @@ function receipt(order, settings = {}, paperWidth) {
   if (r.showLogo !== false) d.big(settings.brandName || 'RestoPro')
   if (r.headerText) d.center(r.headerText)
   d.feed(1).banner(place(order, settings))
-  const waiter = r.showWaiter !== false && order.waiterName ? `Ofitsant: ${order.waiterName}` : ''
-  if (waiter || r.showDateTime !== false) d.pair(waiter, r.showDateTime !== false ? when() : '')
 
-  // Jadval: Taom | Soni | Summa (80 mm: 24+4+10, 58 mm: 10+3+9 belgi)
+  // Hammasi bitta jadvalda: Taom | Soni | Summa (80 mm: 24+4+10, 58 mm: 10+3+9 belgi),
+  // har bir taom o'z katagida; ofitsant/vaqt — tepadagi birlashtirilgan katakda, ustunlar oxirigacha
   const W = wide ? [24, 4, 10] : [10, 3, 9]
   const R = ['l', 'r', 'r']
+  const ALL = Doc.span(W, 0, 3)
+  const waiter = r.showWaiter !== false && order.waiterName ? `Ofitsant: ${order.waiterName}` : ''
+  const dt = r.showDateTime !== false ? when() : ''
+  if (waiter || dt) {
+    // Bir qatorga sig'sa: chapda ofitsant, o'ngda vaqt; sig'masa — ikki qator
+    const info = len(waiter) + 1 + len(dt) <= ALL[0] ? pair(waiter, dt, ALL[0]) : [waiter, dt].filter(Boolean)
+    d.border(ALL).row(ALL, [info])
+  }
   d.border(W).bold(true).row(W, ['Taom', wide ? 'Soni' : 'Son', 'Summa'], R).bold(false).border(W)
   for (const i of order.items || []) {
     const { base, variant } = splitName(i.name)
-    d.row(W, [variant ? `${base} (${variant})` : base, String(i.quantity), money(i.price * i.quantity)], R, '-')
+    d.row(W, [variant ? `${base} (${variant})` : base, String(i.quantity), money(i.price * i.quantity)], R).border(W)
   }
-  for (const e of order.extras || []) d.row(W, [`+ ${e.comment || "Qo'shimcha"}`, '', money(e.extraFee)], R, '-')
-  d.border(W)
+  for (const e of order.extras || []) d.row(W, [`+ ${e.comment || "Qo'shimcha"}`, '', money(e.extraFee)], R).border(W)
 
   const subtotal = (order.items || []).reduce((s, i) => s + i.price * i.quantity, 0) + (order.extras || []).reduce((s, e) => s + (e.extraFee || 0), 0)
   const fee = order.serviceFee > 0 && order.category !== 'soboy' ? order.serviceFee : 0
-  if (fee) d.row(W, ['Taomlar', '', money(subtotal)], R, '-').row(W, ['Xizmat haqi', '', money(fee)], R, '-').border(W)
-  const total = money(subtotal + fee)
-  // Jami: 80 mm da ikki baravar katta; 58 mm ga sig'masa — faqat baland
-  if (len(`JAMI ${total} so'm`) + 1 <= Math.floor(d.cols / 2)) {
-    d.size(2, 2).bold(true); for (const s of pair('JAMI', `${total} so'm`, Math.floor(d.cols / 2))) d.line(s)
-  } else d.size(1, 2).bold(true).pair('JAMI', `${total} so'm`)
-  d.size(1, 1).bold(false).rule()
+  if (fee) d.row(W, ['Taomlar', '', money(subtotal)], R).border(W).row(W, ['Xizmat haqi', '', money(fee)], R).border(W)
+  d.size(1, 2).bold(true).row(W, ["JAMI, so'm", '', money(subtotal + fee)], R).size(1, 1).bold(false).border(W)
   if (r.footerText) d.feed(1).center(r.footerText)
   return d.feed(1).cut().build()
 }
