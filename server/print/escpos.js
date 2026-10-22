@@ -93,12 +93,15 @@ class Doc {
   // ── Jadval: widths — ustunlarning ichki kengligi (har tomonida 1 bo'shliq + chegara) ──
   border(widths) { return this.line('+' + widths.map(w => '-'.repeat(w + 2)).join('+') + '+') }
   // cells: matn yoki matnlar massivi (har biri yangi qatordan); align: 'l' | 'r'
-  row(widths, cells, align = []) {
+  // leader: 1-ustundagi nomdan keyingi bo'sh joy shu belgi bilan to'ldiriladi ("Osh ------- |   4"),
+  // raqamlar turgan birinchi qatorda — qaysi son qaysi taomniki ekani ko'rinib turadi
+  row(widths, cells, align = [], leader = '') {
     const cols = cells.map((c, k) => [].concat(c).flatMap(s => wrap(s, widths[k])))
     const h = Math.max(...cols.map(c => c.length))
     for (let n = 0; n < h; n++) {
       this.line('|' + cols.map((c, k) => {
-        const s = c[n] || '', pad = ' '.repeat(Math.max(0, widths[k] - len(s)))
+        const s = c[n] || '', room = Math.max(0, widths[k] - len(s))
+        const pad = k === 0 && n === 0 && leader && s && room >= 2 ? ' ' + leader.repeat(room - 1) : ' '.repeat(room)
         return ' ' + (align[k] === 'r' ? pad + s : s + pad) + ' '
       }).join('|') + '|')
     }
@@ -135,14 +138,14 @@ function receipt(order, settings = {}, paperWidth) {
   d.border(W).bold(true).row(W, ['Taom', wide ? 'Soni' : 'Son', 'Summa'], R).bold(false).border(W)
   for (const i of order.items || []) {
     const { base, variant } = splitName(i.name)
-    d.row(W, [variant ? `${base} (${variant})` : base, String(i.quantity), money(i.price * i.quantity)], R)
+    d.row(W, [variant ? `${base} (${variant})` : base, String(i.quantity), money(i.price * i.quantity)], R, '-')
   }
-  for (const e of order.extras || []) d.row(W, [`+ ${e.comment || "Qo'shimcha"}`, '', money(e.extraFee)], R)
+  for (const e of order.extras || []) d.row(W, [`+ ${e.comment || "Qo'shimcha"}`, '', money(e.extraFee)], R, '-')
   d.border(W)
 
   const subtotal = (order.items || []).reduce((s, i) => s + i.price * i.quantity, 0) + (order.extras || []).reduce((s, e) => s + (e.extraFee || 0), 0)
   const fee = order.serviceFee > 0 && order.category !== 'soboy' ? order.serviceFee : 0
-  if (fee) d.row(W, ['Taomlar', '', money(subtotal)], R).row(W, ['Xizmat haqi', '', money(fee)], R).border(W)
+  if (fee) d.row(W, ['Taomlar', '', money(subtotal)], R, '-').row(W, ['Xizmat haqi', '', money(fee)], R, '-').border(W)
   const total = money(subtotal + fee)
   // Jami: 80 mm da ikki baravar katta; 58 mm ga sig'masa — faqat baland
   if (len(`JAMI ${total} so'm`) + 1 <= Math.floor(d.cols / 2)) {
