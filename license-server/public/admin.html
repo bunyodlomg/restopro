@@ -278,7 +278,8 @@ function openEdit(id) {
 const b64u = s => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 function connectHtml(c) {
   if (!c.syncKey) return "<span class=\"muted\">Sync kaliti yo'q — litsenziya serverini yangilang.</span>"
-  const url = c.sync?.url || (c.domain ? 'https://' + c.domain : '')
+  // Paneldagi «Cloud domeni» asosiy: sync.url cloud bir marta yuborgan eski manzil bo'lishi mumkin (domen ko'chganda)
+  const url = c.domain ? 'https://' + c.domain : (c.sync?.url || '')
   const code = url && 'RP1.' + b64u(JSON.stringify({ u: url, k: c.syncKey }))
   const install = `sudo ./deploy/install.sh --license-key ${c.key}`
   const reinstallOpen = c.reinstallUntil && new Date(c.reinstallUntil) > Date.now()
