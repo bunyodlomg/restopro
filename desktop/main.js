@@ -127,6 +127,21 @@ async function stopMongo() {
 }
 
 // ── RestoPro server ────────────────────────────────────────────
+// Har restoran (cloud manzili) — kassada alohida baza. Kassa boshqa restoranga ulansa yangi, toza baza
+// ochiladi: avvalgi restoran ma'lumotlari yangisiga sync bo'lib ketmaydi (aralashmaydi), qaytib ulansa
+// o'zinikiga qaytadi. Avvalgi yagona baza ("restopro") birinchi marta ishlatilayotgan restoranniki bo'ladi.
+const hostOf = u => { try { return new URL(u).host.toLowerCase() } catch { return '' } }
+function dbName() {
+  const key = config.mode === 'sync' ? hostOf(config.syncUrl) || 'sync' : 'local'
+  config.dbs = config.dbs || {}
+  if (!config.dbs[key]) {
+    const used = new Set(Object.values(config.dbs))
+    config.dbs[key] = used.has('restopro') ? 'restopro_' + key.replace(/[^a-z0-9]+/g, '_').slice(0, 40) : 'restopro'
+    saveConfig(config)
+  }
+  return config.dbs[key]
+}
+
 let server = null
 let quitting = false
 async function startServer() {
@@ -134,7 +149,7 @@ async function startServer() {
     ...process.env,
     ELECTRON_RUN_AS_NODE: '1',          // Electron'ning o'zi Node sifatida
     NODE_ENV: 'production',
-    MONGO_URI: `mongodb://127.0.0.1:${MONGO_PORT}/restopro`,
+    MONGO_URI: `mongodb://127.0.0.1:${MONGO_PORT}/${dbName()}`,
     JWT_SECRET: config.jwtSecret,
     PORT: String(config.port),
     UPLOAD_DIR,
@@ -199,8 +214,9 @@ function runBackup() {
   const dump = path.join(MONGO_BIN, 'mongodump' + EXE)
   if (!fs.existsSync(dump)) return
   const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19)
-  const file = path.join(BACKUP_DIR, `restopro-${stamp}.archive.gz`)
-  execFile(dump, [`--uri=mongodb://127.0.0.1:${MONGO_PORT}/restopro`, `--archive=${file}`, '--gzip', '--quiet'], { windowsHide: true }, err => {
+  const db = dbName()
+  const file = path.join(BACKUP_DIR, `restopro-${stamp}${db === 'restopro' ? '' : '-' + db}.archive.gz`)
+  execFile(dump, [`--uri=mongodb://127.0.0.1:${MONGO_PORT}/${db}`, `--archive=${file}`, '--gzip', '--quiet'], { windowsHide: true }, err => {
     if (err) { log('backup.log').end(`[${stamp}] xato: ${err.message}\n`); return }
     const all = fs.readdirSync(BACKUP_DIR).filter(f => f.startsWith('restopro-')).sort()
     for (const f of all.slice(0, Math.max(0, all.length - BACKUP_KEEP))) fs.rmSync(path.join(BACKUP_DIR, f), { force: true })
@@ -292,6 +308,7 @@ ipcMain.handle('rp:print', (_e, html, opts) => require('./print').printHtml(html
 ipcMain.handle('kassa:get', () => ({
   mode: config.mode || null,
   syncUrl: config.syncUrl || '',
+  knownHosts: Object.keys(config.dbs || {}),   // shu kassada bazasi bor restoranlar (boshqasiga o'tishda ogohlantirish)
   hasKey: !!config.syncKey,
   hasLicense: !!config.licenseKey,
   licenseRequired: licenseRequired(),

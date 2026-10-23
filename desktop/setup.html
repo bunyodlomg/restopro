@@ -131,6 +131,15 @@
       if (!$('key').value && !state.hasKey) return show('err', 'Sync kalitini kiriting')
       const t = await window.kassa.test({ syncUrl: $('url').value, syncKey: $('key').value })
       if (!t.ok) return show('err', t.message)
+      // Boshqa restoranga o'tish: har restoranning bazasi alohida — ma'lumotlar aralashmaydi
+      const host = u => { try { return new URL(/^https?:\/\//i.test(u.trim()) ? u.trim() : 'https://' + u.trim()).host.toLowerCase() } catch { return '' } }
+      const from = state.mode === 'sync' ? host(state.syncUrl) : '', to = host($('url').value)
+      if (from && to && from !== to && !confirm(
+        `Kassa boshqa restoranga ulanmoqda:\n${from}  →  ${to}\n\n` +
+        ((state.knownHosts || []).includes(to)
+          ? `Bu kassada ${to} ning bazasi bor — o'shanga qaytadi.`
+          : `${to} uchun yangi, alohida baza ochiladi: menyu, xodimlar va sozlamalar serverdan yuklanadi.`) +
+        `\n${from} ma'lumotlari saqlanib qoladi va unga aralashmaydi.\n\nDavom etilsinmi?`)) return
     } else if (state.licenseRequired && !$('lic').value.trim() && !state.hasLicense) {
       return show('err', 'Litsenziya kalitini kiriting')
     }
