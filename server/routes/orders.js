@@ -11,6 +11,14 @@ const { adminOnly } = require('../middleware/auth')
 const print      = require('../print')
 const stock      = require('../utils/stock')
 const { isValidObjectId } = require('mongoose')
+const Customer   = require('../models/Customer')
+const DebtTx     = require('../models/DebtTx')
+const Ingredient = require('../models/Ingredient')
+const debts      = require('../utils/debts')
+
+// Buyurtmaning to'liq summasi: taomlar + qo'shimchalar + xizmat haqi
+const orderGrandTotal = o => (o.items || []).reduce((s, i) => s + i.price * i.quantity, 0)
+  + (o.extras || []).reduce((s, e) => s + (e.extraFee || 0), 0) + (o.serviceFee || 0)
 
 // O'zgartirish mumkin bo'lgan (hali yopilmagan) buyurtma holatlari
 const OPEN_STATUSES = ['pending', 'ready']
@@ -82,6 +90,12 @@ router.get('/stats', auth, adminOnly, async (req, res) => {
       ]),
     ])
     const moveCost = t => moves.find(m => m._id === t)?.cost || 0
+    // Qarzlar: davrda qarzga berilgan / qaytarilgan va hozirgi umumiy qarz
+    const [debtTx, debtNow] = await Promise.all([
+      DebtTx.aggregate([{ $match: { createdAt: { $gte: start, $lte: end } } }, { $group: { _id: '$type', sum: { $sum: '$amount' } } }]),
+      Customer.aggregate([{ $match: { balance: { $gt: 0 } } }, { $group: { _id: null, sum: { $sum: '$balance' }, n: { $sum: 1 } } }]),
+    ])
+    const debtSum = t => debtTx.find(x => x._id === t)?.sum || 0
 
     // Davrdagi har bir kun uchun yacheyka — bo'sh kunlar ham 0 bilan to'ladi
     const dailyMap = {}
@@ -181,6 +195,9 @@ router.get('/stats', auth, adminOnly, async (req, res) => {
       purchaseExpense,
       foodCost:  moveCost('out'),     // sotilgan taomlar tannarxi (retsept × ombor narxi)
       wasteCost: moveCost('waste'),   // hisobdan chiqarilgan mahsulot qiymati
+      debtGiven: debtSum('debt'),     // davrda qarzga yozilgan
+      debtPaid:  debtSum('payment'),  // davrda qarzdan to'langan
+      debtTotal: debtNow[0]?.sum || 0, debtCustomers: debtNow[0]?.n || 0,
       recentExpenses,
       products,
       orderCount: orders.length,
@@ -395,15 +412,35 @@ router.post('/:id/move', auth, async (req, res) => {
 })
 
 // ─── PUT /api/orders/:id/close ──────────────────────────────────
+// body.debt (ixtiyoriy) — qarzga yopish: { customerId } yoki { name, phone } (yangi mijoz), amount (bo'lmasa — hammasi)
 router.put('/:id/close', auth, adminOnly, async (req, res) => {
   try {
+    // Qarzga yopish — avval tekshiriladi (xato bo'lsa buyurtma ochiq qoladi)
+    let debtCustomer = null
+    const d = req.body?.debt
+    if (d) {
+      const open = await Order.findOne({ _id: req.params.id, status: { $in: OPEN_STATUSES } })
+      if (!open) return notOpen(req, res)
+      if (isValidObjectId(d.customerId)) debtCustomer = await Customer.findById(d.customerId)
+      else if (String(d.name || '').trim()) {
+        const phone = String(d.phone || '').trim().slice(0, 30)
+        debtCustomer = (phone && await Customer.findOne({ phone })) || await Customer.create({ name: String(d.name).trim().slice(0, 80), phone })
+      }
+      if (!debtCustomer) return res.status(400).json({ message: 'Qarzdor mijozni tanlang yoki ismini yozing' })
+      const total = orderGrandTotal(open)
+      const amount = d.amount === undefined || d.amount === '' ? total : debts.money(d.amount)
+      if (!(amount > 0) || amount > total) return res.status(400).json({ message: `Qarz summasi 1 dan ${total.toLocaleString('ru-RU')} so'mgacha bo'lishi kerak` })
+      d.amount = amount
+    }
+
     // Atomar: faqat ochiq buyurtma yopiladi — qayta yopishda ombor ikki marta ayirilmaydi
     const order = await Order.findOneAndUpdate(
       { _id: req.params.id, status: { $in: OPEN_STATUSES } },
-      { status: 'closed', closedAt: new Date() },
+      { status: 'closed', closedAt: new Date(), ...(debtCustomer ? { debt: { customerId: debtCustomer._id, customerName: debtCustomer.name, amount: d.amount } } : {}) },
       { new: true }
     )
     if (!order) return notOpen(req, res)
+    if (debtCustomer) await debts.record(debtCustomer._id, 'debt', d.amount, { orderId: order._id, note: `${order.category === 'soboy' ? 'Soboy' : 'Stol'} ${order.tableNumber ?? ''} buyurtmasi`, by: req.user.name || '' }, req.app.get('io'))
 
     // Retseptlar bo'yicha ombordan sarf (birlik konversiyasi, harakat izi, kam qolsa ogohlantirish).
     // Ombordagi muammo buyurtma yopilishini to'xtatmaydi — ogohlantirish sifatida qaytadi.
@@ -532,6 +569,36 @@ router.delete('/:id/extras/:extraId', auth, adminOnly, async (req, res) => {
 })
 
 // ─── DELETE /api/orders/:id ─────────────────────────────────────
+// ─── POST /api/orders/history/delete — tarixdan o'chirish (test buyurtmalari) ───
+// body: { ids: [...] } yoki { startDate, endDate } (tarix ro'yxati bilan bir xil sana filtri).
+// Faqat yopilgan / bekor qilingan. Izsiz: ombordan sarflangani qaytadi, qarzga yozilgani bekor bo'ladi.
+router.post('/history/delete', auth, adminOnly, async (req, res) => {
+  try {
+    const io = req.app.get('io')
+    const filter = { status: { $in: ['closed', 'cancelled'] } }
+    const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).filter(isValidObjectId).slice(0, 1000)
+    const { startDate, endDate } = req.body || {}
+    if (ids.length) filter._id = { $in: ids }
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(startDate || '') && /^\d{4}-\d{2}-\d{2}$/.test(endDate || '')) {
+      filter.createdAt = { $gte: new Date(startDate + 'T00:00:00.000'), $lte: new Date(endDate + 'T23:59:59.999') }
+    } else return res.status(400).json({ message: "Qaysi buyurtmalarni o'chirishni tanlang" })
+
+    const orders = await Order.find(filter).select('_id').lean()
+    let restored = 0, debtUndone = 0
+    for (const o of orders) {
+      // Ombor: buyurtma sarfi qaytariladi, harakat izlari o'chadi
+      const moves = await StockMove.find({ orderId: o._id, type: 'out' }).lean()
+      for (const m of moves) await Ingredient.findByIdAndUpdate(m.ingredientId, { $inc: { quantity: -m.quantity } })
+      if (moves.length) { await StockMove.deleteMany({ orderId: o._id }); restored += moves.length }
+      debtUndone += await debts.undoOrder(o._id, io)
+    }
+    const r = await Order.deleteMany({ _id: { $in: orders.map(o => o._id) } })
+    if (restored) io.emit('stockChanged')
+    io.emit('ordersPurged')
+    res.json({ deleted: r.deletedCount || 0, stockRestored: restored, debtsUndone: debtUndone })
+  } catch (err) { res.status(500).json({ message: err.message }) }
+})
+
 router.delete('/:id', auth, adminOnly, async (req, res) => {
   try {
     // Yopilgan (to'langan) buyurtmani bekor qilib, tushumni yashirib bo'lmaydi

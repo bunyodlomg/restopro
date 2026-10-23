@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, History, UtensilsCrossed, Package2,
-  Grid3X3, Users, Wallet, Settings, ShoppingBag, CalendarClock,
+  Grid3X3, Users, Wallet, Settings, ShoppingBag, CalendarClock, HandCoins,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -25,6 +25,7 @@ const NAV = [
   { to: '/admin/ingredients', label: 'Ombor',    Icon: Package2 },
   { to: '/admin/tables',      label: 'Stollar',  Icon: Grid3X3 },
   { to: '/admin/users',       label: 'Xodimlar', Icon: Users },
+  { to: '/admin/debts',       label: 'Qarzlar',  Icon: HandCoins },
   { to: '/admin/salaries',    label: 'Ish haqi', Icon: Wallet },
   { to: '/admin/settings',    label: 'Sozlama',  Icon: Settings },
 ]

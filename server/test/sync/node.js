@@ -8,7 +8,7 @@ if (ROLE !== 'cloud') process.env.SYNC_URL = 'http://127.0.0.1:' + process.argv[
 require(S + '/sync/plugin')
 const mongoose = require(S + '/node_modules/mongoose')
 const express = require(S + '/node_modules/express')
-for (const m of ['User', 'Session', 'Category', 'Product', 'Ingredient', 'StockMove', 'Order', 'Table', 'Salary', 'Purchase', 'Settings', 'Reservation', 'GuestOrder', 'PrintJob']) require(S + '/models/' + m)
+for (const m of ['User', 'Session', 'Category', 'Product', 'Ingredient', 'StockMove', 'Customer', 'DebtTx', 'Order', 'Table', 'Salary', 'Purchase', 'Settings', 'Reservation', 'GuestOrder', 'PrintJob']) require(S + '/models/' + m)
 const engine = require(S + '/sync/engine')
 const client = require(S + '/sync/client')
 const { placeOrder } = require(S + '/routes/orders')

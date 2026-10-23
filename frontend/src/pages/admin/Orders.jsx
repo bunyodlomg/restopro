@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Bell, BellOff, Check, Printer, X, ClipboardList, Undo2, Minus, Plus } from 'lucide-react'
+import { Bell, BellOff, Check, Printer, X, ClipboardList, Undo2, Minus, Plus, HandCoins } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useSections, usePlace } from '../../utils/sections.js'
 import API from '../../api/api.js'
@@ -9,6 +9,7 @@ import { printReceipt as printOrder } from '../../utils/receipt.js'
 import Modal from '../../components/shared/Modal.jsx'
 import { OrderNum } from '../waiter/MyOrders.jsx'
 import GuestOrders from '../../components/GuestOrders.jsx'
+import DebtCloseModal from './DebtCloseModal.jsx'
 import { Seg, Loading, Empty, PageHead, money, orderTotal, itemCount, minutesSince, fmtDuration } from '../../components/ui.jsx'
 
 
@@ -22,7 +23,7 @@ export async function printReceipt(order, settings) {
 
 const FRESH_MS = 10000   // yangi / qo'shimcha buyurtma shuncha vaqt rangli animatsiya bilan ajralib turadi
 
-function OrderCard({ order, settings, onClose, onCancel, onReturn, busy, fresh }) {
+function OrderCard({ order, settings, onClose, onCancel, onReturn, onDebt, busy, fresh }) {
   const mins = minutesSince(order.createdAt)
   const extras = order.extras || []
   return (
@@ -74,6 +75,9 @@ function OrderCard({ order, settings, onClose, onCancel, onReturn, busy, fresh }
         </div>
         <div className="ocard-actions">
           <button className="btn btn-ghost btn-lg btn-icon" title="Bekor qilish" aria-label="Bekor qilish" onClick={() => onCancel(order)} disabled={busy}><X size={22}/></button>
+          <button className="btn btn-soft btn-lg" title="Mijoz keyin to'laydi — qarzga yozish" onClick={() => onDebt(order)} disabled={busy}>
+            <HandCoins size={20}/> Qarzga
+          </button>
           <button className="btn btn-ok btn-lg" onClick={() => onClose(order)} disabled={busy}>
             <Check size={20}/> To'landi
           </button>
@@ -93,6 +97,7 @@ export default function Orders() {
   const [busyId, setBusyId] = useState(null)
   const [cancelling, setCancelling] = useState(null)
   const [returning, setReturning] = useState(null)
+  const [debtOf, setDebtOf] = useState(null)   // qarzga yopilayotgan buyurtma
   const [sound, setSound] = useState(() => localStorage.getItem('rp_sound') !== 'false')
   const { settings } = useSettings()
 
@@ -170,11 +175,12 @@ export default function Orders() {
       ) : (
         <div className="ogrid">
           {list.map(o => (
-            <OrderCard key={o._id} order={o} settings={settings} busy={busyId === o._id} fresh={fresh[o._id]} onClose={close} onCancel={setCancelling} onReturn={setReturning}/>
+            <OrderCard key={o._id} order={o} settings={settings} busy={busyId === o._id} fresh={fresh[o._id]} onClose={close} onCancel={setCancelling} onReturn={setReturning} onDebt={setDebtOf}/>
           ))}
         </div>
       )}
 
+      {debtOf && <DebtCloseModal order={debtOf} onClose={() => setDebtOf(null)} onDone={o => { setDebtOf(null); setOrders(p => p.filter(x => x._id !== o._id)) }}/>}
       <ReturnModal order={returning} onClose={() => setReturning(null)}
         onDone={o => { setOrders(p => p.map(x => (x._id === o._id ? o : x))); setReturning(null) }}/>
 

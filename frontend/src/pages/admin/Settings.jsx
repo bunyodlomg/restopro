@@ -227,17 +227,35 @@ export default function SettingsPage() {
             </div>
           </div>
           <div className="card card-pad">
-            <div className="card-head"><span className="card-title">Asosiy rang</span><span className="label">tugmalar va belgilar</span></div>
-            <div className="row wrap" style={{ gap: 12 }}>
-              {ACCENTS.map(a => (
-                <button key={a.id} onClick={() => chooseAccent(a.id)} className="btn btn-lg"
-                  style={{ background: 'var(--panel)', boxShadow: accent === a.id ? `0 0 0 3px ${a.c}` : '0 0 0 1px var(--rule)' }}>
-                  <span style={{ width: 24, height: 24, borderRadius: 8, background: a.c, display: 'grid', placeItems: 'center', color: '#fff' }}>
-                    {accent === a.id && <Check size={16} strokeWidth={3}/>}
-                  </span>
-                  {a.name}
-                </button>
-              ))}
+            <div className="card-head"><span className="card-title">Rang to'plami</span><span className="label">tugma, yon panel va fon — bir-biriga mos</span></div>
+            <div className="palettes">
+              {ACCENTS.map(p => {
+                const dark = theme === 'dark'
+                const bg = dark ? '#0C0C0E' : p.bg, panel = dark ? '#151518' : '#fff', line = dark ? '#24242A' : p.rule
+                return (
+                  <button key={p.id} onClick={() => chooseAccent(p.id)} className={`palette ${accent === p.id ? 'on' : ''}`}
+                    style={accent === p.id ? { boxShadow: `0 0 0 3px ${p.c}` } : undefined}>
+                    {/* Kichik namuna: yon panel, kartalar, band stol, tugma */}
+                    <div className="palette-demo" style={{ background: bg }}>
+                      <span className="pd-bar" style={{ background: dark ? p.barDark : p.bar }}>
+                        <i style={{ background: p.c }}/><i style={{ background: p.bar2 }}/><i style={{ background: p.bar2 }}/>
+                      </span>
+                      <span className="pd-main">
+                        <span className="pd-row">
+                          <span className="pd-card" style={{ background: panel, boxShadow: `0 0 0 1px ${line}` }}/>
+                          <span className="pd-card" style={{ background: `linear-gradient(160deg, ${p.c}, ${p.d})` }}/>
+                          <span className="pd-card" style={{ background: panel, boxShadow: `0 0 0 1px ${line}` }}/>
+                        </span>
+                        <span className="pd-btn" style={{ background: p.c }}/>
+                      </span>
+                    </div>
+                    <span className="row" style={{ justifyContent: 'space-between', gap: 8, width: '100%' }}>
+                      <span style={{ textAlign: 'left' }}><b style={{ display: 'block', fontSize: 15.5 }}>{p.name}</b><small className="muted">{p.hint}</small></span>
+                      <span className="palette-dot" style={{ background: p.c }}>{accent === p.id && <Check size={14} strokeWidth={3}/>}</span>
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>

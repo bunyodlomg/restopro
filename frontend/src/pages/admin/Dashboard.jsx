@@ -269,6 +269,15 @@ export default function Dashboard() {
             )}
           </Card>
 
+          <Card title="Qarzlar" extra={st.debtCustomers ? `${st.debtCustomers} ta qarzdor` : ''}>
+            <button className="row" style={{ alignItems: 'baseline', gap: 8, marginBottom: 12, textAlign: 'left' }} onClick={() => navigate('/admin/debts')}>
+              <b className="mono" style={{ fontSize: 30, letterSpacing: '-.03em', color: st.debtTotal ? 'var(--accent-ink)' : undefined }}>{money(st.debtTotal)}</b>
+              <span className="muted">so'm jami qarz</span>
+            </button>
+            <div className="exp-mini"><span>Davrda qarzga berildi</span><b className="mono">{money(st.debtGiven)}</b></div>
+            <div className="exp-mini"><span>Davrda qaytarildi</span><b className="mono" style={{ color: st.debtPaid ? 'var(--ok-ink)' : undefined }}>{money(st.debtPaid)}</b></div>
+          </Card>
+
           <Card title="Omborda kam qoldi" extra={low.length ? `${low.length} ta` : ''}>
             {!low.length ? <Mini icon={Package2} text="Hammasi yetarli"/> : (
               <div className="lst">

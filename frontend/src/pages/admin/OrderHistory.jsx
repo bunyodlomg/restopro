@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, History, Calendar, Printer } from 'lucide-react'
+import { Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, History, Calendar, Printer, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useSections } from '../../utils/sections.js'
 import API from '../../api/api.js'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import DateRangeCalendar from '../../components/shared/DateRangeCalendar.jsx'
+import Modal from '../../components/shared/Modal.jsx'
 import { OrderNum } from '../waiter/MyOrders.jsx'
 import { printReceipt } from './Orders.jsx'
 import { PageHead, Loading, Empty, money, orderTotal, itemCount } from '../../components/ui.jsx'
@@ -74,6 +75,20 @@ export default function OrderHistory() {
   const pageSum = orders.reduce((sum, o) => sum + orderTotal(o), 0)
   const range = start === end ? fmtDate(start) : `${fmtDate(start)} — ${fmtDate(end)}`
 
+  // Tarixdan o'chirish (test buyurtmalari): bitta yoki tanlangan davrdagi hammasi
+  const [del, setDel] = useState(null)   // { order } yoki { all: true }
+  const [deleting, setDeleting] = useState(false)
+  const doDelete = async () => {
+    setDeleting(true)
+    try {
+      const body = del.order ? { ids: [del.order._id] } : { startDate: start, endDate: end }
+      const { data } = await API.post('/api/orders/history/delete', body)
+      toast.success(`${data.deleted} ta buyurtma o'chirildi${data.stockRestored ? ' · ombor sarfi qaytarildi' : ''}${data.debtsUndone ? ` · ${data.debtsUndone} ta qarz bekor qilindi` : ''}`)
+      setDel(null); load(del.order ? page : 1)
+    } catch (e) { toast.error(e.response?.data?.message || 'Xatolik') }
+    finally { setDeleting(false) }
+  }
+
   return (
     <div className="page">
       <PageHead title="Buyurtmalar tarixi" sub={`${range} · ${total} ta yopilgan${pages === 1 ? ` · ${money(pageSum)} so'm` : ''}`}
@@ -106,6 +121,9 @@ export default function OrderHistory() {
               </div>
             )}
           </div>
+          <button className="btn btn-soft btn-lg" disabled={!total} onClick={() => setDel({ all: true })} title="Tanlangan davrdagi buyurtmalarni o'chirish">
+            <Trash2 size={20}/> O'chirish
+          </button>
         </>}/>
 
       {loading ? <Loading/> : orders.length === 0 ? (
@@ -123,8 +141,9 @@ export default function OrderHistory() {
                   style={{ width: '100%', padding: '12px 18px', gap: 14, textAlign: 'left' }}>
                   <OrderNum order={o}/>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 16 }} className="truncate">
-                      {sectionLabel(o.category)}{o.waiterName ? ` · ${o.waiterName}` : ''}
+                    <div className="row" style={{ gap: 8, minWidth: 0 }}>
+                      <span style={{ fontWeight: 700, fontSize: 16 }} className="truncate">{sectionLabel(o.category)}{o.waiterName ? ` · ${o.waiterName}` : ''}</span>
+                      {o.debt?.amount > 0 && <span className="tag tag-yel" title={`${o.debt.customerName} nomiga qarz`}>qarz {money(o.debt.amount)}</span>}
                     </div>
                     <div className="label">{fmtDate(iso(new Date(when)))} · {hhmm(o.createdAt)}–{hhmm(when)} · {itemCount(o)} ta</div>
                   </div>
@@ -155,9 +174,15 @@ export default function OrderHistory() {
                         <div className="row muted" style={{ justifyContent: 'space-between' }}><span>Xizmat haqi</span><span>{money(o.serviceFee)}</span></div>
                       )}
                     </div>
-                    <button className="btn btn-soft btn-lg" style={{ marginTop: 12 }} onClick={() => printReceipt(o, settings)}>
-                      <Printer size={20}/> Chekni qayta chiqarish
-                    </button>
+                    {o.debt?.amount > 0 && <div className="hint" style={{ marginTop: 8 }}>Qarzga: <b>{o.debt.customerName}</b> — {money(o.debt.amount)} so'm</div>}
+                    <div className="row wrap" style={{ gap: 10, marginTop: 12 }}>
+                      <button className="btn btn-soft btn-lg" onClick={() => printReceipt(o, settings)}>
+                        <Printer size={20}/> Chekni qayta chiqarish
+                      </button>
+                      <button className="btn btn-ghost btn-lg" style={{ color: 'var(--accent-ink)' }} onClick={() => setDel({ order: o })}>
+                        <Trash2 size={20}/> O'chirish
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -165,6 +190,23 @@ export default function OrderHistory() {
           })}
         </div>
       )}
+
+      <Modal open={!!del} onClose={() => setDel(null)} title={del?.order ? "Buyurtmani o'chirish" : `${range} — hammasini o'chirish`} maxWidth={480}
+        footer={<>
+          <button className="btn btn-ghost btn-lg" onClick={() => setDel(null)}>Bekor qilish</button>
+          <button className="btn btn-danger btn-lg" style={{ flex: 1 }} disabled={deleting} onClick={doDelete}>
+            {deleting ? <span className="spinner-sm"/> : del?.order ? "Ha, o'chirish" : `${total} ta buyurtmani o'chirish`}
+          </button>
+        </>}>
+        <p style={{ margin: '0 0 10px', fontSize: 16 }}>
+          {del?.order ? <>{sectionLabel(del.order.category)} · Stol {del.order.tableNumber} — {money(orderTotal(del.order))} so'm buyurtmasi tarixdan butunlay o'chiriladi.</>
+            : <><b>{range}</b> oralig'idagi <b>{total} ta</b> yopilgan buyurtma tarixdan butunlay o'chiriladi.</>}
+        </p>
+        <div className="hint" style={{ fontSize: 13.5 }}>
+          Test buyurtmalari uchun: tushum va hisobotlardan ham chiqadi, ombordan sarflangan mahsulot qaytariladi,
+          qarzga yozilgan bo'lsa — qarz bekor qilinadi. Qaytarib bo'lmaydi.
+        </div>
+      </Modal>
 
       {pages > 1 && (
         <div className="row" style={{ justifyContent: 'center', gap: 16, marginTop: 20 }}>

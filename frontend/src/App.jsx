@@ -27,6 +27,7 @@ import OrderCreate  from './pages/waiter/OrderCreate.jsx'
 import MyOrders     from './pages/waiter/MyOrders.jsx'
 import Reservations from './pages/admin/Reservations.jsx'
 import QrCodes      from './pages/admin/QrCodes.jsx'
+import Debts        from './pages/admin/Debts.jsx'
 import GuestMenu    from './pages/guest/GuestMenu.jsx'
 import TerminalLock from './components/TerminalLock.jsx'
 import VirtualKeyboard from './components/VirtualKeyboard.jsx'
@@ -99,6 +100,7 @@ function AppRoutes() {
           <Route path="tables"      element={<Tables/>}/>
           <Route path="users"       element={<Users/>}/>
           <Route path="salaries"    element={<Salaries/>}/>
+          <Route path="debts"       element={<Debts/>}/>
           <Route path="settings"    element={<Settings/>}/>
           <Route path="reservations" element={<Reservations/>}/>
           <Route path="tables/qr"   element={<QrCodes/>}/>

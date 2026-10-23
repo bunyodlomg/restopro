@@ -47,6 +47,13 @@ const OrderSchema = new Schema({
 
   // Kassa va cloud bir stolga bir vaqtda buyurtma ochsa — sync'da shu buyurtmaga qo'shilgan (bu bekor qilinadi)
   mergedInto:  { type: Schema.Types.ObjectId, ref: 'Order', default: null },
+
+  // Qarzga yopilgan bo'lsa: kimning nomiga va qancha (qolgani naqd to'langan)
+  debt: {
+    customerId:   { type: Schema.Types.ObjectId, ref: 'Customer', default: null },
+    customerName: { type: String, default: '' },
+    amount:       { type: Number, default: 0 },
+  },
 }, { timestamps: true })
 
 // Jami hisoblaydigan virtual field
