@@ -6,6 +6,7 @@ import Modal from '../../components/shared/Modal.jsx'
 import { Field, Switch, Loading, Empty, PageHead, money, initials, fileUrl } from '../../components/ui.jsx'
 import CategoriesModal from './CategoriesModal.jsx'
 import { Select } from '../../components/shared/Pickers.jsx'
+import FoodImage from '../../components/shared/FoodImage.jsx'
 
 // Retseptda ingredient birligiga mos birliklargina (server/utils/units.js bilan bir xil): kg ↔ g, l ↔ ml
 const UNIT_FAMILY = { kg: ['kg', 'g'], g: ['g', 'kg'], l: ['l', 'ml'], litr: ['l', 'ml'], ml: ['ml', 'l'], dona: ['dona'], paket: ['paket'] }
@@ -13,11 +14,8 @@ const unitChoices = u => UNIT_FAMILY[u] || [u || 'kg']
 const ALL = 'Barchasi'
 const NEW_CAT = '__new'   // select'dagi "+ Yangi bo'lim" varianti
 
-function Thumb({ src, name }) {
-  const [err, setErr] = useState(false)
-  if (!src || err) return <span className="pcard-ini">{initials(name)}</span>
-  return <img src={src} alt="" loading="lazy" onError={() => setErr(true)}/>
-}
+// Rasm shakliga qarab joylashadi (components/shared/FoodImage.jsx)
+const Thumb = ({ src, name }) => <FoodImage src={src ? src : ''} name={name}/>
 
 export default function Products() {
   const [products, setProducts] = useState([])

@@ -3,6 +3,7 @@ import { Plus, Minus, Wifi, QrCode, Check, X, RefreshCw, ShoppingBag, Clock, Rec
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import { money, initials, fileUrl } from '../../components/ui.jsx'
+import FoodImage from '../../components/shared/FoodImage.jsx'
 
 // Mijoz telefonida ochiladigan menyu (stoldagi QR kod orqali). Tizimga kirish shart emas.
 const ALL = 'Barchasi'
@@ -13,11 +14,8 @@ const ERRORS = {
   BAD_QR:      [QrCode, 'QR kod eskirgan', 'Bu QR kod endi ishlamaydi. Ofitsantdan yordam so\'rang.'],
 }
 
-function Photo({ src, name }) {
-  const [err, setErr] = useState(false)
-  if (!src || err) return <span className="pcard-ini">{initials(name)}</span>
-  return <img src={fileUrl(src)} alt="" loading="lazy" onError={() => setErr(true)}/>
-}
+// Rasm shakliga qarab joylashadi (components/shared/FoodImage.jsx)
+const Photo = ({ src, name }) => <FoodImage src={src ? fileUrl(src) : ''} name={name}/>
 
 // Stolning ochiq hisobi: qabul qilingan barcha taomlar (oldingi buyurtmalar ham) va jami
 function Bill({ bill }) {

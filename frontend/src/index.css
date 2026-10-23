@@ -360,7 +360,12 @@ select.input {
 .pcard > .pcard-ph, .pcard > .pcard-body { width: 100%; align-self: stretch; }
 .pcard-body { flex: 1; }
 .pcard-ph { height: 138px; background: var(--thumb); display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
-.pcard-ph img { width: 100%; height: 100%; object-fit: cover; }
+/* Taom rasmi (components/shared/FoodImage.jsx): cover — to'ldiradi, contain — kesilmaydi, orqasida xira nusxa */
+.pcard-ph .ph-img { position: relative; width: 100%; height: 100%; object-fit: cover; transition: opacity .15s; }
+.pcard-ph .ph-img.contain { object-fit: contain; padding: 8px 0; filter: drop-shadow(0 6px 10px rgba(0,0,0,.18)); }
+.pcard-ph .ph-blur { position: absolute; inset: -12%; width: 124%; height: 124%; object-fit: cover; filter: blur(18px) saturate(1.2); opacity: .45; transform: scale(1.05); }
+.pcard-ph .ph-fill { position: absolute; inset: 0; }
+.pcard-ph .ph-img.contain.flat { filter: none; padding: 6px 0; }
 .pcard-ini { font: 700 40px var(--font); letter-spacing: -.05em; color: var(--ink-3); opacity: .55; }
 .pcard-ph .tag { position: absolute; left: 10px; top: 10px; background: var(--panel); color: var(--accent-ink); }
 .pcard-badge { position: absolute; right: 10px; top: 10px; min-width: 40px; height: 40px; padding: 0 10px; border-radius: 13px; background: var(--accent); color: #fff; font: 700 19px var(--mono); display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 14px -4px rgba(255,59,47,.6); }

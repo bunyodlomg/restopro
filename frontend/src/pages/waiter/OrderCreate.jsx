@@ -10,16 +10,14 @@ import { createSocket } from '../../api/socket.js'
 import { isTerminal, lockSoon } from '../../utils/terminal.js'
 import SyncBadge from '../../components/shared/SyncBadge.jsx'
 import MoveTableModal from './MoveTableModal.jsx'
+import FoodImage from '../../components/shared/FoodImage.jsx'
 import { enqueueOrder, genClientId } from '../../utils/offlineQueue.js'
 import { BrandMark, usePosBase, money, initials, fileUrl, minutesSince, fmtDuration, Loading, Empty } from '../../components/ui.jsx'
 
 const ALL = 'Barchasi'
 
-function Photo({ src, name }) {
-  const [err, setErr] = useState(false)
-  if (!src || err) return <span className="pcard-ini">{initials(name)}</span>
-  return <img src={fileUrl(src)} alt="" loading="lazy" onError={() => setErr(true)}/>
-}
+// Rasm shakliga qarab joylashadi (components/shared/FoodImage.jsx)
+const Photo = ({ src, name }) => <FoodImage src={src ? fileUrl(src) : ''} name={name}/>
 
 export default function OrderCreate() {
   const { label: sectionLabel } = useSections()
