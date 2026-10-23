@@ -5,8 +5,11 @@ import API from '../../api/api.js'
 import Modal from '../../components/shared/Modal.jsx'
 import { Field, Switch, Loading, Empty, PageHead, money, initials, fileUrl } from '../../components/ui.jsx'
 import CategoriesModal from './CategoriesModal.jsx'
+import { Select } from '../../components/shared/Pickers.jsx'
 
-const UNITS = ['kg', 'g', 'l', 'ml', 'dona', 'litr', 'paket']
+// Retseptda ingredient birligiga mos birliklargina (server/utils/units.js bilan bir xil): kg ↔ g, l ↔ ml
+const UNIT_FAMILY = { kg: ['kg', 'g'], g: ['g', 'kg'], l: ['l', 'ml'], litr: ['l', 'ml'], ml: ['ml', 'l'], dona: ['dona'], paket: ['paket'] }
+const unitChoices = u => UNIT_FAMILY[u] || [u || 'kg']
 const ALL = 'Barchasi'
 const NEW_CAT = '__new'   // select'dagi "+ Yangi bo'lim" varianti
 
@@ -207,12 +210,11 @@ export default function Products() {
         </div>
 
         <Field label="Bo'lim" required>
-          <select className="input" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
-            <option value="" disabled>Bo'limni tanlang</option>
-            {[...new Set([...categories.map(c => c.name), ...(form.category && form.category !== NEW_CAT ? [form.category] : [])])]
-              .map(c => <option key={c} value={c}>{c}</option>)}
-            <option value={NEW_CAT}>+ Yangi bo'lim…</option>
-          </select>
+          <Select value={form.category} onChange={v => setForm(f => ({ ...f, category: v }))} placeholder="Bo'limni tanlang"
+            options={[
+              ...[...new Set([...categories.map(c => c.name), ...(form.category && form.category !== NEW_CAT ? [form.category] : [])])].map(c => ({ value: c, label: c })),
+              { value: NEW_CAT, label: "+ Yangi bo'lim…" },
+            ]}/>
         </Field>
         {form.category === NEW_CAT && (
           <div className="row" style={{ gap: 8, marginTop: -4, marginBottom: 12 }}>
@@ -233,14 +235,11 @@ export default function Products() {
             const ingUnit = getIngUnit(row.ingredient)
             return (
               <div key={i} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr) 92px 48px', gap: 8, alignItems: 'center' }}>
-                <select className="input" value={row.ingredient} onChange={e => updateRow(i, 'ingredient', e.target.value)}>
-                  <option value="">Ingredient</option>
-                  {ingredients.map(ing => <option key={ing._id} value={ing._id}>{ing.name} ({ing.unit})</option>)}
-                </select>
+                <Select value={row.ingredient} placeholder="Ingredient" onChange={v => updateRow(i, 'ingredient', v)}
+                  options={ingredients.map(ing => ({ value: ing._id, label: ing.name, hint: `omborda ${+(+ing.quantity).toFixed(3)} ${ing.unit}` }))}/>
                 <input className="input mono" type="number" value={row.quantity} onChange={e => updateRow(i, 'quantity', e.target.value)} placeholder="Miqdor"/>
-                <select className="input" value={row.recipeUnit || ingUnit} onChange={e => updateRow(i, 'recipeUnit', e.target.value)}>
-                  {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
+                <Select value={unitChoices(ingUnit).includes(row.recipeUnit) ? row.recipeUnit : unitChoices(ingUnit)[0]}
+                  onChange={v => updateRow(i, 'recipeUnit', v)} options={unitChoices(ingUnit).map(u => ({ value: u, label: u }))}/>
                 <button type="button" className="btn btn-ghost btn-icon" onClick={() => removeRow(i)} aria-label="Qatorni o'chirish"><X size={20}/></button>
               </div>
             )

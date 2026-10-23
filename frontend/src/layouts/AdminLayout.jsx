@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext.jsx'
 import { API_URL } from '../config.js'
 import { createSocket } from '../api/socket.js'
+import API from '../api/api.js'
 import { getNewOrderSoundUrl } from '../utils/sound.js'
 import { BrandMark, initials } from '../components/ui.jsx'
 import SyncBadge from '../components/shared/SyncBadge.jsx'
@@ -56,8 +57,24 @@ export default function AdminLayout() {
       }
       toast(`Yangi buyurtma — ${placeRef.current(o)}`, { duration: 4000 })
     })
+    // Ombor: qoldiq minimumdan tushdi yoki tugadi (buyurtma yopilganda, hisobdan chiqarishda)
+    socket.on('stockAlert', list => {
+      for (const g of list || []) {
+        const q = `${+(+g.quantity).toFixed(3)} ${g.unit}`
+        toast(g.level === 'out' ? `Omborda tugadi: ${g.name} (${q})` : `Omborda kam qoldi: ${g.name} — ${q}`,
+          { id: `stock-${g._id}`, icon: g.level === 'out' ? '⛔' : '⚠️', duration: 8000 })
+      }
+      loadLow()
+    })
+    socket.on('stockChanged', loadLow)
+    socket.on('syncApplied', ({ colls } = {}) => { if (colls?.includes('ingredients')) loadLow() })
+    loadLow()
     return () => socket.disconnect()
   }, [])
+
+  // Menyudagi «Ombor» yonida kam qolgan / tugagan mahsulotlar soni
+  const [lowCount, setLowCount] = useState(0)
+  function loadLow() { API.get('/api/ingredients/low').then(r => setLowCount(r.data.length)).catch(() => {}) }
 
   return (
     <div className="shell">
@@ -66,6 +83,7 @@ export default function AdminLayout() {
         {NAV.map(({ to, label, Icon, end }) => (
           <NavLink key={to} to={to} end={end} className={({ isActive }) => `rail-link ${isActive ? 'active' : ''}`}>
             <Icon size={22} strokeWidth={1.9}/>{label}
+            {to === '/admin/ingredients' && lowCount > 0 && <span className="rail-badge" title="Kam qolgan / tugagan">{lowCount}</span>}
           </NavLink>
         ))}
         <div className="rail-spacer"/>

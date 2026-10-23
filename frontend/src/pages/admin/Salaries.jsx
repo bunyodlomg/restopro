@@ -3,6 +3,7 @@ import { Plus, Trash2, ChevronDown, ChevronUp, Wallet, Check } from 'lucide-reac
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import Modal, { ModalField } from '../../components/shared/Modal.jsx'
+import { Select, MonthInput } from '../../components/shared/Pickers.jsx'
 import { PageHead, Loading, Empty, money, initials } from '../../components/ui.jsx'
 
 export default function Salaries() {
@@ -55,7 +56,7 @@ export default function Salaries() {
     <div className="page">
       <PageHead title="Ish haqi" sub={`${month} · ${summary.length} ta xodim`}
         actions={<>
-          <input type="month" className="input" value={month} onChange={e => setMonth(e.target.value)} style={{ width: 190 }}/>
+          <MonthInput value={month} onChange={setMonth} style={{ width: 210 }}/>
           <button className="btn btn-primary btn-lg" onClick={() => pay()}><Plus size={20}/> To'lov</button>
         </>}/>
 
@@ -149,10 +150,8 @@ export default function Salaries() {
         </>}>
         <div className="col" style={{ gap: 14 }}>
           <ModalField label="Xodim" required>
-            <select className="input" value={form.userId} onChange={e => setForm(f => ({ ...f, userId: e.target.value }))}>
-              <option value="">Xodimni tanlang</option>
-              {summary.map(u => <option key={u._id} value={u._id}>{u.name} — qoldi {money(u.remaining)}</option>)}
-            </select>
+            <Select value={form.userId} onChange={v => setForm(f => ({ ...f, userId: v }))} placeholder="Xodimni tanlang"
+              options={summary.map(u => ({ value: u._id, label: u.name, hint: `qoldi ${money(u.remaining)} so'm` }))}/>
           </ModalField>
           <ModalField label="Miqdor (so'm)" required>
             <input className="input mono" type="number" inputMode="numeric" value={form.amount}

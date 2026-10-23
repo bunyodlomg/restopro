@@ -1,7 +1,7 @@
 const router     = require('express').Router()
 const Order      = require('../models/Order')
 const Table      = require('../models/Table')
-const Ingredient = require('../models/Ingredient')
+const StockMove  = require('../models/StockMove')
 const Product    = require('../models/Product')
 const Settings   = require('../models/Settings')
 const Salary     = require('../models/Salary')
@@ -9,6 +9,7 @@ const Purchase   = require('../models/Purchase')
 const auth       = require('../middleware/auth')
 const { adminOnly } = require('../middleware/auth')
 const print      = require('../print')
+const stock      = require('../utils/stock')
 const { isValidObjectId } = require('mongoose')
 
 // O'zgartirish mumkin bo'lgan (hali yopilmagan) buyurtma holatlari
@@ -70,11 +71,17 @@ router.get('/stats', auth, adminOnly, async (req, res) => {
     const end   = new Date(endStr   + 'T23:59:59.999Z')
 
     // Daromad — yopilgan buyurtmalar; Chiqim — oyliklar + ingredient xaridlari
-    const [orders, salaries, purchases] = await Promise.all([
+    const [orders, salaries, purchases, moves] = await Promise.all([
       Order.find({ status: 'closed', closedAt: { $gte: start, $lte: end } }),
       Salary.find({ paidAt:    { $gte: start, $lte: end } }),
       Purchase.find({ createdAt: { $gte: start, $lte: end } }),
+      // Ombor sarfi: sotilgan taomlar tannarxi (out) va hisobdan chiqarilgan (waste)
+      StockMove.aggregate([
+        { $match: { createdAt: { $gte: start, $lte: end }, type: { $in: ['out', 'waste'] } } },
+        { $group: { _id: '$type', cost: { $sum: '$cost' } } },
+      ]),
     ])
+    const moveCost = t => moves.find(m => m._id === t)?.cost || 0
 
     // Davrdagi har bir kun uchun yacheyka — bo'sh kunlar ham 0 bilan to'ladi
     const dailyMap = {}
@@ -159,6 +166,12 @@ router.get('/stats', auth, adminOnly, async (req, res) => {
       ),
     }
 
+    // Dashboard «Chiqimlar» kartasi uchun — davrdagi oxirgi to'lovlar
+    const recentExpenses = [
+      ...purchases.map(p => ({ kind: 'purchase', title: p.ingredientName || 'Xarid', note: p.note || `${+(+p.quantity).toFixed(3)} ${p.unit || ''}`.trim(), amount: p.totalCost || 0, at: p.createdAt })),
+      ...salaries.map(s => ({ kind: 'salary', title: s.userName || 'Oylik', note: s.note || 'Oylik', amount: s.amount || 0, at: s.paidAt })),
+    ].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 8)
+
     res.json({
       totalSold,
       totalIncome,
@@ -166,6 +179,9 @@ router.get('/stats', auth, adminOnly, async (req, res) => {
       netProfit: totalIncome - totalExpense,
       salaryExpense,
       purchaseExpense,
+      foodCost:  moveCost('out'),     // sotilgan taomlar tannarxi (retsept × ombor narxi)
+      wasteCost: moveCost('waste'),   // hisobdan chiqarilgan mahsulot qiymati
+      recentExpenses,
       products,
       orderCount: orders.length,
       daily,
@@ -389,26 +405,9 @@ router.put('/:id/close', auth, adminOnly, async (req, res) => {
     )
     if (!order) return notOpen(req, res)
 
-    // Ingredientlarni ombordan ayirish (birlik konversiyasi bilan)
-    for (const item of order.items) {
-      const product = await Product.findById(item.productId).populate('ingredients.ingredient')
-      if (!product) continue
-      for (const ing of product.ingredients) {
-        // Konversiya: taomda g, ombordan kg chiqadi
-        let qtyToDeduct = ing.quantity * item.quantity
-        const ingUnit  = ing.ingredient?.unit || 'kg'
-        const recipeUnit = ing.recipeUnit || ingUnit
-
-        // g → kg, ml → l konversiyasi
-        if (ingUnit === 'kg' && recipeUnit === 'g') qtyToDeduct = qtyToDeduct / 1000
-        if (ingUnit === 'l'  && recipeUnit === 'ml') qtyToDeduct = qtyToDeduct / 1000
-
-        await Ingredient.findByIdAndUpdate(
-          ing.ingredient._id,
-          { $inc: { quantity: -qtyToDeduct } }
-        )
-      }
-    }
+    // Retseptlar bo'yicha ombordan sarf (birlik konversiyasi, harakat izi, kam qolsa ogohlantirish).
+    // Ombordagi muammo buyurtma yopilishini to'xtatmaydi — ogohlantirish sifatida qaytadi.
+    const stockWarnings = await stock.consumeOrder(order, { io: req.app.get('io'), by: req.user.name || '' })
 
     // Stolni bo'shatish
     if (order.tableId) {
@@ -431,7 +430,7 @@ router.put('/:id/close', auth, adminOnly, async (req, res) => {
     req.app.get('io').emit('orderClosed', order._id.toString())
     // Ofitsant tarafida ham chiqsin
     req.app.get('io').emit('orderClosedSound')
-    res.json(order)
+    res.json({ ...order.toObject(), stockWarnings })
   } catch (err) { res.status(500).json({ message: err.message }) }
 })
 

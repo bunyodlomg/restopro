@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import { createSocket } from '../../api/socket.js'
 import Modal from '../../components/shared/Modal.jsx'
+import { Select } from '../../components/shared/Pickers.jsx'
 import { Loading, Empty, PageHead, Seg, Field } from '../../components/ui.jsx'
 import { useSections } from '../../utils/sections.js'
 import SectionsModal from './SectionsModal.jsx'
@@ -128,9 +129,8 @@ export default function Tables() {
         </>}>
         {editing && <div className="col" style={{ gap: 14 }}>
           <Field label="Bo'lim">
-            <select className="input" value={editing.category} onChange={e => setEditing(x => ({ ...x, category: e.target.value }))}>
-              {(cat === 'soboy' ? tabs : sections.map(s => ({ k: s.key, l: s.label }))).map(t => <option key={t.k} value={t.k}>{t.l}</option>)}
-            </select>
+            <Select value={editing.category} onChange={v => setEditing(x => ({ ...x, category: v }))}
+              options={(cat === 'soboy' ? tabs : sections.map(s => ({ k: s.key, l: s.label }))).map(t => ({ value: t.k, label: t.l }))}/>
           </Field>
           <Field label="Stol raqami">
             <input className="input" type="number" min="1" value={editing.number} onChange={e => setEditing(x => ({ ...x, number: e.target.value }))}/>

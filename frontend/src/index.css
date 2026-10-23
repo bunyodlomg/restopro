@@ -168,6 +168,27 @@ select.input {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' stroke='%238E8E95' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 14px center;
 }
+/* Tanlagichlar (components/shared/Pickers.jsx) — brauzer select/date o'rniga */
+.picker-btn { display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer; }
+.picker-btn:disabled { cursor: default; }
+.picker-btn > .truncate { flex: 1; min-width: 0; }
+.picker-btn.open { box-shadow: 0 0 0 2px var(--ink); }
+.picker-chev { flex-shrink: 0; color: var(--ink-3); transition: transform .15s; }
+.picker-btn.open .picker-chev { transform: rotate(180deg); }
+.picker-ico { flex-shrink: 0; color: var(--ink-3); }
+.picker-pop { position: fixed; z-index: 1000; background: var(--panel); border-radius: 18px; box-shadow: var(--shadow-2), 0 0 0 1px var(--rule); animation: rise .12s; overflow: hidden; }
+.picker-list { max-height: 300px; overflow-y: auto; padding: 6px; }
+.picker-times { max-height: 280px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+.picker-opt { width: 100%; min-height: 44px; padding: 0 12px; border-radius: 12px; display: flex; align-items: center; gap: 10px; justify-content: space-between; text-align: left; font-size: 15.5px; color: var(--ink); }
+.picker-opt small { display: block; font-size: 12.5px; color: var(--ink-3); margin-top: 1px; }
+.picker-opt.hi, .picker-opt:hover { background: var(--thumb); }
+.picker-opt.sel { font-weight: 600; }
+.picker-opt.sel svg { color: var(--accent); flex-shrink: 0; }
+.picker-times .picker-opt { justify-content: center; }
+.picker-times .picker-opt.sel { background: var(--sel); color: var(--sel-ink); }
+.picker-opt:disabled { opacity: .4; }
+.picker-group { padding: 10px 12px 4px; font: 600 11.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+
 .input-icon { position: relative; }
 .input-icon > svg { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; }
 .input-icon > .input { padding-left: 46px; }
@@ -565,3 +586,11 @@ select.input {
   .sheet .side { width: 100%; max-height: 90vh; border-radius: 24px 24px 0 0; }
 }
 @media print { .rail, .topbar { display: none !important; } }
+
+/* Ombor */
+.stock-alert { display: flex; align-items: center; gap: 14px; background: var(--hl); color: var(--hl-ink); }
+.calc-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--thumb); margin-top: 8px; font-size: 15px; }
+.exp-mini { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--rule); }
+.exp-mini small { display: block; font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
+.rail-link { position: relative; }
+.rail-badge { position: absolute; top: 4px; right: 8px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--accent); color: #fff; font: 700 11.5px/20px var(--mono); text-align: center; }

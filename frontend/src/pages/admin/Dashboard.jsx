@@ -116,7 +116,7 @@ export default function Dashboard() {
   useEffect(() => {
     load(); loadLive()
     const s = createSocket()
-    for (const ev of ['newOrder', 'orderUpdated', 'orderClosed']) s.on(ev, loadLive)
+    for (const ev of ['newOrder', 'orderUpdated', 'orderClosed', 'stockChanged']) s.on(ev, loadLive)
     s.on('syncApplied', loadLive)
     const h = e => { if (pickRef.current && !pickRef.current.contains(e.target)) setPicker(false) }
     document.addEventListener('pointerdown', h)
@@ -228,6 +228,43 @@ export default function Dashboard() {
                     </button>
                   )
                 })}
+              </div>
+            )}
+          </Card>
+
+          <Card title="Chiqimlar" extra={st.totalIncome ? `tushumning ${Math.round((st.totalExpense || 0) / st.totalIncome * 100)}%` : ''}>
+            <div className="row" style={{ alignItems: 'baseline', gap: 8, marginBottom: 14 }}>
+              <b className="mono" style={{ fontSize: 30, letterSpacing: '-.03em' }}>{money(st.totalExpense)}</b>
+              <span className="muted">so'm</span>
+              {cmp.expense !== undefined && cmp.expense !== 0 && (
+                <span className={`chg ${cmp.expense > 0 ? 'down' : 'up'}`} style={{ marginLeft: 'auto' }}>
+                  {cmp.expense > 0 ? <ArrowUpRight size={15}/> : <ArrowDownRight size={15}/>}{Math.abs(cmp.expense)}%
+                </span>
+              )}
+            </div>
+            {[
+              { l: 'Ombor xaridlari', v: st.purchaseExpense, c: 'var(--accent)' },
+              { l: 'Oyliklar', v: st.salaryExpense, c: 'var(--ink-3)' },
+            ].map(r => (
+              <div key={r.l} style={{ marginBottom: 10 }}>
+                <div className="row" style={{ justifyContent: 'space-between' }}><span>{r.l}</span><b className="mono">{money(r.v)}</b></div>
+                <span className="meter" style={{ marginTop: 6, display: 'block' }}><i style={{ width: `${st.totalExpense ? Math.max(2, (r.v || 0) / st.totalExpense * 100) : 0}%`, background: r.c }}/></span>
+              </div>
+            ))}
+            <div className="exp-mini">
+              <span>Taomlar tannarxi<small>retsept bo'yicha ombordan sarf{st.totalIncome && st.foodCost ? ` · tushumning ${Math.round(st.foodCost / st.totalIncome * 100)}%` : ''}</small></span>
+              <b className="mono">{money(st.foodCost)}</b>
+            </div>
+            {st.wasteCost > 0 && <div className="exp-mini"><span>Hisobdan chiqarilgan<small>buzilgan, to'kilgan</small></span><b className="mono" style={{ color: 'var(--accent-ink)' }}>{money(st.wasteCost)}</b></div>}
+            {(st.recentExpenses || []).length > 0 && (
+              <div className="lst" style={{ marginTop: 10 }}>
+                {st.recentExpenses.slice(0, 4).map((x, i) => (
+                  <button key={i} className="lst-row" style={{ textAlign: 'left' }} onClick={() => navigate(x.kind === 'salary' ? '/admin/salaries' : '/admin/ingredients')}>
+                    <span className="lst-th" style={x.kind === 'salary' ? undefined : { background: 'var(--accent-soft)', color: 'var(--accent-ink)' }}>{x.kind === 'salary' ? initials(x.title) : <Package2 size={18}/>}</span>
+                    <span className="lst-name truncate">{x.title}<small>{x.note} · {fmtDate(String(x.at).slice(0, 10))}</small></span>
+                    <span className="lst-val">−{money(x.amount)}</span>
+                  </button>
+                ))}
               </div>
             )}
           </Card>

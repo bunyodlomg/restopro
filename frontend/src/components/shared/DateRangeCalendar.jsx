@@ -14,8 +14,9 @@ const iso = d => {
   return `${d.getFullYear()}-${m}-${day}`
 }
 
-// Diapazonni tanlash uchun kalendar — boshlanish va tugash sanalari
-export default function DateRangeCalendar({ start, end, onChange }) {
+// Diapazonni tanlash uchun kalendar — boshlanish va tugash sanalari.
+// single — bitta sana (onChange(kun)); min — undan oldingi kunlar tanlanmaydi
+export default function DateRangeCalendar({ start, end, onChange, single = false, min }) {
   const [view, setView] = useState(() => {
     const base = start ? new Date(start + 'T00:00') : new Date()
     return new Date(base.getFullYear(), base.getMonth(), 1)
@@ -33,6 +34,7 @@ export default function DateRangeCalendar({ start, end, onChange }) {
 
   const pick = date => {
     const k = iso(date)
+    if (single) return onChange(k)
     if (!start || (start && end)) {
       onChange(k, '')                      // yangi diapazonni boshlash
     } else if (k < start) {
@@ -88,6 +90,8 @@ export default function DateRangeCalendar({ start, end, onChange }) {
                 type="button"
                 data-sound="tick"
                 onClick={() => pick(date)}
+                disabled={!!min && k < min}
+                style={min && k < min ? { opacity: .3 } : undefined}
                 className={`cal-day${isEdge ? ' cal-day--sel' : ''}${k === todayKey && !isEdge ? ' cal-day--today' : ''}`}
               >
                 {date.getDate()}

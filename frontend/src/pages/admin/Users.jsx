@@ -3,6 +3,7 @@ import { UserPlus, Trash2, Search, Pencil, Users as UsersIcon, ShieldOff, Shield
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import Modal, { ModalField } from '../../components/shared/Modal.jsx'
+import { Select } from '../../components/shared/Pickers.jsx'
 import { PageHead, Loading, Empty, Switch, money, initials } from '../../components/ui.jsx'
 import { useSettings } from '../../context/SettingsContext.jsx'
 import { useAuth } from '../../context/AuthContext.jsx'
@@ -240,10 +241,8 @@ export default function Users() {
           </ModalField>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <ModalField label="Rol">
-              <select className="input" value={form.role} onChange={set('role')}>
-                <option value="waiter">Ofitsant</option>
-                <option value="admin">Admin</option>
-              </select>
+              <Select value={form.role} onChange={v => setForm(f => ({ ...f, role: v }))}
+                options={[{ value: 'waiter', label: 'Ofitsant' }, { value: 'admin', label: 'Admin' }]}/>
             </ModalField>
             <ModalField label="Oylik (so'm)">
               <input className="input" type="number" inputMode="numeric" value={form.salary} onChange={set('salary')} placeholder="2000000"/>

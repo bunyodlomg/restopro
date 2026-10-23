@@ -6,6 +6,7 @@ import API from '../../api/api.js'
 import { createSocket } from '../../api/socket.js'
 import Modal from '../../components/shared/Modal.jsx'
 import { PageHead, Field, Loading, Empty, money, hhmm } from '../../components/ui.jsx'
+import { Select, DateInput, TimeInput } from '../../components/shared/Pickers.jsx'
 
 const STATUS = {
   booked:    ['Kutilmoqda', 'tag-yel'],
@@ -99,7 +100,7 @@ export default function Reservations() {
       <div className="row" style={{ gap: 10, marginBottom: 18 }}>
         <button className="btn btn-soft btn-lg btn-icon" onClick={() => setDay(addDays(day, -1))} aria-label="Oldingi kun"><ChevronLeft size={22}/></button>
         <button className={`btn btn-lg ${day === iso(new Date()) ? 'btn-dark' : 'btn-soft'}`} onClick={() => setDay(iso(new Date()))}>Bugun</button>
-        <input className="input mono" type="date" value={day} onChange={e => e.target.value && setDay(e.target.value)} style={{ width: 190 }}/>
+        <DateInput value={day} onChange={setDay} style={{ width: 230 }}/>
         <button className="btn btn-soft btn-lg btn-icon" onClick={() => setDay(addDays(day, 1))} aria-label="Keyingi kun"><ChevronRight size={22}/></button>
       </div>
 
@@ -153,21 +154,15 @@ export default function Reservations() {
             <Field label="Telefon"><input className="input mono" value={form.phone} onChange={e => set('phone', e.target.value)} inputMode="tel"/></Field>
           </div>
           <Field label="Stol / xona" required>
-            <select className="input" value={form.tableId} onChange={e => set('tableId', e.target.value)}>
-              {Object.entries(groups).map(([cat, ts]) => (
-                <optgroup key={cat} label={CAT(cat)}>
-                  {ts.map(t => <option key={t._id} value={t._id}>{CAT(cat)} {t.number}{t.description ? ` — ${t.description}` : ''}</option>)}
-                </optgroup>
-              ))}
-            </select>
+            <Select value={form.tableId} onChange={v => set('tableId', v)} placeholder="Stolni tanlang"
+              options={Object.entries(groups).flatMap(([cat, ts]) => ts.map(t => ({ value: t._id, group: CAT(cat), label: `${CAT(cat)} ${t.number}`, hint: t.description || '' })))}/>
           </Field>
           <div className="form-3">
-            <Field label="Sana"><input className="input mono" type="date" value={form.date} onChange={e => set('date', e.target.value)}/></Field>
-            <Field label="Vaqt"><input className="input mono" type="time" value={form.time} onChange={e => set('time', e.target.value)}/></Field>
+            <Field label="Sana"><DateInput value={form.date} onChange={v => set('date', v)}/></Field>
+            <Field label="Vaqt"><TimeInput value={form.time} onChange={v => set('time', v)}/></Field>
             <Field label="Necha soat">
-              <select className="input" value={form.duration} onChange={e => set('duration', +e.target.value)}>
-                {[60, 90, 120, 180, 240, 360].map(m => <option key={m} value={m}>{m / 60} soat</option>)}
-              </select>
+              <Select value={form.duration} onChange={v => set('duration', +v)}
+                options={[60, 90, 120, 180, 240, 360].map(m => ({ value: m, label: `${m / 60} soat` }))}/>
             </Field>
           </div>
           <div className="form-2">

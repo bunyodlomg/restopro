@@ -11,7 +11,7 @@ const { resolveUnique } = require('./unique')
 require('../models/SyncNotice')
 
 // Sinxronlanadigan modellar
-const MODELS = ['User', 'Session', 'Category', 'Product', 'Ingredient', 'Order', 'Table', 'Salary', 'Purchase', 'Settings', 'Reservation', 'GuestOrder', 'PrintJob', 'SyncNotice']
+const MODELS = ['User', 'Session', 'Category', 'Product', 'Ingredient', 'StockMove', 'Order', 'Table', 'Salary', 'Purchase', 'Settings', 'Reservation', 'GuestOrder', 'PrintJob', 'SyncNotice']
 const BATCH = 500
 
 const models = () => MODELS.map(name => mongoose.model(name))
