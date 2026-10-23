@@ -9,6 +9,7 @@ const Purchase   = require('../models/Purchase')
 const auth       = require('../middleware/auth')
 const { adminOnly } = require('../middleware/auth')
 const print      = require('../print')
+const { isValidObjectId } = require('mongoose')
 
 // O'zgartirish mumkin bo'lgan (hali yopilmagan) buyurtma holatlari
 const OPEN_STATUSES = ['pending', 'ready']
@@ -327,6 +328,52 @@ router.post('/', auth, async (req, res) => {
   } catch (err) {
     if (err.status) return res.status(err.status).json({ message: err.message })
     console.error('Order xatosi:', err)
+    res.status(500).json({ message: 'Server xatosi' })
+  }
+})
+
+// ─── POST /api/orders/:id/move — mehmonlarni boshqa stolga ko'chirish ───
+// Masalan Zal 1 → Xona 4. Faqat bo'sh stolga; ofitsant ham, admin ham qila oladi.
+router.post('/:id/move', auth, async (req, res) => {
+  try {
+    const io = req.app.get('io')
+    if (!isValidObjectId(req.params.id)) return res.status(404).json({ message: 'Buyurtma topilmadi' })
+    if (!isValidObjectId(req.body?.tableId)) return res.status(400).json({ message: 'Stol tanlanmagan' })
+    const order = await Order.findOne({ _id: req.params.id, status: { $in: OPEN_STATUSES } })
+    if (!order) return notOpen(req, res)
+    if (order.category === 'soboy') return res.status(400).json({ message: "Soboy buyurtmani stolga ko'chirib bo'lmaydi" })
+
+    const target = await Table.findById(req.body.tableId)
+    if (!target || target.category === 'soboy') return res.status(404).json({ message: 'Stol topilmadi' })
+    if (String(target._id) === String(order.tableId)) return res.status(400).json({ message: "Buyurtma shu stolning o'zida" })
+    if (await Order.exists({ tableId: target._id, status: { $in: OPEN_STATUSES } }))
+      return res.status(409).json({ message: `Stol ${target.number} band — bo'sh stol tanlang` })
+
+    // Stolni egallash: o'qilgan holati o'zgarmagan bo'lsagina (shu orada boshqasi egallasa — rad).
+    // "Band" belgisi qolib ketgan, lekin ochiq buyurtmasi yo'q stol ham bo'sh hisoblanadi.
+    const claimed = await Table.findOneAndUpdate(
+      { _id: target._id, status: target.status, currentOrder: target.currentOrder },
+      { status: 'busy', currentOrder: order._id },
+      { new: true }
+    )
+    if (!claimed) return res.status(409).json({ message: `Stol ${target.number} band — bo'sh stol tanlang` })
+
+    const fromId = order.tableId
+    order.tableId = claimed._id
+    order.tableNumber = claimed.number
+    order.category = claimed.category
+    await order.save()
+
+    // Eski stolda boshqa ochiq buyurtma qolmagan bo'lsa — bo'shaydi
+    if (fromId && !(await Order.exists({ tableId: fromId, status: { $in: OPEN_STATUSES } }))) {
+      const freed = await Table.findByIdAndUpdate(fromId, { status: 'free', currentOrder: null }, { new: true })
+      if (freed) io.emit('tableUpdated', freed)
+    }
+    io.emit('tableUpdated', claimed)
+    io.emit('orderUpdated', order)
+    res.json(order)
+  } catch (err) {
+    console.error("Ko'chirish xatosi:", err)
     res.status(500).json({ message: 'Server xatosi' })
   }
 })

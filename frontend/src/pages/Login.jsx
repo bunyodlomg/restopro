@@ -4,8 +4,8 @@ import { useNavigate } from 'react-router-dom'
 import API from '../api/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import AuthFrame from '../components/auth/AuthFrame.jsx'
-import { Field, Seg } from '../components/ui.jsx'
-import { isTerminal } from '../utils/terminal.js'
+import { Field } from '../components/ui.jsx'
+import { isTerminal, appKind } from '../utils/terminal.js'
 
 // 4 raqamli PIN klaviaturasi (monoblok uchun katta tugmalar)
 function PinPad({ onSubmit, busy }) {
@@ -37,8 +37,11 @@ function PinPad({ onSubmit, busy }) {
   )
 }
 
+// Asosiy kirish — PIN (ofitsant terminali, telefon, brauzer); login/parol — ikkinchi yo'l.
+// Kassa ilovasiga faqat admin kiradi — u yerda login/parol asosiy.
 export default function Login() {
-  const [mode, setMode] = useState(isTerminal() ? 'pin' : 'pass')
+  const pinFirst = appKind() !== 'kassa'
+  const [mode, setMode] = useState(pinFirst ? 'pin' : 'pass')
   const [pinAvailable, setPinAvailable] = useState(false)
   const [pinOff, setPinOff] = useState(null)   // terminalda PIN ishlamasa — sababi (IP)
   const [username, setUsername] = useState('')
@@ -91,11 +94,6 @@ export default function Login() {
         {mode === 'pin' ? '4 raqamli PIN kodingizni kiriting' : 'Login va parolingizni kiriting'}
       </p>
 
-      {pinAvailable && (
-        <Seg value={mode} onChange={m => { setMode(m); setError('') }} style={{ marginBottom: 20 }}
-          items={[{ k: 'pin', l: 'PIN kod' }, { k: 'pass', l: 'Login va parol' }]}/>
-      )}
-
       {pinOff && (
         <div className="hint" style={{ marginBottom: 16 }}>
           PIN bilan kirish faqat restoran tarmog'idan ishlaydi. Terminalni kassa kompyuteriga ulang
@@ -125,6 +123,13 @@ export default function Login() {
             {loading ? <><span className="spinner-sm"/> Kirilmoqda</> : 'Kirish'}
           </button>
         </form>
+      )}
+
+      {pinAvailable && pinFirst && (
+        <button type="button" className="btn btn-ghost btn-block" style={{ marginTop: 14 }}
+          onClick={() => { setMode(m => (m === 'pin' ? 'pass' : 'pin')); setError('') }}>
+          {mode === 'pin' ? 'Login va parol bilan kirish' : 'PIN kod bilan kirish'}
+        </button>
       )}
     </AuthFrame>
   )

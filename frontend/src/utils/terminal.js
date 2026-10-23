@@ -44,6 +44,5 @@ export const appInfo = () => appUpdate
   ? { ver: appUpdate.current || '', upd: appUpdate.status || '', updErr: appUpdate.status === 'error' ? String(appUpdate.error || '').slice(0, 120) : '' }
   : {}
 
-// Buyurtma yuborilgach terminal tez bloklanadi (TerminalLock tinglaydi)
-export const LOCK_SOON_MS = 10000
+// Buyurtma yuborilgach terminal tez bloklanadi (TerminalLock tinglaydi, vaqti — settings.terminalLock)
 export const lockSoon = () => window.dispatchEvent(new Event('rp:lock-soon'))

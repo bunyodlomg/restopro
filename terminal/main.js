@@ -33,12 +33,23 @@ function normalizeUrl(u) {
   return u
 }
 
+// Restoran interneti paket yo'qotsa ulanish 7+ soniyaga cho'ziladi — bitta urinish kam: 3 marta, har biri 15 s
 async function checkServer(url) {
+  let last
+  for (let i = 0; i < 3; i++) {
+    last = await checkOnce(url)
+    if (last.ok || last.final) return last
+  }
+  return last
+}
+
+async function checkOnce(url) {
   try {
-    const r = await fetch(`${url}/health`, { signal: AbortSignal.timeout(6000) })
-    if (!r.ok) return { ok: false, message: `Server javobi: ${r.status}` }
+    const r = await fetch(`${url}/health`, { signal: AbortSignal.timeout(15000) })
+    // Server javob berdi — qayta urinish foydasiz (final)
+    if (!r.ok) return { ok: false, final: true, message: `Server javobi: ${r.status}` }
     const j = await r.json().catch(() => null)
-    if (j?.status !== 'ok') return { ok: false, message: 'Bu manzilda RestoPro serveri topilmadi' }
+    if (j?.status !== 'ok') return { ok: false, final: true, message: 'Bu manzilda RestoPro serveri topilmadi' }
     return { ok: true }
   } catch (err) {
     return { ok: false, message: 'Serverga ulanib bo\'lmadi: ' + (err.cause?.code || err.message) }

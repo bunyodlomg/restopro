@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Search, Plus, Minus, Trash2, Send, X, MessageSquareText, Eraser, UtensilsCrossed } from 'lucide-react'
+import { ArrowLeft, Search, Plus, Minus, Trash2, Send, X, MessageSquareText, Eraser, UtensilsCrossed, ArrowRightLeft } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useSections } from '../../utils/sections.js'
 import API from '../../api/api.js'
@@ -9,6 +9,7 @@ import { useSettings } from '../../context/SettingsContext.jsx'
 import { createSocket } from '../../api/socket.js'
 import { isTerminal, lockSoon } from '../../utils/terminal.js'
 import SyncBadge from '../../components/shared/SyncBadge.jsx'
+import MoveTableModal from './MoveTableModal.jsx'
 import { enqueueOrder, genClientId } from '../../utils/offlineQueue.js'
 import { BrandMark, usePosBase, money, initials, fileUrl, minutesSince, fmtDuration, Loading, Empty } from '../../components/ui.jsx'
 
@@ -42,6 +43,7 @@ export default function OrderCreate() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [sheet, setSheet] = useState(false)
+  const [moveOpen, setMoveOpen] = useState(false)
   const searchRef = useRef()
 
   const loadCurrent = async () => {
@@ -61,7 +63,10 @@ export default function OrderCreate() {
     Promise.all(jobs).catch(() => toast.error("Menyuni yuklab bo'lmadi")).finally(() => setLoading(false))
 
     const s = createSocket()
-    s.on('orderUpdated', o => { if (String(o.tableId) === tableId) setCurrent(o) })
+    s.on('orderUpdated', o => {
+      if (String(o.tableId) === tableId) setCurrent(o)
+      else setCurrent(c => (c && c._id === o._id ? null : c))   // boshqa stolga ko'chirildi
+    })
     s.on('orderClosed', id => setCurrent(c => (c && c._id === id ? null : c)))
     s.on('syncApplied', ({ colls }) => {
       if (colls.includes('products')) API.get('/api/products').then(r => setProducts(r.data)).catch(() => {})
@@ -125,7 +130,7 @@ export default function OrderCreate() {
     }
 
     const done = () => {
-      // Monoblok (terminal) rejimida buyurtmadan keyin 10 soniya harakatsizlikdan so'ng PIN ekrani
+      // Monoblok (terminal) rejimida buyurtmadan keyin bir necha soniyada PIN ekrani (vaqti — kassa sozlamasi)
       if (isTerminal()) lockSoon()
       navigate(base)
     }
@@ -240,7 +245,14 @@ export default function OrderCreate() {
           <div className="brand hide-mobile"><BrandMark size={42}/><div><b>{settings.brandName}</b><small>Ofitsant</small></div></div>
           <div className="vr hide-mobile"/>
           <div className="brand"><div><b style={{ fontSize: 19 }}>{title}</b><small>{sub}</small></div></div>
-          <div className="right"><SyncBadge/></div>
+          <div className="right">
+            {current && !isSoboy && (
+              <button className="btn btn-soft btn-lg" onClick={() => setMoveOpen(true)} title="Mehmonlarni boshqa stolga ko'chirish">
+                <ArrowRightLeft size={20}/><span className="hide-mobile">Ko'chirish</span>
+              </button>
+            )}
+            <SyncBadge/>
+          </div>
         </header>
 
         <div className="pos-tabs">
@@ -298,6 +310,12 @@ export default function OrderCreate() {
       </section>
 
       <aside className="side as-panel">{receipt}</aside>
+
+      <MoveTableModal open={moveOpen} order={current} onClose={() => setMoveOpen(false)}
+        onMoved={(order, t) => {
+          setMoveOpen(false); setTable(t); setCurrent(order)
+          navigate(`${base}/order/${t._id}`, { replace: true, state: { table: t } })
+        }}/>
 
       {/* Telefon: pastki savat paneli va chek oynasi */}
       {(newCount > 0 || sentItems.length > 0) && !sheet && (

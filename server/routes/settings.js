@@ -79,6 +79,17 @@ router.put('/', auth, adminOnly, upload.fields([{ name: 'logo', maxCount: 1 }, {
     if (iconFile)                        update.appIcon           = `/uploads/${iconFile.filename}`
     if (req.body.staffAccessEnabled !== undefined) update.staffAccessEnabled = String(req.body.staffAccessEnabled) === 'true'
     if (req.body.qrMenuEnabled      !== undefined) update.qrMenuEnabled      = String(req.body.qrMenuEnabled) === 'true'
+    // Terminal bloklanishi — JSON: { enabled, afterOrder, idle } (soniya)
+    if (req.body.terminalLock !== undefined) {
+      let t = req.body.terminalLock
+      if (typeof t === 'string') { try { t = JSON.parse(t) } catch { t = {} } }
+      const sec = (v, min, max, def) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def }
+      update.terminalLock = {
+        enabled:    t?.enabled !== false,
+        afterOrder: sec(t?.afterOrder, 3, 600, 10),
+        idle:       sec(t?.idle, 10, 3600, 120),
+      }
+    }
     if (req.body.qrBaseUrl !== undefined) {
       const u = String(req.body.qrBaseUrl).trim().replace(/\/+$/, '')
       if (u && !/^https?:\/\/[^\s/]+$/i.test(u)) return res.status(400).json({ message: 'QR manzili noto\'g\'ri (masalan: http://192.168.1.10:5050)' })

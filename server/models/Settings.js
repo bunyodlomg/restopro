@@ -66,6 +66,14 @@ const SettingsSchema = new Schema({
   // Xodimlar (admin bo'lmaganlar) tizimga kira oladimi — bitta tugma bilan hammasini o'chirish
   staffAccessEnabled: { type: Boolean, default: true },
 
+  // Ofitsant terminali (monoblok) avtomatik bloklanishi — PIN ekraniga qaytish, boshqa ofitsant
+  // birovning nomidan buyurtma bermasligi uchun. Kassadan (Xodimlar sahifasi) sozlanadi.
+  terminalLock: {
+    enabled:     { type: Boolean, default: true },
+    afterOrder:  { type: Number,  default: 10 },    // soniya: buyurtma yuborilgach
+    idle:        { type: Number,  default: 120 },   // soniya: hech narsa bosilmasa
+  },
+
   // QR menyu: mijoz stoldagi QR kodni skanerlab buyurtma beradi (faqat restoran Wi-Fi'idan)
   qrMenuEnabled: { type: Boolean, default: false },
   qrBaseUrl:     { type: String,  default: '' },     // QR ichidagi manzil (bo'sh = avtomatik)

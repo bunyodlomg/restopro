@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { UserPlus, Trash2, Search, Pencil, Users as UsersIcon, ShieldOff, ShieldCheck, KeyRound, LogOut } from 'lucide-react'
+import { UserPlus, Trash2, Search, Pencil, Users as UsersIcon, ShieldOff, ShieldCheck, KeyRound, LogOut, Lock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import Modal, { ModalField } from '../../components/shared/Modal.jsx'
@@ -23,6 +23,17 @@ export default function Users() {
   const { user: me } = useAuth()
   const staffOn = settings.staffAccessEnabled !== false
   const [confirmOff, setConfirmOff] = useState(false)
+
+  // Ofitsant terminali bloklanishi (PIN ekraniga qaytish) — yoqish/o'chirish va vaqtlar
+  const lock = { enabled: true, afterOrder: 10, idle: 120, ...(settings.terminalLock || {}) }
+  const [lockSec, setLockSec] = useState({ afterOrder: lock.afterOrder, idle: lock.idle })
+  useEffect(() => { setLockSec({ afterOrder: lock.afterOrder, idle: lock.idle }) }, [lock.afterOrder, lock.idle])
+  const saveLock = async patch => {
+    const fd = new FormData(); fd.append('terminalLock', JSON.stringify({ ...lock, ...patch }))
+    try { await API.put('/api/settings', fd); await refresh(); toast.success('Terminal bloklanishi saqlandi') }
+    catch (e) { toast.error(e.response?.data?.message || 'Xatolik') }
+  }
+  const lockDirty = +lockSec.afterOrder !== lock.afterOrder || +lockSec.idle !== lock.idle
 
   // Barcha xodimlar (admin bo'lmaganlar) kirishini yoqish/o'chirish
   const setStaffAccess = async enabled => {
@@ -126,6 +137,35 @@ export default function Users() {
           </div>
         </div>
         <Switch checked={staffOn} onChange={v => (v ? setStaffAccess(true) : setConfirmOff(true))}/>
+      </div>
+
+      <div className="card card-pad" style={{ marginBottom: 16 }}>
+        <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
+          <Lock size={26} style={{ flexShrink: 0, marginTop: 2 }}/>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <b style={{ fontSize: 17 }}>Ofitsant terminali bloklanishi</b>
+            <div className="hint">
+              {lock.enabled ? "Monoblok o'zi PIN ekraniga qaytadi — boshqa ofitsant birovning nomidan buyurtma bera olmaydi."
+                : "O'chirilgan: ofitsant «Chiqish» tugmasini bosmaguncha terminal ochiq qoladi."}
+            </div>
+          </div>
+          <Switch checked={lock.enabled} onChange={v => saveLock({ enabled: v })}/>
+        </div>
+        {lock.enabled && (
+          <div className="row wrap" style={{ gap: 16, marginTop: 14, alignItems: 'flex-end' }}>
+            <label className="col" style={{ gap: 6 }}>
+              <span className="label">Buyurtma yuborilgach, soniya</span>
+              <input className="input" type="number" min={3} max={600} style={{ width: 150 }}
+                value={lockSec.afterOrder} onChange={e => setLockSec(s => ({ ...s, afterOrder: e.target.value }))}/>
+            </label>
+            <label className="col" style={{ gap: 6 }}>
+              <span className="label">Hech narsa bosilmasa, soniya</span>
+              <input className="input" type="number" min={10} max={3600} style={{ width: 150 }}
+                value={lockSec.idle} onChange={e => setLockSec(s => ({ ...s, idle: e.target.value }))}/>
+            </label>
+            <button className="btn btn-primary btn-lg" disabled={!lockDirty} onClick={() => saveLock({ afterOrder: +lockSec.afterOrder, idle: +lockSec.idle })}>Saqlash</button>
+          </div>
+        )}
       </div>
 
       <div className="card">
