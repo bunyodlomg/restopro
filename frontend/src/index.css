@@ -594,3 +594,18 @@ select.input {
 .exp-mini small { display: block; font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
 .rail-link { position: relative; }
 .rail-badge { position: absolute; top: 4px; right: 8px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--accent); color: #fff; font: 700 11.5px/20px var(--mono); text-align: center; }
+
+/* Kassa: yangi kelgan buyurtma 10 soniya ajralib turadi (Orders.jsx → FRESH_MS) */
+.ocard { position: relative; }
+.ocard.fresh { --fresh: var(--ok); animation: fresh-pulse 1.25s ease-in-out 8, rise .25s ease; }
+.ocard.fresh-added { --fresh: var(--warn); }
+@keyframes fresh-pulse {
+  0%, 100% { box-shadow: var(--shadow), 0 0 0 2px var(--fresh); }
+  50%      { box-shadow: var(--shadow), 0 0 0 6px color-mix(in srgb, var(--fresh) 35%, transparent), 0 0 28px color-mix(in srgb, var(--fresh) 45%, transparent); }
+}
+.ocard.fresh .ocard-head { animation: fresh-bg 10s ease-out forwards; }
+@keyframes fresh-bg { from { background: color-mix(in srgb, var(--fresh) 22%, transparent); } to { background: transparent; } }
+.fresh-tag { flex-shrink: 0; padding: 2px 9px; border-radius: 20px; background: var(--fresh); color: #fff; font: 700 11px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; animation: rise .2s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .ocard.fresh, .ocard.fresh .ocard-head { animation: none; box-shadow: var(--shadow), 0 0 0 3px var(--fresh); }
+}

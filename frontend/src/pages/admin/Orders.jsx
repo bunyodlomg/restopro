@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Bell, BellOff, Check, Printer, X, ClipboardList, Undo2, Minus, Plus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useSections, usePlace } from '../../utils/sections.js'
@@ -20,15 +20,20 @@ export async function printReceipt(order, settings) {
   else toast.success('Chek chiqdi', { id })
 }
 
-function OrderCard({ order, settings, onClose, onCancel, onReturn, busy }) {
+const FRESH_MS = 10000   // yangi / qo'shimcha buyurtma shuncha vaqt rangli animatsiya bilan ajralib turadi
+
+function OrderCard({ order, settings, onClose, onCancel, onReturn, busy, fresh }) {
   const mins = minutesSince(order.createdAt)
   const extras = order.extras || []
   return (
-    <div className="card ocard">
+    <div className={`card ocard ${fresh ? `fresh fresh-${fresh}` : ''}`}>
       <div className="ocard-head">
         <OrderNum order={order}/>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 16 }} className="truncate">{order.waiterName || '—'}</div>
+          <div className="row" style={{ gap: 8, minWidth: 0 }}>
+            <span style={{ fontWeight: 700, fontSize: 16 }} className="truncate">{order.waiterName || '—'}</span>
+            {fresh && <span className="fresh-tag">{fresh === 'new' ? 'Yangi' : "Qo'shimcha"}</span>}
+          </div>
           <div className="label truncate">
             {new Date(order.createdAt).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}
             {' · '}<span className={mins > 60 ? 'late' : ''}>{fmtDuration(mins)}</span>
@@ -91,16 +96,34 @@ export default function Orders() {
   const [sound, setSound] = useState(() => localStorage.getItem('rp_sound') !== 'false')
   const { settings } = useSettings()
 
+  // Yangi kelgan buyurtma ('new') va ochiq stolga qo'shilgan taom ('added') — 10 soniya ajralib turadi.
+  // Cloud'dagi ofitsantdan sync orqali kelganlar uchun socket «newOrder» yo'q — ro'yxat solishtiriladi.
+  const [fresh, setFresh] = useState({})
+  const seen = useRef(null)   // { orderId: taomlar soni } — birinchi yuklashdagilar yangi hisoblanmaydi
+  const markFresh = (id, kind) => {
+    setFresh(f => ({ ...f, [id]: f[id] === 'new' ? 'new' : kind }))
+    setTimeout(() => setFresh(f => { const n = { ...f }; delete n[id]; return n }), FRESH_MS)
+  }
+  const track = list => {
+    const prev = seen.current
+    seen.current = Object.fromEntries(list.map(o => [o._id, itemCount(o)]))
+    if (!prev) return
+    for (const o of list) {
+      if (!(o._id in prev)) markFresh(o._id, 'new')
+      else if (itemCount(o) > prev[o._id]) markFresh(o._id, 'added')
+    }
+  }
+
   useEffect(() => {
     const load = () => API.get('/api/orders?status=pending')
-      .then(({ data }) => setOrders(data))
+      .then(({ data }) => { track(data); setOrders(data) })
       .catch(() => toast.error("Yuklab bo'lmadi"))
       .finally(() => setLoading(false))
     load()
     const s = createSocket({ transports: ['websocket'], reconnection: true })
     s.on('syncApplied', ({ colls }) => { if (colls.includes('orders')) load() })
-    s.on('newOrder', o => setOrders(p => (p.some(x => x._id === o._id) ? p : [o, ...p])))
-    s.on('orderUpdated', o => setOrders(p => p.map(x => (x._id === o._id ? o : x))))
+    s.on('newOrder', o => setOrders(p => { if (p.some(x => x._id === o._id)) return p; const next = [o, ...p]; track(next); return next }))
+    s.on('orderUpdated', o => setOrders(p => { const next = p.map(x => (x._id === o._id ? o : x)); track(next); return next }))
     s.on('orderClosed', id => setOrders(p => p.filter(x => x._id !== id)))
     return () => s.disconnect()
   }, [])
@@ -147,7 +170,7 @@ export default function Orders() {
       ) : (
         <div className="ogrid">
           {list.map(o => (
-            <OrderCard key={o._id} order={o} settings={settings} busy={busyId === o._id} onClose={close} onCancel={setCancelling} onReturn={setReturning}/>
+            <OrderCard key={o._id} order={o} settings={settings} busy={busyId === o._id} fresh={fresh[o._id]} onClose={close} onCancel={setCancelling} onReturn={setReturning}/>
           ))}
         </div>
       )}
