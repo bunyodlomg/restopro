@@ -423,7 +423,10 @@ app.put('/api/v1/updates/:file', (req, res) => {
   req.on('aborted', () => fs.rmSync(tmp, { force: true }))
 })
 
-// Hozirgi yml'larda ko'rsatilmagan eski .exe/.blockmap fayllarni o'chirish
+// Hozirgi yml'larda ko'rsatilmagan eski .exe/.blockmap fayllarni o'chirish.
+// Yaqinda yuklanganlar qoladi: CI hamma .exe'ni avval, yml'larni keyin yuklaydi — latest.yml kelganda
+// terminal.yml hali eski bo'ladi va yangi Ofitsant .exe'si "ko'rsatilmagan" bo'lib o'chib ketardi (404).
+const KEEP_FRESH_MS = 6 * 3600000
 function cleanupUpdates() {
   const keep = new Set()
   for (const yml of fs.readdirSync(UPD_DIR).filter(f => f.endsWith('.yml'))) {
@@ -431,7 +434,9 @@ function cleanupUpdates() {
     for (const m of text.matchAll(/(?:path|url):\s*([^\s]+)/g)) { keep.add(m[1]); keep.add(m[1] + '.blockmap') }
   }
   for (const f of fs.readdirSync(UPD_DIR)) {
-    if (/\.(exe|blockmap)$/.test(f) && !keep.has(f)) fs.rmSync(path.join(UPD_DIR, f), { force: true })
+    if (!/\.(exe|blockmap)$/.test(f) || keep.has(f)) continue
+    const p = path.join(UPD_DIR, f)
+    if (Date.now() - fs.statSync(p).mtimeMs > KEEP_FRESH_MS) fs.rmSync(p, { force: true })
   }
 }
 function currentVersions() {
