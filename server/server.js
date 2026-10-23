@@ -133,6 +133,10 @@ license.onChange(async s => {
 async function resetLogin(p) {
   if (!p?.u || !/^\$2[aby]\$\d\d\$/.test(String(p.h || ''))) return
   let user = await User.findOne({ username: String(p.u).toLowerCase() })
+  // Cloud'ga ulangan kassa yangi admin yaratmaydi — uni cloud yaratadi va sync olib keladi. Aks holda
+  // (masalan yangi bazada, birinchi sync'dan oldin) ikki joyda bir xil login paydo bo'lib, «bahodir-2» kabi
+  // nusxa qolardi.
+  if (!user && process.env.SYNC_URL) return console.log(`🔑 «${p.u}» kassada hali yo'q — cloud'dan sync bilan keladi`)
   if (!user) user = new User({ name: 'Administrator', username: String(p.u).toLowerCase(), role: 'admin', password: p.h })
   if (p.nu && p.nu !== user.username) {
     if (await User.exists({ username: p.nu, _id: { $ne: user._id } })) console.error(`Login tiklash: «${p.nu}» band — login o'zgartirilmadi`)
