@@ -118,10 +118,19 @@ router.put('/', auth, adminOnly, upload.fields([{ name: 'logo', maxCount: 1 }, {
         const known = current.find(c => c.key === x?.key)
         out.push({ key: known ? known.key : 's_' + require('crypto').randomBytes(4).toString('hex'), label })
       }
-      for (const c of current) {
-        if (out.some(o => o.key === c.key)) continue
+      // O'chirilayotgan bo'limlar: stoli bo'lsa — faqat «stollari bilan» (dropTables) va hech biri band bo'lmasa
+      const dropTables = String(req.body.dropTables) === 'true'
+      const removed = current.filter(c => !out.some(o => o.key === c.key))
+      for (const c of removed) {
         const n = await Table.countDocuments({ category: c.key })
-        if (n) return res.status(400).json({ message: `«${c.label}» bo'limida ${n} ta stol bor — avval stollarni o'chiring yoki boshqa bo'limga o'tkazing` })
+        if (n && !dropTables) return res.status(400).json({ message: `«${c.label}» bo'limida ${n} ta stol bor — avval stollarni o'chiring yoki boshqa bo'limga o'tkazing` })
+        if (n && await Table.exists({ category: c.key, status: 'busy' })) return res.status(400).json({ message: `«${c.label}» bo'limida band stol bor — avval hisobni yoping` })
+      }
+      for (const c of removed) {
+        const ids = (await Table.find({ category: c.key }).select('_id').lean()).map(t => t._id)
+        if (!ids.length) continue
+        await Table.deleteMany({ _id: { $in: ids } })
+        for (const id of ids) req.app.get('io').emit('tableDeleted', String(id))
       }
       update.tableSections = out
     }

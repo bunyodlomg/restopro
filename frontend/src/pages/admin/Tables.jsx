@@ -9,6 +9,7 @@ import { Select } from '../../components/shared/Pickers.jsx'
 import { Loading, Empty, PageHead, Seg, Field } from '../../components/ui.jsx'
 import { useSections } from '../../utils/sections.js'
 import SectionsModal from './SectionsModal.jsx'
+import AddTablesModal from './AddTablesModal.jsx'
 
 const pad = n => String(n).padStart(2, '0')
 
@@ -21,6 +22,7 @@ export default function Tables() {
   const [deleting, setDeleting] = useState(null)
   const [editing, setEditing] = useState(null)
   const [sectionsOpen, setSectionsOpen] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
 
   const fetchTables = async () => {
     try { const { data } = await API.get('/api/tables'); setTables(data) }
@@ -86,16 +88,16 @@ export default function Tables() {
         actions={<>
           <button className="btn btn-soft btn-lg" onClick={() => setSectionsOpen(true)}><Layers size={20}/> Bo'limlar</button>
           <Link to="/admin/tables/qr" className="btn btn-soft btn-lg"><QrCode size={20}/> QR kodlar</Link>
-          <button className="btn btn-primary btn-lg" onClick={addTable} disabled={adding}>
-            <Plus size={20}/>{adding ? "Qo'shilmoqda" : "Stol qo'shish"}
+          <button className="btn btn-primary btn-lg" onClick={() => setAddOpen(true)} disabled={cat === 'soboy'}>
+            <Plus size={20}/>Stol qo'shish
           </button>
         </>}/>
 
       <Seg value={cat} onChange={setCat} items={tabs.map(t => ({ ...t, n: counts[t.k] || 0 }))} style={{ marginBottom: 18 }}/>
 
       {loading ? <Loading/> : list.length === 0 ? (
-        <Empty icon={Grid3X3} title="Bu bo'limda stol yo'q" text="«Stol qo'shish» tugmasi keyingi raqamli stolni darhol yaratadi."
-          action={<button className="btn btn-primary btn-lg" onClick={addTable} disabled={adding}><Plus size={20}/> Stol qo'shish</button>}/>
+        <Empty icon={Grid3X3} title="Bu bo'limda stol yo'q" text="Bitta stol (istalgan raqam, masalan 100) yoki bir nechtasini birdan (1 dan 32 gacha) qo'shing."
+          action={<button className="btn btn-primary btn-lg" onClick={() => setAddOpen(true)}><Plus size={20}/> Stol qo'shish</button>}/>
       ) : (
         <div className="tgrid">
           {list.map(t => {
@@ -150,6 +152,8 @@ export default function Tables() {
       </Modal>
 
       <SectionsModal open={sectionsOpen} onClose={() => setSectionsOpen(false)} counts={counts}/>
+      <AddTablesModal open={addOpen} onClose={() => setAddOpen(false)} tables={tables} defaultCat={cat === 'soboy' ? sections[0]?.key : cat}
+        onAdded={list => { setTables(p => [...p, ...list.filter(t => !p.some(x => x._id === t._id))]); if (list[0]) setCat(list[0].category) }}/>
     </div>
   )
 }

@@ -612,3 +612,27 @@ select.input {
 /* Ofitsant: «Barchasi» — bo'lim sarlavhalari */
 .tgroup-head { display: flex; align-items: baseline; gap: 12px; margin: 4px 2px 12px; }
 .tgroup-head b { font-size: 20px; letter-spacing: -.02em; }
+
+/* ── Ekran klaviaturasi (components/VirtualKeyboard.jsx) — Apple uslubida ── */
+:root { --kbd-h: 0px; --vk-bg: #D1D4DB; --vk-key: #FFFFFF; --vk-fn: #ACB1BB; --vk-ink: #0B0B0C; --vk-shadow: 0 1px 0 rgba(0,0,0,.32); }
+[data-theme="dark"] { --vk-bg: #2B2B2E; --vk-key: #6B6B70; --vk-fn: #464649; --vk-ink: #FFFFFF; --vk-shadow: 0 1px 0 rgba(0,0,0,.6); }
+html.vkbd-open body { padding-bottom: var(--kbd-h); }
+html.vkbd-open .modal-overlay { padding-bottom: calc(20px + var(--kbd-h)); align-items: flex-end; }
+html.vkbd-open .modal { max-height: calc(100vh - 40px - var(--kbd-h)); }
+html.vkbd-open .pos, html.vkbd-open .shell { height: calc(100vh - var(--kbd-h)); }
+.vkbd { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2000; background: var(--vk-bg); padding: 8px 6px calc(10px + env(safe-area-inset-bottom)); box-shadow: 0 -1px 0 rgba(0,0,0,.08); animation: vk-up .18s ease-out; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+@keyframes vk-up { from { transform: translateY(100%); } to { transform: none; } }
+.vkbd-in { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 9px; }
+.vkbd-num .vkbd-in { max-width: 460px; }
+.vk-row { display: flex; gap: 7px; }
+.vk { position: relative; flex: 1; height: 56px; border-radius: 9px; background: var(--vk-key); color: var(--vk-ink); box-shadow: var(--vk-shadow); font: 400 23px/1 -apple-system, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif; display: flex; align-items: center; justify-content: center; border: 0; padding: 0; transition: background .05s; }
+.vk:active { background: var(--vk-fn); }
+.vk-fn { background: var(--vk-fn); font-size: 18px; }
+.vk-fn:active { background: var(--vk-key); }
+.vk-on { background: var(--vk-key); }
+.vk-caps svg { color: var(--accent); }
+.vk-space { font-size: 16px; color: color-mix(in srgb, var(--vk-ink) 60%, transparent); }
+.vk-go { background: var(--accent); color: #fff; font-size: 18px; font-weight: 600; }
+.vk-go:active { filter: brightness(.9); background: var(--accent); }
+.vkbd-num .vk { height: 64px; font-size: 28px; }
+@media (max-width: 700px) { .vk { height: 46px; font-size: 20px; border-radius: 7px; } .vk-row { gap: 5px; } }

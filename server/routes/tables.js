@@ -43,11 +43,34 @@ router.post('/:id/qr-reset', auth, adminOnly, async (req, res) => {
   } catch { res.status(500).json({ message: 'Server xatosi' }) }
 })
 
+// POST /api/tables/bulk — bir nechta stol: { category, from, to } (masalan 1–32). Bor raqamlar o'tkaziladi
+router.post('/bulk', auth, adminOnly, async (req, res) => {
+  try {
+    const { category } = req.body
+    const from = Math.round(+req.body.from), to = Math.round(+req.body.to)
+    if (!(from >= 1 && to >= from && to <= 9999)) return res.status(400).json({ message: "Raqamlar oralig'i noto'g'ri (1 — 9999)" })
+    if (to - from + 1 > 200) return res.status(400).json({ message: 'Bir martada 200 tadan ko\'p stol yaratib bo\'lmaydi' })
+    if (category === 'soboy' || !sectionsOf(await Settings.findById('main')).some(s => s.key === category))
+      return res.status(400).json({ message: "Bunday bo'lim yo'q" })
+    const have = new Set((await Table.find({ category, number: { $gte: from, $lte: to } }).select('number').lean()).map(t => t.number))
+    const created = []
+    for (let n = from; n <= to; n++) {
+      if (have.has(n)) continue
+      const t = await Table.create({ number: n, category })
+      req.app.get('io').emit('tableCreated', t)
+      created.push(t)
+    }
+    res.status(201).json({ created, skipped: have.size })
+  } catch (err) { res.status(500).json({ message: err.message }) }
+})
+
 // POST /api/tables
 router.post('/', auth, adminOnly, async (req, res) => {
   try {
-    const { number, category, description } = req.body
-    if (!number || !category) return res.status(400).json({ message: 'Raqam va kategoriya majburiy' })
+    const { category, description } = req.body
+    const number = Math.round(+req.body.number)
+    if (!category) return res.status(400).json({ message: 'Raqam va kategoriya majburiy' })
+    if (!(number >= 1 && number <= 9999)) return res.status(400).json({ message: 'Stol raqami 1 dan 9999 gacha bo\'lishi kerak' })
     if (category !== 'soboy' && !sectionsOf(await Settings.findById('main')).some(s => s.key === category))
       return res.status(400).json({ message: "Bunday bo'lim yo'q" })
 

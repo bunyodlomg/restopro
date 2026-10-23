@@ -144,29 +144,30 @@ export default function Users() {
         <div className="row" style={{ gap: 14, alignItems: 'flex-start' }}>
           <Lock size={26} style={{ flexShrink: 0, marginTop: 2 }}/>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <b style={{ fontSize: 17 }}>Ofitsant terminali bloklanishi</b>
+            <div className="row" style={{ gap: 10 }}>
+              <b style={{ fontSize: 17 }}>Ofitsant terminali bloklanishi</b>
+              <span className={`tag ${lock.enabled ? 'tag-ok' : 'tag-soft'}`}>{lock.enabled ? 'Yoqilgan' : "O'chirilgan"}</span>
+            </div>
             <div className="hint">
-              {lock.enabled ? "Monoblok o'zi PIN ekraniga qaytadi — boshqa ofitsant birovning nomidan buyurtma bera olmaydi."
-                : "O'chirilgan: ofitsant «Chiqish» tugmasini bosmaguncha terminal ochiq qoladi."}
+              {lock.enabled ? `Monoblok o'zi PIN ekraniga qaytadi: buyurtmadan ${lock.afterOrder} soniya, harakatsiz ${lock.idle} soniya o'tgach.`
+                : "Terminal o'zi bloklanmaydi — ofitsant «Chiqish» tugmasini bosmaguncha ochiq qoladi. Yoqish uchun tugmani bosing."}
             </div>
           </div>
           <Switch checked={lock.enabled} onChange={v => saveLock({ enabled: v })}/>
         </div>
-        {lock.enabled && (
-          <div className="row wrap" style={{ gap: 16, marginTop: 14, alignItems: 'flex-end' }}>
-            <label className="col" style={{ gap: 6 }}>
-              <span className="label">Buyurtma yuborilgach, soniya</span>
-              <input className="input" type="number" min={3} max={600} style={{ width: 150 }}
-                value={lockSec.afterOrder} onChange={e => setLockSec(s => ({ ...s, afterOrder: e.target.value }))}/>
-            </label>
-            <label className="col" style={{ gap: 6 }}>
-              <span className="label">Hech narsa bosilmasa, soniya</span>
-              <input className="input" type="number" min={10} max={3600} style={{ width: 150 }}
-                value={lockSec.idle} onChange={e => setLockSec(s => ({ ...s, idle: e.target.value }))}/>
-            </label>
-            <button className="btn btn-primary btn-lg" disabled={!lockDirty} onClick={() => saveLock({ afterOrder: +lockSec.afterOrder, idle: +lockSec.idle })}>Saqlash</button>
-          </div>
-        )}
+        <div className="row wrap" style={{ gap: 16, marginTop: 14, alignItems: 'flex-end', opacity: lock.enabled ? 1 : .55 }}>
+          <label className="col" style={{ gap: 6 }}>
+            <span className="label">Buyurtma yuborilgach, soniya</span>
+            <input className="input mono" type="number" min={3} max={600} style={{ width: 150 }}
+              value={lockSec.afterOrder} onChange={e => setLockSec(s => ({ ...s, afterOrder: e.target.value }))}/>
+          </label>
+          <label className="col" style={{ gap: 6 }}>
+            <span className="label">Hech narsa bosilmasa, soniya</span>
+            <input className="input mono" type="number" min={10} max={3600} style={{ width: 150 }}
+              value={lockSec.idle} onChange={e => setLockSec(s => ({ ...s, idle: e.target.value }))}/>
+          </label>
+          <button className="btn btn-primary btn-lg" disabled={!lockDirty} onClick={() => saveLock({ afterOrder: +lockSec.afterOrder, idle: +lockSec.idle })}>Saqlash</button>
+        </div>
       </div>
 
       <div className="card">

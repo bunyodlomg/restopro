@@ -29,6 +29,7 @@ import Reservations from './pages/admin/Reservations.jsx'
 import QrCodes      from './pages/admin/QrCodes.jsx'
 import GuestMenu    from './pages/guest/GuestMenu.jsx'
 import TerminalLock from './components/TerminalLock.jsx'
+import VirtualKeyboard from './components/VirtualKeyboard.jsx'
 import UpdateBanner from './components/UpdateBanner.jsx'
 import OfflineBanner from './components/shared/OfflineBanner.jsx'
 import { initSync } from './utils/syncEngine.js'
@@ -146,6 +147,7 @@ export default function App() {
         <SettingsProvider>
           <BrowserRouter>
             <LicenseGate><TerminalLock/><UpdateBanner/><AppRoutes/></LicenseGate>
+            <VirtualKeyboard/>
           </BrowserRouter>
         </SettingsProvider>
       </AuthProvider>
