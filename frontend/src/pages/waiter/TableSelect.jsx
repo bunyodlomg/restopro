@@ -13,10 +13,10 @@ const pad = n => String(n).padStart(2, '0')
 
 export default function TableSelect() {
   const { sections } = useSections()
-  const CATS = sections.map(s => ({ k: s.key, l: s.label }))
+  const CATS = [{ k: 'all', l: 'Barchasi' }, ...sections.map(s => ({ k: s.key, l: s.label }))]
   const [tables, setTables] = useState([])
   const [orders, setOrders] = useState([])
-  const [cat, setCat] = useState(() => localStorage.getItem('rp_table_cat') || 'zal')
+  const [cat, setCat] = useState(() => localStorage.getItem('rp_table_cat') || 'all')
   const [loading, setLoading] = useState(true)
   const [reservations, setReservations] = useState([])
   const [, tick] = useState(0)
@@ -72,8 +72,13 @@ export default function TableSelect() {
   // Saqlangan bo'lim o'chirilgan bo'lsa — birinchisiga
   useEffect(() => { if (!CATS.some(c => c.k === cat)) setCat(CATS[0].k) }, [sections])
 
-  const list = tables.filter(t => t.category === cat).sort((a, b) => a.number - b.number)
-  const counts = Object.fromEntries(CATS.map(c => [c.k, tables.filter(t => t.category === c.k).length]))
+  const all = cat === 'all'
+  const list = tables.filter(t => all || t.category === cat).sort((a, b) => a.number - b.number)
+  const counts = Object.fromEntries(CATS.map(c => [c.k, c.k === 'all' ? tables.length : tables.filter(t => t.category === c.k).length]))
+  // «Barchasi»: bo'limlar ketma-ket, har biri o'z sarlavhasi bilan (raqamlar bo'limlarda takrorlanadi)
+  const groups = all
+    ? sections.map(s => ({ key: s.key, label: s.label, list: list.filter(t => t.category === s.key) })).filter(g => g.list.length)
+    : [{ key: cat, label: '', list }]
   const busy = list.filter(t => t.status === 'busy')
   const openSum = busy.reduce((s, t) => s + orderTotal(byTable[t._id]), 0)
 
@@ -96,9 +101,16 @@ export default function TableSelect() {
 
       {loading ? <Loading/> : list.length === 0 ? (
         <Empty icon={Grid3X3} title="Bu bo'limda stol yo'q" text="Stollarni admin panelidagi «Stollar» bo'limidan qo'shish mumkin."/>
-      ) : (
+      ) : groups.map(g => (
+        <section key={g.key} style={{ marginBottom: all ? 26 : 0 }}>
+          {all && (
+            <div className="tgroup-head">
+              <b>{g.label}</b>
+              <span className="label">{g.list.filter(t => t.status !== 'busy').length} bo'sh · {g.list.filter(t => t.status === 'busy').length} band</span>
+            </div>
+          )}
         <div className="tgrid">
-          {list.map(t => {
+          {g.list.map(t => {
             const o = byTable[t._id]
             const res = resByTable[t._id]
             if (t.status !== 'busy' && res) return (
@@ -129,7 +141,8 @@ export default function TableSelect() {
             )
           })}
         </div>
-      )}
+        </section>
+      ))}
     </div>
   )
 }

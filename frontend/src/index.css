@@ -609,3 +609,6 @@ select.input {
 @media (prefers-reduced-motion: reduce) {
   .ocard.fresh, .ocard.fresh .ocard-head { animation: none; box-shadow: var(--shadow), 0 0 0 3px var(--fresh); }
 }
+/* Ofitsant: «Barchasi» — bo'lim sarlavhalari */
+.tgroup-head { display: flex; align-items: baseline; gap: 12px; margin: 4px 2px 12px; }
+.tgroup-head b { font-size: 20px; letter-spacing: -.02em; }
