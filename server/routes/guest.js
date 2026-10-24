@@ -38,7 +38,7 @@ async function guestGate(req, res, next) {
 // GET /api/guest/t/:token — stol, brend va menyu
 router.get('/t/:token', guestGate, async (req, res, next) => {
   try {
-    const products = await Product.find({ isActive: true }).select('name price category image').sort({ category: 1, name: 1 })
+    const products = await Product.find({ isActive: true }).select('name price category image').sort({ position: 1, category: 1, name: 1 })
     const s = req.settings
     res.json({
       table: { number: req.table.number, category: req.table.category, label: require('../utils/sections').labelOf(s, req.table.category) },

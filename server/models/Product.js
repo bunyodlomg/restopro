@@ -6,6 +6,7 @@ const ProductSchema = new Schema({
   category: { type: String, default: 'Asosiy', trim: true },
   image:    { type: String, default: '' },
   isActive: { type: Boolean, default: true },
+  position: { type: Number, default: 0 },   // menyudagi tartib (admin «Tartiblash»da sudrab o'zgartiradi)
   ingredients: [{
     ingredient:  { type: Schema.Types.ObjectId, ref: 'Ingredient' },
     quantity:    { type: Number, default: 0 },

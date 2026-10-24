@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react'
-import { Plus, Pencil, Trash2, ImagePlus, Search, UtensilsCrossed, X, FolderOpen } from 'lucide-react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
+import { Plus, Pencil, Trash2, ImagePlus, Search, UtensilsCrossed, X, FolderOpen, GripVertical, ArrowUpDown, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import API from '../../api/api.js'
 import Modal from '../../components/shared/Modal.jsx'
@@ -7,6 +7,7 @@ import { Field, Switch, Loading, Empty, PageHead, money, initials, fileUrl } fro
 import CategoriesModal from './CategoriesModal.jsx'
 import { Select } from '../../components/shared/Pickers.jsx'
 import FoodImage from '../../components/shared/FoodImage.jsx'
+import useDragSort from '../../components/shared/useDragSort.js'
 
 // Retseptda ingredient birligiga mos birliklargina (server/utils/units.js bilan bir xil): kg ↔ g, l ↔ ml
 const UNIT_FAMILY = { kg: ['kg', 'g'], g: ['g', 'kg'], l: ['l', 'ml'], litr: ['l', 'ml'], ml: ['ml', 'l'], dona: ['dona'], paket: ['paket'] }
@@ -33,6 +34,10 @@ export default function Products() {
   const [form, setForm] = useState({ name: '', price: '', category: '', ingredients: [], isActive: true })
   const [catsOpen, setCatsOpen] = useState(false)
   const [newCat, setNewCat] = useState('')
+  // Tartiblash rejimi: taomlar sudrab joylashtiriladi, «Saqlash»da serverga yoziladi
+  const [sorting, setSorting] = useState(false)
+  const [savingOrder, setSavingOrder] = useState(false)
+  const beforeSort = useRef(null)
 
   const load = async () => {
     try {
@@ -63,6 +68,28 @@ export default function Products() {
     p.name?.toLowerCase().includes(q.toLowerCase()) &&
     (catFilter === ALL || p.category === catFilter)
   )
+
+  // Ko'rinib turgan ro'yxat to'liq ro'yxatning bir qismi — to'liq ro'yxatda suriladi,
+  // shunda boshqa bo'limlardagi taomlarning o'rni buzilmaydi
+  const moveProduct = (fromId, toId) => setProducts(ps => {
+    const from = ps.findIndex(p => p._id === fromId), to = ps.findIndex(p => p._id === toId)
+    if (from < 0 || to < 0) return ps
+    const next = [...ps]
+    next.splice(to, 0, next.splice(from, 1)[0])
+    return next
+  })
+  const { containerRef, start: startDrag } = useDragSort({ enabled: sorting, order: products, onMove: moveProduct })
+
+  const startSorting = () => { beforeSort.current = products; setQ(''); setSorting(true) }
+  const cancelSorting = () => { setProducts(beforeSort.current); setSorting(false) }
+  const saveOrder = async () => {
+    setSavingOrder(true)
+    try {
+      await API.put('/api/products/reorder', { ids: products.map(p => p._id) })
+      toast.success('Tartib saqlandi'); setSorting(false)
+    } catch (err) { toast.error(err.response?.data?.message || 'Xatolik') }
+    finally { setSavingOrder(false) }
+  }
 
   const openAdd = () => {
     setEditing(null)
@@ -107,7 +134,7 @@ export default function Products() {
         setProducts(p => p.map(x => (x._id === editing._id ? data : x))); toast.success('Saqlandi')
       } else {
         const { data } = await API.post('/api/products', fd)
-        setProducts(p => [data, ...p]); toast.success("Qo'shildi")
+        setProducts(p => [...p, data]); toast.success("Qo'shildi")
       }
       setModalOpen(false)
     } catch (err) { toast.error(err.response?.data?.message || 'Xatolik') }
@@ -138,11 +165,18 @@ export default function Products() {
   return (
     <div className="page">
       <PageHead title="Taomlar" sub={`${products.length} ta taom · ${catNames.length} ta bo'lim`}
-        actions={<>
+        actions={sorting ? <>
+          <span className="muted" style={{ fontSize: 15 }}>Taomni bosib turib kerakli joyga suring</span>
+          <button className="btn btn-ghost btn-lg" onClick={cancelSorting} disabled={savingOrder}>Bekor qilish</button>
+          <button className="btn btn-primary btn-lg" onClick={saveOrder} disabled={savingOrder}>
+            {savingOrder ? <><span className="spinner-sm"/> Saqlanmoqda</> : <><Check size={20}/> Saqlash</>}
+          </button>
+        </> : <>
           <div className="input-icon" style={{ width: 260 }}>
             <Search size={20}/>
             <input className="input" value={q} onChange={e => setQ(e.target.value)} placeholder="Taom qidirish"/>
           </div>
+          <button className="btn btn-soft btn-lg" onClick={startSorting} disabled={products.length < 2}><ArrowUpDown size={20}/> Tartiblash</button>
           <button className="btn btn-soft btn-lg" onClick={() => setCatsOpen(true)}><FolderOpen size={20}/> Bo'limlar</button>
           <button className="btn btn-primary btn-lg" onClick={openAdd}><Plus size={20}/> Yangi taom</button>
         </>}/>
@@ -159,22 +193,24 @@ export default function Products() {
         <Empty icon={UtensilsCrossed} title="Taom topilmadi" text="Yangi taom qo'shing — kassada darhol ko'rinadi."
           action={<button className="btn btn-primary btn-lg" onClick={openAdd}><Plus size={20}/> Yangi taom</button>}/>
       ) : (
-        <div className="menu-grid">
+        <div ref={containerRef} className={`menu-grid ${sorting ? 'sorting' : ''}`}>
           {filtered.map(p => (
-            <div key={p._id} className="pcard" style={{ cursor: 'pointer', opacity: p.isActive === false ? .5 : 1 }} onClick={() => openEdit(p)}>
+            <div key={p._id} data-sort-id={p._id} className="pcard" style={{ cursor: sorting ? 'grab' : 'pointer', opacity: p.isActive === false ? .5 : 1 }}
+              onPointerDown={sorting ? startDrag : undefined} onClick={sorting ? undefined : () => openEdit(p)}>
               <div className="pcard-ph">
                 <Thumb src={p.image ? fileUrl(p.image) : ''} name={p.name}/>
                 <span className="tag">{p.category}</span>
+                {sorting && <span className="sort-grip"><GripVertical size={22}/></span>}
               </div>
               <div className="pcard-body">
                 <span className="pcard-name">{p.name}</span>
                 <span className="pcard-desc">{p.ingredients?.length ? `${p.ingredients.length} ta ingredient` : 'Retsept kiritilmagan'}</span>
                 <span className="pcard-foot">
                   <span className="pcard-price">{money(p.price)}</span>
-                  <span className="row" style={{ gap: 6 }}>
+                  {!sorting && <span className="row" style={{ gap: 6 }}>
                     <button className="pcard-btn" title="Tahrirlash" onClick={e => { e.stopPropagation(); openEdit(p) }}><Pencil size={19}/></button>
                     <button className="pcard-btn" title="O'chirish" style={{ color: 'var(--accent-ink)' }} onClick={e => { e.stopPropagation(); setDeleting(p) }}><Trash2 size={19}/></button>
-                  </span>
+                  </span>}
                 </span>
               </div>
             </div>

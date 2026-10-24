@@ -54,7 +54,7 @@ router.get('/', async (req, res) => {
     if (req.query.active !== 'false') filter.isActive = true
     const products = await Product.find(filter)
       .populate('ingredients.ingredient', 'name unit quantity')
-      .sort({ category: 1, name: 1 })
+      .sort({ position: 1, category: 1, name: 1 })
     res.json(products)
   } catch (err) { res.status(500).json({ message: err.message }) }
 })
@@ -96,7 +96,10 @@ router.post('/', auth, adminOnly, upload.single('image'), async (req, res) => {
       } catch {}
     }
 
+    // Yangi taom ro'yxat oxiriga tushadi
+    const last = await Product.findOne().sort({ position: -1 }).select('position').lean()
     const product = await Product.create({
+      position:    (last?.position || 0) + 1,
       name:        name.trim(),
       price:       +price,
       category:    cat.name,
@@ -112,6 +115,25 @@ router.post('/', auth, adminOnly, upload.single('image'), async (req, res) => {
     }
     res.status(500).json({ message: err.message })
   }
+})
+
+// ── PUT /api/products/reorder ─────────────────────────────────
+// body: { ids: [...] } — taomlarning yangi tartibi (to'liq ro'yxat). Faqat o'rni o'zgarganlar
+// yoziladi; har biri alohida updateOne — sync plugin _seq qo'yishi uchun (bulkWrite hook'siz).
+router.put('/reorder', auth, adminOnly, async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(String) : []
+    if (!ids.length) return res.status(400).json({ message: "Ro'yxat bo'sh" })
+    const current = await Product.find({ _id: { $in: ids } }).select('position').lean()
+    const pos = Object.fromEntries(current.map(p => [String(p._id), p.position]))
+    let changed = 0
+    for (const [i, id] of ids.entries()) {
+      if (!(id in pos) || pos[id] === i) continue
+      await Product.updateOne({ _id: id }, { $set: { position: i } })
+      changed++
+    }
+    res.json({ changed })
+  } catch (err) { res.status(500).json({ message: err.message }) }
 })
 
 // ── PUT /api/products/:id ─────────────────────────────────────
